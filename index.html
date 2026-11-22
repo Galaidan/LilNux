@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LilNux</title>
+  <meta name="description" content="A family game for learning Fedora 44 Workstation and Linux.">
+  <meta name="theme-color" content="#3c6eb4">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="LilNux">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/lilnux.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="top" class="topbar"></header>
+  <main id="app" class="wrap"></main>
+  <div id="toasts" aria-live="polite"></div>
+  <noscript><p class="wrap">LilNux needs JavaScript turned on. Open this file in Firefox.</p></noscript>
+  <script src="js/terminal.js"></script>
+  <script src="js/content.js"></script>
+  <script src="js/game.js"></script>
+  <script>
+    // Offline support when served over https (GitHub Pages). Opening the file directly still works without it.
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+    }
+  </script>
+</body>
+</html>
