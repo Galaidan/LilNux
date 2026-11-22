@@ -31,10 +31,23 @@
       H.ui = CK.UI.create(document.getElementById('ck-ui'), {
         user: 'tester', getState: () => H.state, onExit: () => (H.exited = true),
         onEquip: (id) => CK.Rules.equip(H.state, id), onUnequip: (id) => CK.Rules.unequip(H.state, id),
-        onBuy: (id) => CK.Rules.buyUpgrade(H.state, id), onSkill: (id) => (H.skill = id),
+        onBuy: (id) => CK.Rules.buyUpgrade(H.state, id), onSkill: (id) => { H.skill = id; if (H.scene && H.scene.skill) H.scene.skill(id); },
         onLearned: (id) => CK.Rules.learn(H.state, id), speak: () => {},
       });
       H.ui.hud(H.state); H.ui.skillBar(H.state, 'map');
+      H.startFight = function (creature, skills, kid) {
+        (skills || ['echo', 'ls']).forEach((k) => CK.Rules.learn(H.state, k));
+        H.ended = null;
+        H.scene = CK.Scenes.fight({ engine: H.engine, ui: H.ui, state: H.state, creature, kid: !!kid, seed: 1, onEnd: (o) => (H.ended = o) });
+        H.engine.setScene(H.scene);
+      };
+      H.startPuzzle = function (nodeId) {
+        const n = CK.Rules.region(H.state.region).nodes[nodeId];
+        H.solved = false; H.solvedGrid = JSON.parse(JSON.stringify(n.ref.grid));
+        const grid = CK.Puzzle.scramble(JSON.parse(JSON.stringify(n.ref.grid)), CK.rng(7));
+        H.scene = CK.Scenes.puzzle({ engine: H.engine, state: H.state, grid, accent: '#ffb347', onSolved: () => (H.solved = true) });
+        H.engine.setScene(H.scene);
+      };
     });
   </script>
 </body>

@@ -35,9 +35,10 @@
       const bw = Math.round(view.w * view.dpr); const bh = Math.round(view.h * view.dpr);
       if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
       if (scene && scene.view === 'arena') {
-        view.s = Math.min(view.w / ARENA.w, (view.h - (scene.reserveBottom || 0)) / ARENA.h);
+        const top = scene.reserveTop || 0; const room = view.h - top - (scene.reserveBottom || 0);
+        view.s = Math.max(0.1, Math.min(view.w / ARENA.w, room / ARENA.h));
         view.ox = (view.w - ARENA.w * view.s) / 2;
-        view.oy = Math.max(0, (view.h - (scene.reserveBottom || 0) - ARENA.h * view.s) / 2);
+        view.oy = top + Math.max(0, (room - ARENA.h * view.s) / 2);
       } else {
         const cam = engine.camera;
         view.s = Math.max(0.5, Math.min(1.25, Math.min(view.w / 760, view.h / 600))) * cam.zoom;

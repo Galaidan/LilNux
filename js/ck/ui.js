@@ -227,7 +227,7 @@
       if (d.ck === 'next' && sayState) return sayState.next();
       if (d.ck === 'speak' && sayState) return sayState.speak();
       if (d.tab) return ui.pip(d.tab);
-      if (d.skill) { if (ui.mode === 'fight') ui.select(d.skill); return h.onSkill(d.skill); }
+      if (d.skill) return h.onSkill(d.skill);
       if (d.equip) { h.onEquip(d.equip); ui.pip('items'); ui.skillBar(h.getState(), ui.mode); return; }
       if (d.unequip) { h.onUnequip(d.unequip); ui.pip('items'); ui.skillBar(h.getState(), ui.mode); return; }
       if (d.buy) { h.onBuy(d.buy); ui.pip('items'); ui.skillBar(h.getState(), ui.mode); ui.hud(h.getState()); }
