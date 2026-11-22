@@ -128,10 +128,12 @@
     const prevXP = RANKS.filter((r) => p.xp >= r[0]).pop()[0];
     const pct = nr ? Math.round(((p.xp - prevXP) / (nr[0] - prevXP)) * 100) : 100;
     top.innerHTML = `
-      <button class="brand" data-go="map" title="World map"><span class="logo">${TUX}</span><span>LilNux</span></button>
+      <button class="brand" data-go="hub" title="Choose a mode"><span class="logo">${TUX}</span><span>LilNux</span></button>
+      <div class="mode-switch" role="group" aria-label="Game mode">
+        <button data-go="map" class="${LEARN_VIEWS.includes(view) ? 'on' : ''}" title="Learn mode: lessons, quizzes and terminal missions">📚<span class="lbl"> Learn</span></button>
+        <button data-go="kernel" class="${view === 'kernel' ? 'on' : ''}" title="Adventure mode: the Colonel Kernel videogame">🎮<span class="lbl"> Adventure</span></button>
+      </div>
       <nav class="top-actions">
-        <button class="ghost" data-go="map" title="World map">🗺️<span class="lbl"> Map</span></button>
-        <button class="ghost" data-go="kernel" title="Colonel Kernel — the videogame">🎮<span class="lbl"> Kernel</span></button>
         <button class="ghost" data-go="sandbox" title="Free play terminal">🧪<span class="lbl"> Free Play</span></button>
         <button class="ghost" data-go="cheats" title="Cheat sheet">📜<span class="lbl"> Cheat Sheet</span></button>
         <button class="ghost" data-go="badges" title="Badges">🏅<span class="lbl"> Badges</span></button>
@@ -147,23 +149,75 @@
   // ---------------------------------------------------------------- router
   let run = null; // current world run
   let sandbox = null; // free play shell
+  let view = 'players';
+  const LEARN_VIEWS = ['map', 'world', 'sandbox', 'cheats', 'certificate'];
   function go(where, arg) {
     stopSpeak();
     if (where !== 'world') run = null;
     if (where !== 'kernel' && window.CK && CK.close) CK.close();
     if (!me() && where !== 'players') where = 'players';
     window.scrollTo(0, 0);
-    ({ players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel })[where](arg);
+    view = where;
+    ({ hub: renderHub, players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel })[where](arg);
     renderTop();
+  }
+
+  // ---------------------------------------------------------------- mode choice: Learn or Adventure
+  function adventureStatus(p) {
+    const ck = p.ck;
+    if (!ck || !ck.seenIntro) return 'Not started yet — Chapter 1 awaits.';
+    if (ck.story && ck.story.liltuxTaken) return 'Chapter 1 complete — Lil Tux is missing!';
+    const names = { firmware: 'Firmware Foundry', grub: 'GRUB Gate' };
+    return `Chapter 1 · ${names[ck.region] || 'in progress'} · ${(ck.memories || []).length}/10 memories`;
+  }
+  function renderHub() {
+    const p = me();
+    const done = WORLDS.filter((w) => worldDone(p, w.id)).length;
+    app.innerHTML = `
+      <section class="hub">
+        <h1>Hi ${esc(p.name)} ${p.avatar} — what do you want to play?</h1>
+        <p class="lead">LilNux has two parts. Both teach real Fedora &amp; Linux, and both share your XP, rank and badges.</p>
+        <div class="hub-grid">
+          <article class="hub-card learn" data-go="map">
+            <div class="hub-art">${TUX}</div>
+            <span class="hub-kicker">📚 Learn mode</span>
+            <h2>LilNux Academy</h2>
+            <p>Short lessons, quizzes and pretend-terminal missions with Lil Tux. Learn Fedora one step at a time.</p>
+            <ul><li>8 worlds, from the desktop to <code>sudo</code></li><li>Quizzes, matching games &amp; real commands</li><li>Great for all ages · Kid mode &amp; read-aloud</li></ul>
+            <span class="hub-progress">⭐ ${done}/${WORLDS.length} worlds done</span>
+            <button class="primary" data-go="map">Start learning →</button>
+          </article>
+          <article class="hub-card adventure" data-go="kernel">
+            <canvas class="hub-preview" aria-hidden="true"></canvas>
+            <span class="hub-kicker">🎮 Adventure mode</span>
+            <h2>Colonel Kernel</h2>
+            <p>A neon videogame. Explore a broken computer, learn real commands as powers, beat glitchy bosses — and save Lil Tux.</p>
+            <ul><li>Story, fog of war &amp; boss fights</li><li>Upgrades, secrets &amp; a sarcastic sidekick</li><li>Best for ages 12+</li></ul>
+            <span class="hub-progress">${esc(adventureStatus(p))}</span>
+            <button class="primary neon" data-go="kernel">Play adventure →</button>
+          </article>
+        </div>
+      </section>`;
+    drawHubPreview($('.hub-preview'));
+  }
+  function drawHubPreview(c) {
+    if (!c || !window.CK || !CK.Art) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); const w = c.clientWidth || 320; const h = c.clientHeight || 150;
+    c.width = w * dpr; c.height = h * dpr;
+    const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    CK.Art.background(x, { w, h, ox: 0, oy: 0 }, 2, '#8b5cff');
+    CK.Art.colonel(x, w * 0.42, h * 0.62, 1.05, 1, { reduced: true });
+    CK.Art.pip(x, w * 0.24, h * 0.36, 1.1, 1);
+    CK.Art.liltux(x, w * 0.72, h * 0.58, 0.42, 1);
   }
 
   // ---------------------------------------------------------------- Colonel Kernel (videogame mode)
   function openKernel() {
-    renderMap();
+    renderHub();
     if (!window.CK || !CK.open) { toast('Colonel Kernel could not load.'); return; }
     CK.open({
       root: document.body, player: me(), save, addXP, giveBadge, speak,
-      sound: SFX, soundOn: () => S.sound, onExit: () => go('map'),
+      sound: SFX, soundOn: () => S.sound, onExit: () => go('hub'),
     });
   }
 
@@ -214,7 +268,7 @@
       if (editing) { editing.name = name; editing.avatar = f.get('avatar') || editing.avatar; editing.kid = !!f.get('kid'); }
       else {
         const p = { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, avatar: f.get('avatar') || '🐧', kid: !!f.get('kid'), xp: 0, worlds: {}, quests: {}, badges: [], unlockAll: false, sandboxCount: 0 };
-        S.players.push(p); S.current = p.id; save(); SFX.win(); go('map'); return;
+        S.players.push(p); S.current = p.id; save(); SFX.win(); go('hub'); return;
       }
       save(); go('players');
     });
@@ -227,6 +281,7 @@
     const allDone = WORLDS.every((w) => worldDone(p, w.id));
     const nextW = WORLDS.findIndex((w, i) => unlocked(p, i) && !worldDone(p, w.id));
     app.innerHTML = `
+      <div class="mode-banner learn"><span><b>📚 Learn mode</b> · LilNux Academy — lessons, quizzes and terminal missions</span><button class="ghost" data-go="kernel">Switch to 🎮 Adventure</button></div>
       <section class="map-head">
         <div class="bubble-row"><div class="tux small">${TUX}</div>
           <div class="bubble"><b>Hi ${esc(p.name)}! ${p.avatar}</b><br>${allDone ? 'You finished every world — you’re a Linux Legend! Replay worlds for 3 stars, or try Free Play.' : nextW >= 0 ? `Next stop: <b>${WORLDS[nextW].emoji} ${esc(WORLDS[nextW].title)}</b>. Click it to start!` : 'Pick a world to play!'}</div>
@@ -247,7 +302,7 @@
       }).join('')}</div>
       <div class="map-foot">
         ${allDone ? '<button class="primary" data-go="certificate">🎓 Print my certificate</button>' : ''}
-        <button class="primary" data-go="kernel">🎮 Colonel Kernel</button>
+        <button class="ghost" data-go="kernel">🎮 Switch to Adventure</button>
         <button class="ghost" data-go="sandbox">🧪 Free Play terminal</button>
         <button class="ghost" data-go="cheats">📜 Cheat sheet</button>
         ${!p.unlockAll && !allDone ? '<button class="ghost" data-act="unlock">🔓 Unlock all worlds</button>' : ''}
@@ -689,7 +744,7 @@
       if (!unlocked(me(), idx)) { shake(t); toast('🔒 Finish the world before this one to unlock it!'); return; }
       return go('world', t.dataset.world);
     }
-    if (t.dataset.play) { S.current = t.dataset.play; save(); SFX.pop(); return go('map'); }
+    if (t.dataset.play) { S.current = t.dataset.play; save(); SFX.pop(); return go('hub'); }
     if (t.dataset.edit) return renderPlayers(t.dataset.edit);
     if (t.dataset.del) {
       const p = S.players.find((x) => x.id === t.dataset.del);
@@ -715,5 +770,5 @@
     if (!n && /^[a-dA-D]$/.test(e.key)) { const opts = $$('.opt'); const o = opts['abcd'.indexOf(e.key.toLowerCase())]; if (o && !o.disabled) o.click(); }
   });
 
-  go(me() ? 'map' : 'players');
+  go(me() ? 'hub' : 'players');
 })();

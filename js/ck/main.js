@@ -88,16 +88,16 @@
       const reg = R.region(state.region);
       if (ev.type === 'taken') {
         await ui.banner('…', 'You wake up', 1600);
-        await say('pip', ['Colonel! Colonel, wake up!', 'Lil Tux is gone. Home is… glitching. Everything was fine when you went to sleep.',
-          'There’s a log line I don’t recognise: `' + S.TAKEN_LOG + '`', 'swapper/0? Nothing out here should be running as PID 0…', 'Whatever took him is still somewhere in this system. We’re going to find him.']);
+        await say('pip', ['Colonel! Colonel, wake up! And no, I’m not being dramatic this time.', 'Lil Tux is gone. Home is… glitching. Everything was fine when you went to sleep.',
+          'There’s a log line I don’t recognise: `' + S.TAKEN_LOG + '`', 'swapper/0? Nothing out here should be running as PID 0…', 'Whatever took him is still somewhere in this system. And nobody messes with our penguin. We’re going to find him.']);
         h.giveBadge(...BADGES.chapter); sound('win');
         await ui.banner('Chapter 1 Complete', 'Lil Tux is missing', 3200);
-        await say('pip', ['Next: the Kernel Core — processes, the scheduler… and maybe some answers.', 'Until then, try `ls -a`, `cd` and `sudo dmesg` in the real Terminal (dmesg may need sudo). Same commands as here. Well… minus the lasers.']);
+        await say('pip', ['Next: the Kernel Core — processes, the scheduler… and maybe some answers. You rest. I’ll keep watch. PID 1 doesn’t get naps.', 'Until then, try `ls -a`, `cd` and `sudo dmesg` in the real Terminal (dmesg may need sudo). Same commands as here. Well… minus the lasers.']);
         return;
       }
       ui.toast('😴 The Colonel wakes up feeling rested.');
-      if (ev.type === 'rebreak') await say('pip', [`Huh. The ${reg.nodes[ev.node].label} circuit is broken again. I could’ve sworn we fixed that…`]);
-      else if (ev.type === 'oddlog') { ui.toast(`✦ A strange line appeared in the logs:<br><code>${ev.line}</code>`); await say('pip', ['That’s not a boot message… Probably nothing.']); }
+      if (ev.type === 'rebreak') await say('pip', [`Huh. The ${reg.nodes[ev.node].label} circuit is broken again. I could’ve sworn we fixed that… Did you sleepwalk? Kidding. Probably.`]);
+      else if (ev.type === 'oddlog') { ui.toast(`✦ A strange line appeared in the logs:<br><code>${ev.line}</code>`); await say('pip', ['That’s not a boot message… Probably nothing. Probably.']); }
     }
     async function breakReminder() {
       const who = state.story.liltuxMet && !state.story.liltuxTaken ? 'liltux' : 'pip';
@@ -153,7 +153,7 @@
       });
     }
     function blocked(why) {
-      const msg = { fog: 'Too foggy — explore next to it first (or scan with <code>ls</code>).', 'not-adjacent': 'No direct trace there. Follow the circuit lines.', blocked: 'Pip: we can’t get past this until it’s fixed. Tap it again to try, or step back.' }[why];
+      const msg = { fog: 'Pip: Too foggy. Even I can’t see that far — explore next to it first (or scan with <code>ls</code>).', 'not-adjacent': 'Pip: No direct trace there. We follow the circuit lines, Colonel, not vibes.', blocked: 'Pip: We can’t just walk past a broken thing and pretend it’s fine. Tap it again to deal with it, or step back.' }[why];
       if (msg) ui.toast(msg);
     }
 
@@ -162,7 +162,7 @@
       const skill = Object.keys(W.SKILLS).find((k) => W.SKILLS[k].teacher === who);
       const first = !state.codex.includes(skill);
       if (first) await say(who, W.CHARACTERS[who].lines);
-      else await say(who, [who === 'pip' ? 'I’m right here, Colonel. Always running.' : 'Back again? Go on — the machine won’t fix itself.']);
+      else await say(who, [who === 'pip' ? 'Still here. Still PID 1. Still not going anywhere — that’s literally my whole job.' : 'Back again? Go on — the machine won’t fix itself.']);
       if (skill && !state.learned.includes(skill)) { m.learning = skill; m.learnExample = W.SKILLS[skill].example; await ui.learn(skill); m.learning = null; m.learnExample = null; sound('win'); xp(10); }
       if (skill && state.learned.includes(skill) && !state.equipped.includes(skill)) {
         const out = await ui.choice(`Your skill slots are full`, state.equipped.map((s) => ({ label: `Swap out ${W.SKILLS[s].cmd}`, html: `🔁 Swap out <code>${W.SKILLS[s].cmd}</code> for <code>${W.SKILLS[skill].cmd}</code>`, value: s }))
@@ -209,7 +209,7 @@
             backToMap();
             if (outcome === 'win') { state.stats.wins++; resolve(true); return; }
             state.region = state.checkpoint.region; state.node = state.checkpoint.node; state.prev = null; map.setState(state);
-            ui.toast('💥 Stability lost — rebooting at the last checkpoint. Your loot is safe.');
+            ui.toast('💥 Stability lost — rebooting at the last checkpoint. Your loot is safe. Your dignity, less so. You’ve got this.');
             resolve(false);
           },
         });
@@ -267,7 +267,7 @@
       map.burst(node.x, node.y, '#8b5cff', 30);
       ui.toast(`✦ Memory fragment recovered <br><code>${node.ref.replace(/</g, '&lt;')}</code>`);
       const n = state.memories.length;
-      if (n === 1) await say('pip', ['A memory! It looks like a kernel log line — the kind `dmesg` prints on a real Linux machine.', 'Why would YOU remember kernel logs, Colonel…?']);
+      if (n === 1) await say('pip', ['A memory! It looks like a kernel log line — the kind `dmesg` prints on a real Linux machine.', 'Why would YOU remember kernel logs, Colonel…? Don’t answer that. It’s a little creepy.']);
       claim();
     }
 
@@ -309,7 +309,7 @@
     async function onSkill(id) {
       if (engine.scene !== map) { if (engine.scene && engine.scene.skill) engine.scene.skill(id); return; }
       if (map.locked) return;
-      if (id === 'echo') { ui.toast('📣 <code>echo hello</code> → hello… …hello… …hello. (Save it for fights, Colonel.)'); return; }
+      if (id === 'echo') { ui.toast('📣 <code>echo hello</code> → hello… …hello… …hello. Very impressive. Save it for the fights, Colonel.'); return; }
       const r = R.useOnMap(state, id);
       if (!r.ok) return;
       if (id === 'ls') {
@@ -337,7 +337,7 @@
     }
     busy(async () => {
       if (!state.seenIntro) await intro();
-      else ui.toast(`Welcome back, Colonel. ${R.region(state.region).name}.`);
+      else ui.toast(`Pip: Welcome back, Colonel. ${R.region(state.region).name}. I kept the lights on. Mostly.`);
       if (restedAway) await wake(S.rest(state, Math.random));
     });
     cur.cleanup = () => { clearInterval(tick); document.removeEventListener('visibilitychange', onVis); root.removeEventListener('pagehide', onHide); state.story.lastSeen = Date.now(); save(); };

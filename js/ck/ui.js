@@ -21,6 +21,7 @@
       const mems = W.REGIONS.reduce((n, r) => n + Object.values(r.nodes).filter((x) => x.kind === 'memory').length, 0);
       $('.ck-hud').innerHTML = `
         <div class="ck-hud-left">
+          <span class="ck-mode">🎮 Adventure</span>
           <span class="ck-region" style="--acc:${reg.accent}"><i></i>${esc(reg.name)}</span>
           <span class="ck-stat" title="Bits"><b>${state.bits}</b> bits</span>
           <span class="ck-stat" title="Memory fragments"><b>${state.memories.length}</b>/${mems} memories</span>
@@ -28,7 +29,7 @@
         <div class="ck-hud-right">
           ${opts.canRest ? '<button class="ck-btn" data-ck="rest" aria-label="Rest (systemctl suspend)" title="Rest — systemctl suspend">💤 Rest</button>' : ''}
           <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip"><span class="ck-orb"></span><span>Pip</span></button>
-          <button class="ck-btn" data-ck="exit" aria-label="Exit Colonel Kernel">✕</button>
+          <button class="ck-btn" data-ck="exit" aria-label="Leave the adventure" title="Back to choose a mode">✕</button>
         </div>`;
     };
 
@@ -137,7 +138,7 @@
         <div class="ck-quest"><b>Memories</b><p>${state.memories.length ? state.memories.slice(-3).map((m) => `<code>${esc(m)}</code>`).join('<br>') : 'None recovered yet. Look for violet ✦ nodes.'}</p></div>`;
     }
     function tabCombat() {
-      return `<div class="ck-quest"><b>Pip’s combat notes</b><p>${ui.combatText ? code(ui.combatText) : 'Pick a skill (keys 1–5 or tap it), then tap the arena to fire. Shoot down incoming orbs, watch your heat, and dash with cd once you have it.'}</p></div>
+      return `<div class="ck-quest"><b>Pip’s combat notes</b><p>${ui.combatText ? code(ui.combatText) : 'Pick a skill (keys 1–5 or tap it), then tap the arena to fire. Shoot down incoming orbs, watch your heat, and dash with cd once you have it. Simple. Mostly. I believe in you.'}</p></div>
         <div class="ck-quest"><b>Clean fixes</b><p>Equip the right skill before walking into a problem and you can fix it instantly — no fight, bonus bits.</p></div>`;
     }
     function tabTasks(state) {
@@ -153,7 +154,7 @@
       if (!panel) { panel = document.createElement('aside'); panel.className = 'ck-pip'; $('.ck-layer').appendChild(panel); }
       const tabs = [['quests', '📜 Quests'], ['items', '🎒 Items'], ['combat', '⚔️ Combat'], ['tasks', '✅ Tasks']];
       const body = { quests: tabQuests, items: tabItems, combat: tabCombat, tasks: tabTasks }[ui.pipTab](state);
-      panel.innerHTML = `<header><span class="ck-orb big"></span><div><b>Pip</b><small>PID 1 · always running</small></div><button class="ck-btn" data-ck="closepip" aria-label="Close Pip">✕</button></header>
+      panel.innerHTML = `<header><span class="ck-orb big"></span><div><b>Pip</b><small>PID 1 · always running · mildly judgmental</small></div><button class="ck-btn" data-ck="closepip" aria-label="Close Pip">✕</button></header>
         <nav>${tabs.map(([id, l]) => `<button class="ck-tab ${id === ui.pipTab ? 'on' : ''}" data-tab="${id}">${l}</button>`).join('')}</nav>
         <div class="ck-pip-body">${body}</div>`;
     };

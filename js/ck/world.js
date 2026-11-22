@@ -68,10 +68,10 @@
     pip: {
       id: 'pip', name: 'Pip', title: 'PID 1 · your companion', color: '#38f2ff',
       lines: [
-        '…boot sequence… hey. HEY. You’re awake! Everything’s dark, but you’re online. That’s a start.',
-        'I’m Pip. PID 1. On Linux the very first program the kernel starts gets process ID 1, and it starts and babysits everything else. So technically I’m the first friend you ever made.',
-        'You don’t remember who you are? Yeah… my memory’s scrambled too. Let’s fix this machine. Maybe it all comes back.',
-        'Lesson one: echo. In a real terminal it just repeats what you tell it — `echo hello` prints hello. Down here it’s your basic shot. Type it in.',
+        '…boot sequence… hey. HEY. Oh good, you’re awake. I was starting to talk to myself, and honestly? Terrible company.',
+        'I’m Pip. PID 1. On Linux the very first program the kernel starts gets process ID 1, and it starts and babysits everything else. So yes — I’m technically your oldest friend. You’re welcome.',
+        'You don’t remember who you are? Great. Fantastic. My memory’s scrambled too, so that makes two of us. Let’s fix this machine and hope it shakes something loose.',
+        'Lesson one: echo. In a real terminal it repeats whatever you tell it — `echo hello` prints hello. Thrilling, I know. Down here it’s your basic shot. Type it in.',
       ],
     },
     bios: {
@@ -117,8 +117,8 @@
 
   const firmware = {
     id: 'firmware', name: 'Firmware Foundry', accent: '#ffb347', start: 'f0', boss: 'f12', exit: 'f13',
-    intro: ['Firmware Foundry. This is where a computer wakes up — before Linux, before anything.', 'Tap a glowing node to move. Fog hides everything we haven’t explored yet.', 'Weird… I’m picking up a faint signal from deep inside the system. Small. Penguin-shaped? Let’s get this machine booted and find out.'],
-    outro: ['POST complete! The firmware found a bootable disk and is handing control to the bootloader.', '…did you feel that? A memory. Something about “Linux version 6.19”. Weird. Let’s keep moving.'],
+    intro: ['Firmware Foundry. This is where a computer wakes up — before Linux, before anything. Cozy. Well, no. Dark.', 'Tap a glowing node to move. Fog hides everything we haven’t explored. Scary? A bit. Don’t worry, I’ll float right next to you. Someone has to.', 'Weird… I’m picking up a faint signal deep inside the system. Small. Penguin-shaped? Let’s boot this machine and find out.'],
+    outro: ['POST complete! The firmware found a bootable disk and is handing control to the bootloader. Look at you, being useful.', '…did you feel that? A memory. Something about “Linux version 6.19”. Weird. Let’s keep moving before you get sentimental.'],
     nodes: {
       f0: n(120, 520, 'Cold Boot', 'start'),
       f1: n(300, 520, 'Power Rail', 'character', 'pip'),
@@ -143,8 +143,8 @@
 
   const grubRegion = {
     id: 'grub', name: 'GRUB Gate', accent: '#b6ff5c', start: 'g0', boss: 'g12', exit: null, home: 'g13',
-    intro: ['GRUB Gate. The bootloader’s job: find the kernel, load it, and hand over control.', 'Somewhere past these loops is the kernel image. Let’s go get it.'],
-    outro: ['The kernel image is loaded and GRUB just handed over control to… wait.', 'Colonel. The log says “Run /init as init process”. That’s me — PID 1. And the thing that starts PID 1 is the kernel. Which means you’re…', '…no time. The machine is booting! Look — Home just came online. Someone’s waving at us.'],
+    intro: ['GRUB Gate. The bootloader’s job: find the kernel, load it, and hand over control. Basically a very fancy “start” button.', 'Somewhere past these loops is the kernel image. Try not to get lost. Again.'],
+    outro: ['The kernel image is loaded and GRUB just handed over control to… wait.', 'Colonel. The log says “Run /init as init process”. That’s me — PID 1. And the thing that starts PID 1 is the kernel. Which means you’re…', '…not important right now. The machine is booting! Look — Home just came online. Someone’s waving at us. Wave back, Colonel. It’s polite.'],
     nodes: {
       g0: n(110, 500, 'Boot Menu', 'start'),
       g1: n(300, 500, 'GRUB Shell', 'character', 'grub'),

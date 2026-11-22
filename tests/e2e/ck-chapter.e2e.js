@@ -21,7 +21,7 @@ async function addPlayer(pg, name) {
   await pg.click('#pform button[type=submit]');
 }
 async function openKernel(pg) {
-  await pg.click('.map-foot [data-go=kernel]');
+  await pg.click('.mode-switch [data-go=kernel]');
   await pg.waitForFunction(() => window.CK && CK._test && CK._test.main);
 }
 const info = (pg) => pg.evaluate(() => {
@@ -189,6 +189,7 @@ const tests = {
     await settle(pg);
     await pg.click('[data-ck=exit]');
     assert.equal(await pg.$('#ck-root'), null);
+    assert.ok(await pg.$('.hub-card.adventure'), 'leaving the adventure returns to the mode choice');
   },
   async 'full slots offer a swap when learning cd'(b) {
     const pg = await newPage(b, () => {

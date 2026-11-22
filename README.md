@@ -24,6 +24,13 @@ cd ~/LilNux
 Remove the shortcut with `./install-shortcut.sh --remove`.
 If the scripts say “Permission denied”, run `chmod +x play.sh install-shortcut.sh` first (you’ll learn why in World 5!).
 
+## Two ways to play
+
+After picking a player you choose a mode (switch any time with **📚 Learn | 🎮 Adventure** in the top bar):
+
+- **📚 Learn — LilNux Academy:** lessons, quizzes and terminal missions. Great for all ages.
+- **🎮 Adventure — Colonel Kernel:** the neon videogame below. Best for ages 12+.
+
 ## 🎮 Colonel Kernel (videogame mode — Chapter 1)
 
 A futuristic adventure for teens and grown-ups. **Colonel Kernel** wakes up inside a dark,

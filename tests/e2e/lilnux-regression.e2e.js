@@ -19,6 +19,13 @@ const SOLVE = {
   await pg.goto(URL);
   await pg.fill('input[name=name]', 'Sam');
   await pg.click('#pform button[type=submit]');
+  // the mode choice screen: two clearly separate parts
+  for (const sel of ['.hub-card.learn', '.hub-card.adventure', '.mode-switch [data-go=map]', '.mode-switch [data-go=kernel]']) {
+    if (!(await pg.$(sel))) { console.log('MISSING', sel); failed = true; }
+  }
+  if (!/Learn/.test(await pg.textContent('.hub-card.learn')) || !/Colonel Kernel/.test(await pg.textContent('.hub-card.adventure'))) { console.log('HUB TEXT'); failed = true; }
+  await pg.click('.hub-card.learn [data-go=map]');
+  if (!(await pg.$('.mode-banner.learn'))) { console.log('MISSING learn banner'); failed = true; }
   const worlds = await pg.evaluate(() => window.LILNUX_WORLDS.map((w) => ({
     id: w.id,
     steps: w.steps.map((s) => ({ type: s.type, answer: s.answer, n: (s.pairs || s.items || []).length, show: s.show || (s.accept && typeof s.accept[0] === 'string' ? s.accept[0] : null), hints: (s.missions || []).map((m) => m.hint) })),

@@ -35,6 +35,7 @@ body.ck-open { overflow: hidden; }
 .ck-hud > * { pointer-events: auto; }
 .ck-hud-left { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ck-hud-right { display: flex; gap: 6px; }
+.ck-mode { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; color: #fff; background: linear-gradient(135deg, #1fb6d1, #7a4dff); box-shadow: 0 0 16px rgba(122, 77, 255, .45); }
 .ck-region, .ck-stat { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--glass); border: 1px solid var(--edge);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .ck-region { border-color: var(--acc); box-shadow: 0 0 16px color-mix(in srgb, var(--acc) 35%, transparent); }
