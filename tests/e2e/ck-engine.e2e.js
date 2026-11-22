@@ -71,6 +71,19 @@ const tests = {
     assert.equal(await pg.evaluate(() => H.engine.running), true);
     assert.equal(await pg.evaluate(() => CK._test.loops), 1);
   },
+  async 'pinch does not count as a tap'(b) {
+    const pg = await page(b, { ...devices['iPhone 13'] });
+    const p = await pos(pg, 'f1');
+    await pg.evaluate((q) => {
+      const c = document.getElementById('c');
+      const ev = (type, id, x, y) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: id === 1 }));
+      ev('pointerdown', 1, q.x, q.y); ev('pointerdown', 2, q.x + 40, q.y + 40); ev('pointermove', 2, q.x + 90, q.y + 90);
+      ev('pointerup', 1, q.x, q.y); ev('pointerup', 2, q.x + 90, q.y + 90);
+    }, p);
+    await pg.waitForTimeout(1500);
+    assert.equal(await pg.evaluate(() => H.state.node), 'f0');
+    assert.equal(await pg.evaluate(() => !!H.arrived || !!H.blocked), false);
+  },
 };
 
 (async () => {

@@ -174,6 +174,34 @@
     return got;
   }
 
+  // Drop ids the current world doesn't know (corrupt or future-version saves) without losing valid progress.
+  function sanitize(state) {
+    const Wd = W(); const known = (obj) => (id) => Object.prototype.hasOwnProperty.call(obj, id);
+    const regOk = (id) => !!region(id);
+    const nodeOk = (r, n) => regOk(r) && !!region(r).nodes[n];
+    for (const key of ['explored', 'cleared']) {
+      const out = {};
+      for (const r of Object.keys(state[key])) if (regOk(r)) out[r] = state[key][r].filter((n) => !!region(r).nodes[n]);
+      state[key] = out;
+    }
+    state.learned = state.learned.filter(known(Wd.SKILLS));
+    state.codex = state.codex.filter(known(Wd.SKILLS));
+    state.modules = state.modules.filter(known(Wd.MODULES));
+    const ups = Object.values(Wd.SKILLS).map((s) => s.upgrade.id);
+    state.upgrades = state.upgrades.filter((u) => ups.includes(u));
+    state.tasksDone = state.tasksDone.filter(known(Wd.TASKS));
+    state.equipped = state.equipped.filter((s) => state.learned.includes(s)).slice(0, stats(state).slots);
+    if (!nodeOk(state.checkpoint.region, state.checkpoint.node)) {
+      const r = regOk(state.checkpoint.region) ? state.checkpoint.region : regOk(state.region) ? state.region : Wd.REGIONS[0].id;
+      state.checkpoint = { region: r, node: region(r).start };
+    }
+    if (!nodeOk(state.region, state.node)) { state.region = state.checkpoint.region; state.node = state.checkpoint.node; state.prev = null; }
+    if (state.prev && !region(state.region).nodes[state.prev]) state.prev = null;
+    if (!state.explored[state.region]) state.explored[state.region] = [];
+    reveal(state, state.node);
+    return state;
+  }
+
   function enterRegion(state, regionId) {
     const reg = region(regionId);
     state.region = regionId; state.node = reg.start; state.prev = null;
@@ -181,5 +209,5 @@
     reveal(state, reg.start);
   }
 
-  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, quickFix, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, BLOCKING };
+  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, quickFix, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, BLOCKING };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -16,9 +16,7 @@
     CK.close();
     const W = CK.World; const R = CK.Rules;
     const player = h.player;
-    let state = CK.State.load(player.ck);
-    const reg0 = R.region(state.region);
-    if (!reg0 || !reg0.nodes[state.node]) state = CK.State.fresh();
+    const state = R.sanitize(CK.State.load(player.ck));
     // Never resume standing inside an unfinished fight/puzzle: go back to the checkpoint.
     const here = R.region(state.region).nodes[state.node];
     if (R.BLOCKING[here.kind] && !R.isCleared(state, state.node) && state.checkpoint.region === state.region && R.region(state.region).nodes[state.checkpoint.node]) {
@@ -28,6 +26,14 @@
     player.ck = state;
 
     const host = document.createElement('div'); host.id = 'ck-root';
+    try { setup(); } catch (err) {
+      // A bug must never leave a full-screen overlay the player can't close.
+      try { if (cur) CK.close(); else host.remove(); } catch (e) { /* ignore */ }
+      document.body.classList.remove('ck-open'); cur = null;
+      if (root.console) console.error('Colonel Kernel failed to start:', err);
+      if (h.onExit) h.onExit();
+    }
+    function setup() {
     host.innerHTML = '<canvas class="ck-canvas" aria-label="Colonel Kernel game map"></canvas><div class="ck-ui-host"></div>';
     (h.root || document.body).appendChild(host);
     document.body.classList.add('ck-open');
@@ -40,13 +46,15 @@
     let lock = 0; const m = { learning: null, pendingProblem: null };
     let orientationTipShown = false;
 
+    let engineRef = null; const onMap = () => !engineRef || !engineRef.scene || !!engineRef.scene.tapNode;
     const ui = CK.UI.create(host.querySelector('.ck-ui-host'), {
       user: (player.name || 'colonel').toLowerCase().replace(/[^a-z0-9]/g, '') || 'colonel',
       getState: () => state,
       onExit: () => { CK.close(); if (h.onExit) h.onExit(); },
-      onEquip: (id) => { R.equip(state, id); save(); },
-      onUnequip: (id) => { R.unequip(state, id); save(); },
+      onEquip: (id) => { if (onMap()) { R.equip(state, id); save(); } },
+      onUnequip: (id) => { if (onMap()) { R.unequip(state, id); save(); } },
       onBuy: (id) => {
+        if (!onMap()) return;
         const r = R.buyUpgrade(state, id);
         if (r.ok) { const up = Object.values(W.SKILLS).find((s) => s.upgrade.id === id).upgrade; sound('win'); ui.toast(`⬆ Upgrade installed: <code>${up.cmd}</code> — ${up.blurb}`); }
         save();
@@ -57,6 +65,7 @@
     });
 
     const map = CK.Scenes.map({ engine, state, onArrive: (r) => arrive(r), onBlocked: (why, id) => blocked(why, id) });
+    engineRef = engine; cur = { engine, ui, host, map };
     engine.setScene(map); engine.start();
     refresh();
 
@@ -98,6 +107,12 @@
       if (first) await say(who, W.CHARACTERS[who].lines);
       else await say(who, [who === 'pip' ? 'I’m right here, Colonel. Always running.' : 'Back again? Go on — the machine won’t fix itself.']);
       if (skill && !state.learned.includes(skill)) { m.learning = skill; await ui.learn(skill); m.learning = null; sound('win'); xp(10); }
+      if (skill && state.learned.includes(skill) && !state.equipped.includes(skill)) {
+        const out = await ui.choice(`Your skill slots are full`, state.equipped.map((s) => ({ label: `Swap out ${W.SKILLS[s].cmd}`, html: `🔁 Swap out <code>${W.SKILLS[s].cmd}</code> for <code>${W.SKILLS[skill].cmd}</code>`, value: s }))
+          .concat([{ label: 'Keep my loadout', html: '✋ Keep my loadout (swap later in Pip → Items)', value: null }]),
+          `You have ${state.equipped.length} slots. A RAM stick adds one. Which skill should make room for ${W.SKILLS[skill].cmd}?`);
+        if (out) { state.equipped[state.equipped.indexOf(out)] = skill; save(); }
+      }
     }
 
     async function problem(id, node) {
@@ -164,7 +179,7 @@
     async function boss(id, node) {
       const c = W.CREATURES[node.ref.creature];
       const pick = await ui.choice('☠ ' + c.name, [{ label: 'Fight!', html: '⚔️ Fight!', value: 'fight', primary: true }, { label: 'Not yet', html: '↩ Not yet — step back', value: 'back' }],
-        `Pip: “That’s the ${c.name}. ${c.weakText}”`);
+        `Pip: “That’s the ${c.name}. ${c.weakText}”` + (c.cloaked && !state.equipped.includes('ls') ? ' ⚠ You don’t have ls equipped — you won’t be able to see it! Step back and equip it in Pip → Items.' : ''));
       if (pick === 'back') { if (state.prev) { state.node = state.prev; state.prev = null; map.snapTo(state.node); } return; }
       const won = await fight(node.ref.creature);
       if (!won) return;
@@ -207,7 +222,7 @@
         state.chapterDone = true; save();
         h.giveBadge(...BADGES.chapter); sound('win');
         await ui.banner('Chapter 1 Complete', 'Boot Sequence restored', 3200);
-        await say('pip', ['Next time: the Kernel Core. Processes, the scheduler, and something called a Fork Bomb. I’ve got a bad feeling about this.', 'Until then — try `dmesg`, `ls -a` and `cd` in the real Terminal. They work exactly like here. Well… minus the lasers.']);
+        await say('pip', ['Next time: the Kernel Core. Processes, the scheduler, and something called a Fork Bomb. I’ve got a bad feeling about this.', 'Until then — try `ls -a`, `cd` and `sudo dmesg` in the real Terminal (dmesg may need sudo). Same commands as here. Well… minus the lasers.']);
       } else {
         await say('pip', ['Chapter 2 is still being built. Stay tuned, Colonel!']);
       }
@@ -245,7 +260,6 @@
       }
     }
 
-    cur = { engine, ui, host, map };
     if (CK.Engine.debug) {
       CK._test.main = {
         get state() { return state; }, ui, map,
@@ -258,6 +272,7 @@
       if (!state.seenIntro) await intro();
       else ui.toast(`Welcome back, Colonel. ${R.region(state.region).name}.`);
     });
+    }
   };
 
   CK.close = function () {

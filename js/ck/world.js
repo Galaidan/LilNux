@@ -60,7 +60,7 @@
       id: 'kernelWraith', name: 'Missing Kernel Wraith', boss: true, hp: 300, phases: 3, speed: 170, pattern: 'blink', cloaked: true, count: 1, weak: 'cd',
       shoots: { every: 1.2, speed: 230, dmg: 12 },
       weakText: '🌀🔦 Blinks and cloaks — dash with cd, scan with ls, echo it down.',
-      real: 'If GRUB cannot find the kernel file (vmlinuz) in /boot, you land at a bare "grub>" prompt. Fedora keeps a few older kernels in the menu so you can boot one of those instead.',
+      real: 'If GRUB cannot find the kernel file (vmlinuz) in /boot, the menu entry fails with “error: file … not found” and you drop back to the menu. Fedora keeps a few older kernels there so you can boot one of those instead.',
     },
   };
 
@@ -139,8 +139,8 @@
       g1: n(300, 500, 'GRUB Shell', 'character', 'grub'),
       g2: n(300, 280, 'grub.cfg', 'memory', '[    0.000000] Command line: BOOT_IMAGE=(hd0,gpt2)/vmlinuz-6.19.8-200.fc44.x86_64 root=UUID=4f2c9a1e-7b3d-4c55-9e0a-1d2b3c4d5e6f ro rhgb quiet'),
       g3: n(500, 380, 'Menu Entry', 'circuit', { grid: grid(['X0 L2 L1 G3', 'L1 I1 T3 I0', 'I0 L1 T2 L3', 'S0 I1 L0 T0']) }),
-      g4: n(520, 680, 'Loop Path', 'problem', { skill: 'cd', creature: 'loopWisp', title: 'Endless boot loop', real: 'cd moves you to the right place. A bootloader pointed at the wrong path just keeps circling — the fix is always “go to the right directory”.' }),
-      g5: n(680, 200, 'Kernel Image', 'memory', '[    0.000000] Kernel command line: rhgb quiet'),
+      g4: n(520, 680, 'Loop Path', 'problem', { skill: 'cd', creature: 'loopWisp', title: 'Endless boot loop', real: 'Like cd taking you to the right folder, the real fix for a boot loop is pointing the bootloader at the right kernel path — usually by fixing its menu entries or picking another kernel.' }),
+      g5: n(680, 200, 'Kernel Image', 'memory', '[    0.000000] Kernel command line: BOOT_IMAGE=(hd0,gpt2)/vmlinuz-6.19.8-200.fc44.x86_64 root=UUID=4f2c9a1e-7b3d-4c55-9e0a-1d2b3c4d5e6f ro rhgb quiet'),
       g6: n(720, 860, 'Spare Core', 'item', 'cpu'),
       g7: n(760, 500, 'initramfs', 'memory', '[    0.982114] Freeing initrd memory: 38912K'),
       g8: n(950, 380, 'Fallback Loop', 'problem', { skill: 'cd', creature: 'loopWisp', title: 'Fallback entry stuck in a loop', real: 'Fedora keeps older kernels as fallback menu entries. If the newest one breaks, you can boot an older one and fix things from there.' }),

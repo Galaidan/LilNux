@@ -47,6 +47,7 @@
     }
 
     sc.pointer = function (type, p) {
+      if (type === 'cancel') { drag = null; return; }
       if (type === 'down') drag = { sx: p.sx, sy: p.sy, px: pan.x, py: pan.y, moved: false };
       else if (type === 'move' && drag) {
         const dx = p.sx - drag.sx; const dy = p.sy - drag.sy;
@@ -151,6 +152,7 @@
     };
 
     sc.update = function (dt) {
+      if (ui.pipOpen && ui.pipOpen()) { ui.tick(f); return; } // paused while Pip's panel is open
       f.update(dt);
       for (const e of f.events) {
         if (e.type === 'hit') { A.spawnBurst(parts, e.x, e.y, A.C.coral, 10, 180); pop(e.x, e.y - 30, '-' + W.SKILLS.echo.fight.dmg, '#ffffff'); sfx('hit'); }

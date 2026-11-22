@@ -104,6 +104,18 @@ const tests = {
     await pg.screenshot({ path: path.join(SHOTS, 'ck-puzzle-phone.png') });
     assert.deepEqual(pg.errs, []);
   },
+  async 'no loadout changes mid-fight and the fight pauses while Pip is open'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => { H.startFight('glitchMite', ['echo', 'ls', 'cd']); H.ui.pip('items'); });
+    assert.equal(await pg.$eval('[data-unequip=ls]', (e) => e.disabled), true);
+    assert.equal(await pg.$eval('[data-equip=cd]', (e) => e.disabled), true);
+    const t0 = await pg.evaluate(() => H.scene.fight.time);
+    await pg.waitForTimeout(500);
+    assert.equal(await pg.evaluate(() => H.scene.fight.time), t0, 'paused while Pip is open');
+    await pg.evaluate(() => H.ui.closePip());
+    await pg.waitForTimeout(300);
+    assert.ok(await pg.evaluate((t) => H.scene.fight.time > t, t0));
+  },
 };
 
 (async () => {

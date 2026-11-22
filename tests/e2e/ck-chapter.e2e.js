@@ -41,6 +41,7 @@ async function settle(pg, opts) {
       const ex = await pg.evaluate((id) => CK.World.SKILLS[id].example, s.learning);
       await pg.fill('.ck-learn input', ex); await pg.press('.ck-learn input', 'Enter'); await wait(1400); continue;
     }
+    if (s.choice && opts.stopAtChoice) return 'choice';
     if (s.choice) {
       const want = opts.wrong ? 'echo' : s.problemSkill;
       const btns = await pg.$$('.ck-choice button');
@@ -171,6 +172,36 @@ const tests = {
     await openKernel(pg); await settle(pg);
     assert.equal(await pg.evaluate(() => CK._test.main.state.node), 'f0');
     assert.deepEqual(pg.errs, []);
+  },
+  async 'corrupt ids do not crash and Exit still works'(b) {
+    const pg = await newPage(b, () => {
+      localStorage.setItem('lilnux.save.v1', JSON.stringify({ players: [{ id: 'p1', name: 'Old', avatar: '🦊', kid: false, xp: 0, worlds: {}, quests: {}, badges: [], unlockAll: false,
+        ck: { region: 'firmware', node: 'f0', seenIntro: true, explored: { firmware: ['f0', 'f1', 'zzz'] }, learned: ['grep'], equipped: ['grep'], checkpoint: { region: 'firmware', node: 'f99' } } }], current: 'p1', sound: false }));
+    });
+    await openKernel(pg); await settle(pg);
+    await step(pg);
+    assert.equal(await pg.evaluate(() => CK._test.main.state.node), 'f1');
+    assert.deepEqual(pg.errs, []);
+    await settle(pg);
+    await pg.click('[data-ck=exit]');
+    assert.equal(await pg.$('#ck-root'), null);
+  },
+  async 'full slots offer a swap when learning cd'(b) {
+    const pg = await newPage(b, () => {
+      localStorage.setItem('lilnux.save.v1', JSON.stringify({ players: [{ id: 'p1', name: 'Old', avatar: '🦊', kid: false, xp: 0, worlds: {}, quests: {}, badges: [], unlockAll: false,
+        ck: { region: 'grub', node: 'g0', seenIntro: true, explored: { grub: ['g0', 'g1'] }, learned: ['echo', 'ls'], equipped: ['echo', 'ls'], codex: ['echo', 'ls'], checkpoint: { region: 'grub', node: 'g0' } } }], current: 'p1', sound: false }));
+    });
+    await openKernel(pg); await settle(pg);
+    await pg.evaluate(() => CK._test.mapScene.tapNode('g1')); await wait(1500);
+    let sawSwap = false;
+    for (let i = 0; i < 40; i++) {
+      const s = await info(pg);
+      if (s.choice) { const t = await pg.textContent('.ck-choice'); if (/slots are full/i.test(t)) { sawSwap = true; await pg.click('.ck-choice button >> nth=0'); continue; } }
+      if (!s.choice && !s.say && !s.learning && !s.busy) break;
+      await settle(pg, { stopAtChoice: true });
+    }
+    assert.ok(sawSwap, 'swap offered');
+    assert.ok(await pg.evaluate(() => CK._test.main.state.equipped.includes('cd')));
   },
 };
 

@@ -188,3 +188,32 @@ test('move reports first visits and clears non-blocking nodes', () => {
   Rules.move(s, 'f3'); const p = Rules.move(s, 'f5');
   assert.equal(p.first, true); assert.equal(Rules.isCleared(s, 'f5'), false, 'problems stay uncleared');
 });
+
+test('sanitize repairs unknown ids from corrupt or future saves', () => {
+  const s = State.load({
+    region: 'firmware', node: 'f3', checkpoint: { region: 'firmware', node: 'f99' },
+    explored: { firmware: ['f0', 'f1', 'zzz'], mars: ['x'] }, cleared: { firmware: ['f5', 'nope'] },
+    learned: ['echo', 'ls', 'cd', 'grep'], equipped: ['grep', 'echo', 'ls', 'cd'], codex: ['grep', 'echo'],
+    upgrades: ['ls-a', 'bogus'], modules: ['quantum'], tasksDone: ['bios-check', 'nope'],
+  });
+  Rules.sanitize(s);
+  assert.deepEqual(Object.keys(s.explored), ['firmware']);
+  assert.ok(!s.explored.firmware.includes('zzz') && s.explored.firmware.includes('f0') && s.explored.firmware.includes('f3'));
+  assert.deepEqual(s.cleared, { firmware: ['f5'] });
+  assert.deepEqual(s.learned, ['echo', 'ls', 'cd']);
+  assert.deepEqual(s.equipped, ['echo', 'ls'], 'trimmed to 2 slots');
+  assert.deepEqual(s.codex, ['echo']);
+  assert.deepEqual(s.upgrades, ['ls-a']); assert.deepEqual(s.modules, []); assert.deepEqual(s.tasksDone, ['bios-check']);
+  assert.deepEqual(s.checkpoint, { region: 'firmware', node: 'f0' });
+  assert.equal(s.node, 'f3');
+});
+
+test('sanitize moves an unknown node to the checkpoint and an unknown region to the start', () => {
+  const a = State.load({ region: 'firmware', node: 'f99', checkpoint: { region: 'firmware', node: 'f3' }, explored: { firmware: ['f0', 'f1', 'f3'] }, learned: ['echo'] });
+  Rules.sanitize(a);
+  assert.equal(a.node, 'f3'); assert.deepEqual(a.learned, ['echo'], 'progress kept');
+  const b = State.load({ region: 'mars', node: 'm1', checkpoint: { region: 'mars', node: 'm1' }, bits: 50 });
+  Rules.sanitize(b);
+  assert.deepEqual([b.region, b.node, b.bits], ['firmware', 'f0', 50]);
+  assert.ok(b.explored.firmware.includes('f1'));
+});

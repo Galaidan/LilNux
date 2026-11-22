@@ -119,3 +119,10 @@ test('characters have lines', () => {
   }
   assert.match(W.CHARACTERS.pip.lines.join(' '), /PID 1/);
 });
+
+test('real-Linux facts: missing kernel, boot loops, kernel command line', () => {
+  const w = W.CREATURES.kernelWraith.real;
+  assert.doesNotMatch(w, /grub>/); assert.match(w, /not found/);
+  assert.doesNotMatch(W.REGIONS[1].nodes.g4.ref.real, /always/);
+  assert.match(W.REGIONS[1].nodes.g5.ref, /Kernel command line: BOOT_IMAGE=/);
+});

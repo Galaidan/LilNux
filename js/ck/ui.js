@@ -104,14 +104,15 @@
         const m = W.MODULES[id]; const n = count(id);
         return `<div class="ck-slot ${n ? 'on' : ''}" data-slot="${id}" title="${n ? esc(m.real) : 'Empty slot'}"><b>${label}</b><span>${n ? `${m.icon} ${esc(m.name)}${n > 1 ? ' ×' + n : ''}` : '—'}</span></div>`;
       }).join('');
-      const skills = state.learned.map((id) => {
+      const inFight = ui.mode === 'fight';
+      const skills = (inFight ? '<p class="ck-dim">⏸ Fight paused. Loadout changes happen on the map, not mid-fight.</p>' : '') + state.learned.map((id) => {
         const s = W.SKILLS[id]; const on = state.equipped.includes(id);
         const u = s.upgrade; const owned = state.upgrades.includes(u.id); const cb = canBuy(state, u.id);
         const why = { bits: `need ${u.cost} bits`, needs: u.needs ? `needs ${W.MODULES[u.needs] ? W.MODULES[u.needs].name : u.needs}` : 'locked' }[cb.reason] || '';
         return `<div class="ck-skillrow">
           <span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(owned ? u.cmd : s.cmd)}</code><small>${esc(s.blurb)}</small></div>
-          ${on ? `<button class="ck-btn" data-unequip="${id}">Unequip</button>` : `<button class="ck-btn" data-equip="${id}" ${state.equipped.length >= st.slots ? 'disabled' : ''}>Equip</button>`}
-          ${owned ? `<span class="ck-owned">✓ <code>${esc(u.cmd)}</code></span>` : `<button class="ck-btn ck-up" data-buy="${u.id}" ${cb.ok ? '' : 'disabled'} title="${esc(u.blurb)}">⬆ <code>${esc(u.cmd)}</code> · ${u.cost}b${why ? `<small>${why}</small>` : ''}</button>`}
+          ${on ? `<button class="ck-btn" data-unequip="${id}" ${inFight ? 'disabled' : ''}>Unequip</button>` : `<button class="ck-btn" data-equip="${id}" ${inFight || state.equipped.length >= st.slots ? 'disabled' : ''}>Equip</button>`}
+          ${owned ? `<span class="ck-owned">✓ <code>${esc(u.cmd)}</code></span>` : `<button class="ck-btn ck-up" data-buy="${u.id}" ${cb.ok && !inFight ? '' : 'disabled'} title="${esc(u.blurb)}">⬆ <code>${esc(u.cmd)}</code> · ${u.cost}b${why ? `<small>${why}</small>` : ''}</button>`}
         </div>`;
       }).join('') || '<p class="ck-dim">No skills learned yet.</p>';
       const codex = state.codex.map((id) => { const s = W.SKILLS[id]; return `<li><code>${esc(s.cmd)}</code> — ${code(s.real)}<br><span class="ck-dim">Try in a real terminal:</span> <code>${esc(s.example)}</code></li>`; }).join('') || '<li class="ck-dim">Learn a skill to fill your codex.</li>';
@@ -181,7 +182,9 @@
           p.textContent = shell.prompt();
           if (s.learnTest.test(v.trim()) && res.ok !== false) {
             done = true; h.onLearned(skillId);
-            const ok = document.createElement('div'); ok.className = 'ck-learned'; ok.innerHTML = `✅ Skill learned: <code>${esc(s.cmd)}</code> — it’s in your skill bar and codex.`; out.appendChild(ok);
+            const equipped = h.getState().equipped.includes(skillId);
+            const ok = document.createElement('div'); ok.className = 'ck-learned';
+            ok.innerHTML = `✅ Skill learned: <code>${esc(s.cmd)}</code> — ${equipped ? 'it’s in your skill bar and codex.' : 'it’s in your codex, but your skill slots are full.'}`; out.appendChild(ok);
             setTimeout(() => { box.remove(); resolve(); }, 1100);
           } else if (v.trim()) {
             const hint = document.createElement('div'); hint.className = 'ck-dim'; hint.innerHTML = `Not quite — try <code>${esc(s.example)}</code>`; out.appendChild(hint);

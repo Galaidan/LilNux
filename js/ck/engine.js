@@ -11,7 +11,7 @@
     const ctx = canvas.getContext('2d');
     let scene = null; let raf = 0; let last = 0; let started = false; let destroyed = false;
     const view = { w: 1, h: 1, dpr: 1, s: 1, ox: 0, oy: 0 };
-    const pointers = new Map(); let pinchDist = 0;
+    const pointers = new Map(); let pinchDist = 0; let pinching = false;
 
     const engine = {
       canvas, ctx, view, camera: { x: 800, y: 500, zoom: 1 }, running: false,
@@ -76,7 +76,11 @@
     function pt(e) { return Object.assign(engine.toWorld(e.clientX, e.clientY), { sx: e.clientX, sy: e.clientY, id: e.pointerId, kind: e.pointerType }); }
     function onDown(e) {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchDist = Math.hypot(a.x - b.x, a.y - b.y); }
+      if (pointers.size >= 2) {
+        const [a, b] = [...pointers.values()]; pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (!pinching) { pinching = true; if (scene && scene.pointer) scene.pointer('cancel', pt(e), e); }
+        e.preventDefault(); return;
+      }
       if (canvas.setPointerCapture) try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       if (scene && scene.pointer) scene.pointer('down', pt(e), e);
       e.preventDefault();
@@ -87,10 +91,12 @@
         const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
         if (pinchDist) scene.pinch(d / pinchDist); pinchDist = d; return;
       }
+      if (pinching) return;
       if (scene && scene.pointer) scene.pointer('move', pt(e), e);
     }
     function onUp(e) {
       pointers.delete(e.pointerId); if (pointers.size < 2) pinchDist = 0;
+      if (pinching) { if (!pointers.size) pinching = false; return; }
       if (scene && scene.pointer) scene.pointer('up', pt(e), e);
     }
     function onWheel(e) { if (scene && scene.pinch) { scene.pinch(e.deltaY < 0 ? 1.08 : 1 / 1.08); e.preventDefault(); } }
