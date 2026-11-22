@@ -12,7 +12,7 @@
     let state = o.state; let region; let pos; let travel = null; let drag = null;
     const pan = { x: 0, y: 0 };
     const parts = [];
-    const sc = { view: 'map', locked: false, facing: 1 };
+    const sc = { view: 'map', locked: false, facing: 1 }; let flickerT = 0;
 
     function nodePos(id) { const n = region.nodes[id]; return { x: n.x, y: n.y }; }
     function visible() { return state.explored[state.region] || []; }
@@ -73,6 +73,8 @@
         }
       }
       Art().stepParticles(parts, dt);
+      if (state.story && state.story.flicker && !sc.locked) { state.story.flicker = false; flickerT = 1.6; if (o.onFlicker) o.onFlicker(); }
+      if (flickerT > 0) flickerT -= dt;
       const cam = engine.camera; const k = Math.min(1, dt * 4);
       cam.x += (pos.x + pan.x - cam.x) * k; cam.y += (pos.y + pan.y - cam.y) * k;
     };
@@ -86,8 +88,10 @@
         const lit = Rules().isCleared(state, a) && Rules().isCleared(state, b);
         A.trace(ctx, region.nodes[a], region.nodes[b], t, lit, region.accent, reduced);
       }
-      for (const id of vis) A.node(ctx, region.nodes[id], t, { cleared: Rules().isCleared(state, id), current: id === state.node && !travel, accent: region.accent, reduced });
-      A.colonel(ctx, pos.x, pos.y - 62, 0.9, t, { facing: sc.facing, reduced });
+      const glitched = (state.story && state.story.glitched) || [];
+      for (const id of vis) A.node(ctx, region.nodes[id], t, { cleared: Rules().isCleared(state, id), current: id === state.node && !travel, accent: region.accent, reduced, glitched: glitched.includes(id) });
+      if (region.home && vis.includes(region.home) && !(state.story && state.story.liltuxTaken)) { const hn = region.nodes[region.home]; A.character(ctx, 'liltux', hn.x + 62, hn.y - 44, 0.9, t); }
+      A.colonel(ctx, pos.x, pos.y - 62, 0.9, t, { facing: sc.facing, reduced, redVisor: flickerT > 0 && (reduced || Math.floor(t * 8) % 2 === 0) });
       A.pip(ctx, pos.x - 46 * sc.facing, pos.y - 104, 0.9, t);
       A.burst(ctx, parts);
       engine.screenTransform();

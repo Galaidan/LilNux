@@ -54,10 +54,11 @@ for (const region of W.REGIONS) {
   test(`${region.id}: every node reachable from start`, () => {
     assert.equal(reach(region, region.start).size, Object.keys(region.nodes).length);
   });
-  test(`${region.id}: boss reachable and exit beyond boss`, () => {
+  test(`${region.id}: boss reachable and the way on is beyond the boss`, () => {
     assert.equal(region.nodes[region.boss].kind, 'boss');
-    assert.equal(region.nodes[region.exit].kind, 'exit');
-    assert.ok(!reach(region, region.start, region.boss).has(region.exit));
+    const end = region.exit || region.home;
+    assert.ok(region.exit ? region.nodes[end].kind === 'exit' : region.nodes[end].ref === 'liltux');
+    assert.ok(!reach(region, region.start, region.boss).has(end));
   });
   test(`${region.id}: every problem skill is taught earlier on the path`, () => {
     for (const [id, n] of nodesOf(region, 'problem')) {
@@ -125,4 +126,14 @@ test('real-Linux facts: missing kernel, boot loops, kernel command line', () => 
   assert.doesNotMatch(w, /grub>/); assert.match(w, /not found/);
   assert.doesNotMatch(W.REGIONS[1].nodes.g4.ref.real, /always/);
   assert.match(W.REGIONS[1].nodes.g5.ref, /Kernel command line: BOOT_IMAGE=/);
+});
+
+test('GRUB Gate ends at Home, where Lil Tux lives', () => {
+  const g = W.REGIONS[1];
+  assert.equal(g.exit, null); assert.equal(g.home, 'g13');
+  assert.deepEqual([g.nodes.g13.kind, g.nodes.g13.ref, g.nodes.g13.label], ['character', 'liltux', 'Home']);
+  const lt = W.CHARACTERS.liltux;
+  assert.ok(lt && lt.name === 'Lil Tux');
+  assert.match(lt.lines.join(' '), /rest/i); assert.match(lt.lines.join(' '), /systemctl suspend/);
+  assert.ok(!Object.values(W.SKILLS).some((s) => s.teacher === 'liltux'), 'resting is not a combat skill');
 });

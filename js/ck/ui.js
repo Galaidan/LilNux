@@ -15,7 +15,8 @@
     let sayState = null;
 
     // ------------------------------------------------------------ HUD
-    ui.hud = function (state) {
+    ui.hud = function (state, opts) {
+      opts = opts || {};
       const reg = R.region(state.region);
       const mems = W.REGIONS.reduce((n, r) => n + Object.values(r.nodes).filter((x) => x.kind === 'memory').length, 0);
       $('.ck-hud').innerHTML = `
@@ -25,6 +26,7 @@
           <span class="ck-stat" title="Memory fragments"><b>${state.memories.length}</b>/${mems} memories</span>
         </div>
         <div class="ck-hud-right">
+          ${opts.canRest ? '<button class="ck-btn" data-ck="rest" aria-label="Rest (systemctl suspend)" title="Rest — systemctl suspend">💤 Rest</button>' : ''}
           <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip"><span class="ck-orb"></span><span>Pip</span></button>
           <button class="ck-btn" data-ck="exit" aria-label="Exit Colonel Kernel">✕</button>
         </div>`;
@@ -62,6 +64,7 @@
       const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (speaker === 'colonel') CK.Art.colonel(x, 36, 60, 0.85, 1, { reduced: true });
       else if (speaker === 'pip') CK.Art.pip(x, 36, 38, 1.7, 1);
+      else if (speaker === 'liltux') CK.Art.liltux(x, 36, 34, 0.42, 1);
       else CK.Art.character(x, speaker, 40, 50, 0.8, 1);
       return c;
     }
@@ -125,7 +128,10 @@
       const reg = R.region(state.region); const boss = reg.nodes[reg.boss];
       const done = W.REGIONS.filter((r) => (state.cleared[r.id] || []).includes(r.boss));
       const unlearned = W.REGIONS.flatMap((r) => Object.values(r.nodes)).filter((n) => n.kind === 'character' && W.SKILLS[Object.keys(W.SKILLS).find((k) => W.SKILLS[k].teacher === n.ref)] && !state.learned.includes(Object.keys(W.SKILLS).find((k) => W.SKILLS[k].teacher === n.ref)));
-      return `<div class="ck-quest"><b>Main quest</b><p>${state.chapterDone ? 'Chapter 1 complete. The Kernel Core awaits…' : `Restore <b>${esc(reg.name)}</b>: reach <b>${esc(boss.label)}</b> and defeat the <b>${esc(W.CREATURES[boss.ref.creature].name)}</b>.`}</p></div>
+      return `<div class="ck-quest"><b>Main quest</b><p>${(state.story && state.story.liltuxTaken) ? 'Lil Tux is missing. Something moved him while you rested. The search continues in Chapter 2…'
+          : (state.story && state.story.liltuxMet) ? 'Rest with 💤 (or take a real break). Lil Tux insists.'
+          : (reg.home && (state.cleared[reg.id] || []).includes(reg.boss)) ? 'The machine booted! Go <b>Home</b> and meet whoever is waving.'
+          : `Restore <b>${esc(reg.name)}</b>: reach <b>${esc(boss.label)}</b> and defeat the <b>${esc(W.CREATURES[boss.ref.creature].name)}</b>.`}</p></div>
         <div class="ck-quest"><b>Who to talk to</b><p>${unlearned.length ? `Find <b>${esc(W.CHARACTERS[unlearned[0].ref].name)}</b> at <b>${esc(unlearned[0].label)}</b> to learn a new skill.` : 'You’ve met everyone in this chapter.'}</p></div>
         <div class="ck-quest"><b>Restored</b><p>${done.length ? done.map((r) => '✓ ' + esc(r.name)).join('<br>') : 'Nothing yet. The machine is still dark.'}</p></div>
         <div class="ck-quest"><b>Memories</b><p>${state.memories.length ? state.memories.slice(-3).map((m) => `<code>${esc(m)}</code>`).join('<br>') : 'None recovered yet. Look for violet ✦ nodes.'}</p></div>`;
@@ -155,9 +161,9 @@
     ui.pipOpen = () => !!$('.ck-pip');
 
     // ------------------------------------------------------------ learning terminal
-    ui.learn = function (skillId) {
+    ui.learn = function (skillId, spec) {
       return new Promise((resolve) => {
-        const s = W.SKILLS[skillId]; const teacher = W.CHARACTERS[s.teacher];
+        const s = spec || W.SKILLS[skillId]; const teacher = W.CHARACTERS[s.teacher];
         const shell = new root.LilShell(h.user || 'colonel');
         const box = document.createElement('div');
         box.className = 'ck-modal ck-learn'; box.style.setProperty('--acc', teacher.color);
@@ -184,7 +190,7 @@
             done = true; h.onLearned(skillId);
             const equipped = h.getState().equipped.includes(skillId);
             const ok = document.createElement('div'); ok.className = 'ck-learned';
-            ok.innerHTML = `✅ Skill learned: <code>${esc(s.cmd)}</code> — ${equipped ? 'it’s in your skill bar and codex.' : 'it’s in your codex, but your skill slots are full.'}`; out.appendChild(ok);
+            ok.innerHTML = spec ? esc(spec.done) : `✅ Skill learned: <code>${esc(s.cmd)}</code> — ${equipped ? 'it’s in your skill bar and codex.' : 'it’s in your codex, but your skill slots are full.'}`; out.appendChild(ok);
             setTimeout(() => { box.remove(); resolve(); }, 1100);
           } else if (v.trim()) {
             const hint = document.createElement('div'); hint.className = 'ck-dim'; hint.innerHTML = `Not quite — try <code>${esc(s.example)}</code>`; out.appendChild(hint);
@@ -225,6 +231,7 @@
       const b = e.target.closest('button'); if (!b || b.disabled) return;
       const d = b.dataset;
       if (d.ck === 'exit') return h.onExit();
+      if (d.ck === 'rest') return h.onRest && h.onRest();
       if (d.ck === 'pip') return ui.pipOpen() ? ui.closePip() : ui.pip();
       if (d.ck === 'closepip') return ui.closePip();
       if (d.ck === 'next' && sayState) return sayState.next();

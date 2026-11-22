@@ -827,6 +827,13 @@
     'xdg-open'(args) { return { ok: true, out: '', tip: `In real Fedora this opens <code>${esc(args[0] || '')}</code> with its favourite app.` }; },
     ping() { return { ok: false, err: 'LilNux: no internet in the pretend terminal!', tip: 'In the real Terminal, try <code>ping -c 3 fedoraproject.org</code> to test your internet. Ctrl+C stops it.' }; },
 
+    systemctl(args) {
+      const sub = args[0];
+      if (sub === 'suspend') return { ok: true, out: '', tip: '💤 On a real Fedora computer, <code>systemctl suspend</code> puts it to sleep. (Only pretend here — your computer is fine!)' };
+      if (sub === 'status') return { ok: true, out: '● fedora\n    State: running\n    Units: 412 loaded (incl. loaded aliases)\n     Jobs: 0 queued\n   Failed: 0 units\n' };
+      if (sub === 'poweroff' || sub === 'reboot') return { ok: true, out: '', tip: `In real Fedora this would ${sub === 'reboot' ? 'restart' : 'turn off'} the computer. LilNux only pretends!` };
+      return { ok: false, err: `Unknown command verb '${sub || ''}'.` };
+    },
     // --- software ---
     dnf(args, stdin, ctx) { return dnf.call(this, args, ctx); },
     flatpak(args) { return flatpak.call(this, args); },

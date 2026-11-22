@@ -38,7 +38,7 @@ async function settle(pg, opts) {
     if (s.banner) { await pg.click('.ck-banner'); continue; }
     if (s.say) { await pg.click('.ck-say [data-ck=next]'); continue; }
     if (s.learning) {
-      const ex = await pg.evaluate((id) => CK.World.SKILLS[id].example, s.learning);
+      const ex = await pg.evaluate(() => CK._test.main.learnExample);
       await pg.fill('.ck-learn input', ex); await pg.press('.ck-learn input', 'Enter'); await wait(1400); continue;
     }
     if (s.choice && opts.stopAtChoice) return 'choice';
@@ -111,6 +111,10 @@ const tests = {
     const player = await pg.evaluate(() => JSON.parse(localStorage.getItem('lilnux.save.v1')).players[0]);
     assert.ok(player.xp > 0);
     for (const id of ['ck-r1', 'ck-r2', 'ck-ch1', 'ck-clean']) assert.ok(player.badges.includes(id), id);
+    assert.equal(st.story.liltuxMet, true, 'met Lil Tux at Home');
+    assert.equal(st.story.restUnlocked, true, 'learned systemctl suspend');
+    assert.equal(st.story.liltuxTaken, true, 'the first rest took Lil Tux');
+    assert.deepEqual(st.story.glitched, ['g13']);
     await pg.screenshot({ path: path.join(SHOTS, 'ck-chapter-end.png') });
     assert.deepEqual(pg.errs, []);
   },
@@ -202,6 +206,38 @@ const tests = {
     }
     assert.ok(sawSwap, 'swap offered');
     assert.ok(await pg.evaluate(() => CK._test.main.state.equipped.includes('cd')));
+  },
+  async 'quitting for 5+ minutes counts as a rest (one secret event)'(b) {
+    const pg = await newPage(b, () => {
+      const ck = { region: 'firmware', node: 'f3', seenIntro: true, explored: { firmware: ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f2', 'f3', 'f5', 'f9'] },
+        learned: ['echo', 'ls'], equipped: ['echo', 'ls'], codex: ['echo', 'ls'], bits: 40, checkpoint: { region: 'firmware', node: 'f3' }, story: { lastSeen: Date.now() - 10 * 60e3 } };
+      localStorage.setItem('lilnux.save.v1', JSON.stringify({ players: [{ id: 'p1', name: 'Old', avatar: '🦊', kid: false, xp: 0, worlds: {}, quests: {}, badges: [], unlockAll: false, ck }], current: 'p1', sound: false }));
+    });
+    await openKernel(pg); await settle(pg);
+    const st = await pg.evaluate(() => CK._test.main.state);
+    assert.equal(st.story.rests, 1);
+    const events = (st.cleared.firmware.includes('f9') ? 0 : 1) + st.story.oddLogs.length + (st.story.flicker ? 1 : 0);
+    assert.ok(events <= 1);
+    assert.deepEqual([st.bits, st.learned], [40, ['echo', 'ls']], 'nothing lost');
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'coming back within 5 minutes is not a rest'(b) {
+    const pg = await newPage(b, () => {
+      const ck = { region: 'firmware', node: 'f1', seenIntro: true, learned: ['echo'], equipped: ['echo'], checkpoint: { region: 'firmware', node: 'f1' }, story: { lastSeen: Date.now() - 60e3 } };
+      localStorage.setItem('lilnux.save.v1', JSON.stringify({ players: [{ id: 'p1', name: 'Old', avatar: '🦊', kid: false, xp: 0, worlds: {}, quests: {}, badges: [], unlockAll: false, ck }], current: 'p1', sound: false }));
+    });
+    await openKernel(pg); await settle(pg);
+    assert.equal(await pg.evaluate(() => CK._test.main.state.story.rests), 0);
+  },
+  async 'break reminder offers a rest'(b) {
+    const pg = await newPage(b);
+    await addPlayer(pg);
+    await openKernel(pg); await settle(pg);
+    await pg.evaluate(() => { CK.Story.BREAK_MS = 1500; });
+    await wait(3000);
+    assert.match(await pg.textContent('.ck-choice'), /break/i);
+    await pg.click('.ck-choice button >> text=Keep playing');
+    assert.equal(await pg.$('.ck-choice'), null);
   },
 };
 

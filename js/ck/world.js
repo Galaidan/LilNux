@@ -95,6 +95,17 @@
     },
   };
 
+  CHARACTERS.liltux = {
+    id: 'liltux', name: 'Lil Tux', title: 'Linux mascot · lives at Home', color: '#f5a623',
+    lines: [
+      'You did it! The whole machine booted! I’m Lil Tux — I live here at Home, the desktop that appears when Linux is up and running.',
+      'Firmware checked the hardware, GRUB loaded the kernel, the kernel started PID 1… and now there’s a working computer. A tiny one, but a real one!',
+      'Colonel, you look exhausted. Even kernels need rest. When you rest, the system goes quiet — the CPU idles until something wakes it up.',
+      'On a real Fedora computer, `systemctl suspend` puts it to sleep. Type it, and you can rest at any safe spot — or just close the game; that counts too.',
+      'And if you’ve been playing for ages, I’ll remind you to take a break. Promise you’ll actually take it? 🐧',
+    ],
+  };
+
   // Puzzle grids are stored SOLVED. Codes: S=source G=target I=straight L=corner T=tee X=cross .=empty, digit = rotation.
   const TYPES = { S: 'source', G: 'target', I: 'straight', L: 'corner', T: 'tee', X: 'cross', '.': 'empty' };
   function grid(rows) {
@@ -106,7 +117,7 @@
 
   const firmware = {
     id: 'firmware', name: 'Firmware Foundry', accent: '#ffb347', start: 'f0', boss: 'f12', exit: 'f13',
-    intro: ['Firmware Foundry. This is where a computer wakes up — before Linux, before anything.', 'Tap a glowing node to move. Fog hides everything we haven’t explored yet.'],
+    intro: ['Firmware Foundry. This is where a computer wakes up — before Linux, before anything.', 'Tap a glowing node to move. Fog hides everything we haven’t explored yet.', 'Weird… I’m picking up a faint signal from deep inside the system. Small. Penguin-shaped? Let’s get this machine booted and find out.'],
     outro: ['POST complete! The firmware found a bootable disk and is handing control to the bootloader.', '…did you feel that? A memory. Something about “Linux version 6.19”. Weird. Let’s keep moving.'],
     nodes: {
       f0: n(120, 520, 'Cold Boot', 'start'),
@@ -131,9 +142,9 @@
   };
 
   const grubRegion = {
-    id: 'grub', name: 'GRUB Gate', accent: '#b6ff5c', start: 'g0', boss: 'g12', exit: 'g13',
+    id: 'grub', name: 'GRUB Gate', accent: '#b6ff5c', start: 'g0', boss: 'g12', exit: null, home: 'g13',
     intro: ['GRUB Gate. The bootloader’s job: find the kernel, load it, and hand over control.', 'Somewhere past these loops is the kernel image. Let’s go get it.'],
-    outro: ['The kernel image is loaded and GRUB just handed over control to… wait.', 'Colonel. The log says “Run /init as init process”. That’s me — PID 1. And the thing that starts PID 1 is the kernel. Which means you’re…', 'Chapter 1 complete: Boot Sequence restored. Next stop — the Kernel Core.'],
+    outro: ['The kernel image is loaded and GRUB just handed over control to… wait.', 'Colonel. The log says “Run /init as init process”. That’s me — PID 1. And the thing that starts PID 1 is the kernel. Which means you’re…', '…no time. The machine is booting! Look — Home just came online. Someone’s waving at us.'],
     nodes: {
       g0: n(110, 500, 'Boot Menu', 'start'),
       g1: n(300, 500, 'GRUB Shell', 'character', 'grub'),
@@ -148,7 +159,7 @@
       g10: n(1150, 250, 'Kernel Params', 'memory', '[    0.412345] Memory: 15981232K/16642560K available'),
       g11: n(1150, 820, 'Root UUID', 'memory', '[    1.204561] Run /init as init process'),
       g12: n(1330, 500, 'Kernel Handoff', 'boss', { creature: 'kernelWraith', drop: 'ssd' }),
-      g13: n(1500, 500, 'To the Kernel', 'exit'),
+      g13: n(1500, 500, 'Home', 'character', 'liltux'),
       g14: n(480, 140, 'Hidden Cache', 'item', { bits: 30 }, { hidden: true }),
       g15: n(900, 950, 'Hidden Cache', 'item', { bits: 30 }, { hidden: true }),
     },

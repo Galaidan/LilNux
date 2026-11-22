@@ -17,6 +17,9 @@
     const W = CK.World; const R = CK.Rules;
     const player = h.player;
     const state = R.sanitize(CK.State.load(player.ck));
+    const S = CK.Story;
+    const restedAway = S.restedWhileAway(state, Date.now());
+    state.story.lastSeen = Date.now();
     // Never resume standing inside an unfinished fight/puzzle: go back to the checkpoint.
     const here = R.region(state.region).nodes[state.node];
     if (R.BLOCKING[here.kind] && !R.isCleared(state, state.node) && state.checkpoint.region === state.region && R.region(state.region).nodes[state.checkpoint.node]) {
@@ -43,7 +46,7 @@
     const xp = (n) => { if (n) h.addXP(n); };
     const say = (who, lines) => ui.say(who, lines);
     const sound = (k) => { if (h.sound && h.sound[k] && (!h.soundOn || h.soundOn())) h.sound[k](); };
-    let lock = 0; const m = { learning: null, pendingProblem: null };
+    let lock = 0; const m = { learning: null, learnExample: null, pendingProblem: null }; let remindPending = false; let reminderOpen = false; let hiddenAt = 0;
     let orientationTipShown = false;
 
     let engineRef = null; const onMap = () => !engineRef || !engineRef.scene || !!engineRef.scene.tapNode;
@@ -60,16 +63,69 @@
         save();
       },
       onSkill: (id) => onSkill(id),
-      onLearned: (id) => { R.learn(state, id); save(); },
+      onLearned: (id) => { if (id === 'rest') state.story.restUnlocked = true; else R.learn(state, id); save(); },
+      onRest: () => { if (canRest()) busy(async () => { await ui.banner('💤 Resting…', 'systemctl suspend', 1800); await wake(S.rest(state, Math.random)); }); },
       speak: (t) => { if (h.speak) h.speak(t); },
     });
 
-    const map = CK.Scenes.map({ engine, state, onArrive: (r) => arrive(r), onBlocked: (why, id) => blocked(why, id) });
+    const map = CK.Scenes.map({ engine, state, onArrive: (r) => arrive(r), onBlocked: (why, id) => blocked(why, id), onFlicker: () => save() });
     engineRef = engine; cur = { engine, ui, host, map };
     engine.setScene(map); engine.start();
     refresh();
 
-    function refresh() { ui.hud(state); if (engine.scene === map) ui.skillBar(state, 'map'); }
+    function canRest() {
+      const n = R.region(state.region).nodes[state.node];
+      return !!state.story.restUnlocked && engine.scene === map && !map.locked && !ui.busy() && (n.kind === 'start' || n.kind === 'character') && !state.story.glitched.includes(state.node);
+    }
+    function refresh() {
+      ui.hud(state, { canRest: canRest() }); if (engine.scene === map) ui.skillBar(state, 'map');
+      if (remindPending && !lock && engine.scene === map && !ui.busy()) { remindPending = false; breakReminder(); }
+    }
+
+    // ------------------------------------------------------------ resting (NullNux acts in secret)
+    async function wake(ev) {
+      save(); map.setState(state);
+      const reg = R.region(state.region);
+      if (ev.type === 'taken') {
+        await ui.banner('…', 'You wake up', 1600);
+        await say('pip', ['Colonel! Colonel, wake up!', 'Lil Tux is gone. Home is… glitching. Everything was fine when you went to sleep.',
+          'There’s a log line I don’t recognise: `' + S.TAKEN_LOG + '`', 'swapper/0? Nothing out here should be running as PID 0…', 'Whatever took him is still somewhere in this system. We’re going to find him.']);
+        h.giveBadge(...BADGES.chapter); sound('win');
+        await ui.banner('Chapter 1 Complete', 'Lil Tux is missing', 3200);
+        await say('pip', ['Next: the Kernel Core — processes, the scheduler… and maybe some answers.', 'Until then, try `ls -a`, `cd` and `sudo dmesg` in the real Terminal (dmesg may need sudo). Same commands as here. Well… minus the lasers.']);
+        return;
+      }
+      ui.toast('😴 The Colonel wakes up feeling rested.');
+      if (ev.type === 'rebreak') await say('pip', [`Huh. The ${reg.nodes[ev.node].label} circuit is broken again. I could’ve sworn we fixed that…`]);
+      else if (ev.type === 'oddlog') { ui.toast(`✦ A strange line appeared in the logs:<br><code>${ev.line}</code>`); await say('pip', ['That’s not a boot message… Probably nothing.']); }
+    }
+    async function breakReminder() {
+      const who = state.story.liltuxMet && !state.story.liltuxTaken ? 'liltux' : 'pip';
+      const opts = [];
+      if (canRest()) opts.push({ label: 'Rest now', html: '💤 Rest now (<code>systemctl suspend</code>)', value: 'rest' });
+      opts.push({ label: 'Take a real break', html: '🚶 Take a real break (close the game)', value: 'quit' }, { label: 'Keep playing', html: '▶ Keep playing', value: null });
+      reminderOpen = true;
+      await busy(async () => {
+        const pick = await ui.choice('Time for a break?', opts, `${W.CHARACTERS[who].name}: “You’ve been playing for a while. Even kernels need rest — stretch, grab some water, look at something far away.”`);
+        if (pick === 'rest') { await ui.banner('💤 Resting…', 'systemctl suspend', 1800); await wake(S.rest(state, Math.random)); }
+        else if (pick === 'quit') { setTimeout(() => { CK.close(); if (h.onExit) h.onExit(); }, 0); }
+        reminderOpen = false; remindPending = false; state.story.lastReminderMs = state.story.playMs; // next one a full interval later
+      });
+    }
+    const tick = setInterval(() => {
+      if (!cur || document.hidden) return;
+      if (S.addPlayTime(state, 1000) && !reminderOpen) remindPending = true;
+      state.story.lastSeen = Date.now();
+      if (remindPending) refresh();
+    }, 1000);
+    function onVis() {
+      if (document.hidden) { hiddenAt = Date.now(); state.story.lastSeen = hiddenAt; save(); return; }
+      if (hiddenAt && S.restedWhileAway(state, Date.now()) && !lock) busy(async () => { await wake(S.rest(state, Math.random)); });
+      hiddenAt = 0; state.story.lastSeen = Date.now();
+    }
+    function onHide() { state.story.lastSeen = Date.now(); save(); }
+    document.addEventListener('visibilitychange', onVis);
+    root.addEventListener('pagehide', onHide);
     async function busy(fn) {
       lock++; map.locked = true;
       try { await fn(); } finally { lock--; if (!lock) map.locked = false; if (cur) { refresh(); save(); } }
@@ -102,11 +158,12 @@
     }
 
     async function meet(who) {
+      if (who === 'liltux') return meetLilTux();
       const skill = Object.keys(W.SKILLS).find((k) => W.SKILLS[k].teacher === who);
       const first = !state.codex.includes(skill);
       if (first) await say(who, W.CHARACTERS[who].lines);
       else await say(who, [who === 'pip' ? 'I’m right here, Colonel. Always running.' : 'Back again? Go on — the machine won’t fix itself.']);
-      if (skill && !state.learned.includes(skill)) { m.learning = skill; await ui.learn(skill); m.learning = null; sound('win'); xp(10); }
+      if (skill && !state.learned.includes(skill)) { m.learning = skill; m.learnExample = W.SKILLS[skill].example; await ui.learn(skill); m.learning = null; m.learnExample = null; sound('win'); xp(10); }
       if (skill && state.learned.includes(skill) && !state.equipped.includes(skill)) {
         const out = await ui.choice(`Your skill slots are full`, state.equipped.map((s) => ({ label: `Swap out ${W.SKILLS[s].cmd}`, html: `🔁 Swap out <code>${W.SKILLS[s].cmd}</code> for <code>${W.SKILLS[skill].cmd}</code>`, value: s }))
           .concat([{ label: 'Keep my loadout', html: '✋ Keep my loadout (swap later in Pip → Items)', value: null }]),
@@ -218,14 +275,24 @@
       if (state.region === 'firmware') {
         R.enterRegion(state, 'grub'); map.setState(state); save();
         await intro();
-      } else if (!state.chapterDone) {
-        state.chapterDone = true; save();
-        h.giveBadge(...BADGES.chapter); sound('win');
-        await ui.banner('Chapter 1 Complete', 'Boot Sequence restored', 3200);
-        await say('pip', ['Next time: the Kernel Core. Processes, the scheduler, and something called a Fork Bomb. I’ve got a bad feeling about this.', 'Until then — try `ls -a`, `cd` and `sudo dmesg` in the real Terminal (dmesg may need sudo). Same commands as here. Well… minus the lasers.']);
-      } else {
-        await say('pip', ['Chapter 2 is still being built. Stay tuned, Colonel!']);
       }
+    }
+
+    async function meetLilTux() {
+      const st = state.story;
+      if (st.liltuxTaken) { await say('pip', ['Home is cold and glitching. Lil Tux is gone… We’ll find him, Colonel.']); return; }
+      if (!st.liltuxMet) { await say('liltux', W.CHARACTERS.liltux.lines); sound('win'); }
+      else await say('liltux', ['Still here! Go on, get some rest. I’ll keep watch. 🐧']);
+      if (!st.restUnlocked) {
+        m.learning = 'rest'; m.learnExample = 'systemctl suspend';
+        await ui.learn('rest', { id: 'rest', cmd: 'systemctl suspend', name: 'Rest', icon: '💤', teacher: 'liltux', learnTest: /^systemctl\s+suspend$/,
+          real: '`systemctl suspend` puts a real Fedora computer to sleep. It wakes up right where you left off.', example: 'systemctl suspend', done: '💤 Rest unlocked! Use the 💤 Rest button at safe spots — or just take a real break.' });
+        m.learning = null; m.learnExample = null; xp(10);
+      }
+      if (!st.liltuxMet) { st.liltuxMet = true; xp(25); }
+      save();
+      const pick = await ui.choice('Lil Tux: “Rest now? I’ll keep watch.”', [{ label: 'Rest now', html: '💤 Rest now (<code>systemctl suspend</code>)', value: 'rest', primary: true }, { label: 'Not yet', html: '⏳ Not yet', value: null }]);
+      if (pick === 'rest') { await ui.banner('💤 Resting…', 'systemctl suspend', 1800); await wake(S.rest(state, Math.random)); }
     }
 
     async function intro() {
@@ -265,19 +332,22 @@
         get state() { return state; }, ui, map,
         sceneKind: () => (engine.scene === map ? 'map' : engine.scene && engine.scene.fight ? 'fight' : engine.scene && engine.scene.grid ? 'puzzle' : 'none'),
         busy: () => map.locked || ui.busy(),
-        get learning() { return m.learning; }, get pendingProblem() { return m.pendingProblem; },
+        get learning() { return m.learning; }, get learnExample() { return m.learnExample; }, get pendingProblem() { return m.pendingProblem; },
       };
     }
     busy(async () => {
       if (!state.seenIntro) await intro();
       else ui.toast(`Welcome back, Colonel. ${R.region(state.region).name}.`);
+      if (restedAway) await wake(S.rest(state, Math.random));
     });
+    cur.cleanup = () => { clearInterval(tick); document.removeEventListener('visibilitychange', onVis); root.removeEventListener('pagehide', onHide); state.story.lastSeen = Date.now(); save(); };
     }
   };
 
   CK.close = function () {
     if (!cur) return;
     try { if (root.speechSynthesis) root.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    if (cur.cleanup) cur.cleanup();
     cur.engine.destroy(); cur.ui.destroy(); cur.host.remove();
     document.body.classList.remove('ck-open');
     cur = null;

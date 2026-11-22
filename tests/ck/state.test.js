@@ -8,6 +8,7 @@ const FRESH = {
   learned: [], equipped: [], upgrades: [], modules: [], bits: 0, memories: [], tasksDone: [], codex: [],
   checkpoint: { region: 'firmware', node: 'f0' }, stats: { clean: 0, fights: 0, wins: 0 },
   chapterDone: false, seenIntro: false,
+  story: { liltuxMet: false, liltuxTaken: false, restUnlocked: false, rests: 0, lastSeen: 0, glitched: [], oddLogs: [], flicker: false, playMs: 0, lastReminderMs: 0 },
 };
 
 test('fresh has expected shape', () => {
@@ -57,4 +58,10 @@ test('rng is deterministic', () => {
   assert.deepEqual(xs, ys);
   xs.forEach((x) => assert.ok(x >= 0 && x < 1));
   assert.notDeepEqual(xs, [CK.rng(7)(), 0, 0, 0, 0]);
+});
+
+test('load repairs the story block', () => {
+  const s = CK.State.load({ story: { liltuxMet: 'yes', rests: 3, lastSeen: 'x', glitched: ['g13', 4], oddLogs: 'no', flicker: true } });
+  assert.equal(s.story.liltuxMet, false); assert.equal(s.story.rests, 3); assert.equal(s.story.lastSeen, 0);
+  assert.deepEqual(s.story.glitched, ['g13']); assert.deepEqual(s.story.oddLogs, []); assert.equal(s.story.flicker, true);
 });

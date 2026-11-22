@@ -103,7 +103,8 @@
   }
   function node(ctx, n, t, info) {
     const k = KIND[n.kind] || KIND.empty;
-    const color = n.kind === 'exit' ? info.accent : k.color;
+    const color = info.glitched ? C.coral : n.kind === 'exit' ? info.accent : k.color;
+    if (info.glitched && !info.reduced) { ctx.save(); ctx.translate(Math.sin(t * 53) > 0.6 ? 3 : 0, Math.sin(t * 41) > 0.7 ? -2 : 0); }
     const done = info.cleared; const active = !done;
     const pulse = info.reduced ? 0.5 : 0.5 + 0.5 * Math.sin(t * 3 + n.x * 0.01);
     const w = 66; const h = 46; const x = n.x - w / 2; const y = n.y - h / 2;
@@ -128,6 +129,11 @@
     ctx.fillStyle = 'rgba(4,8,22,0.75)'; const tw = ctx.measureText(label).width + 10;
     rr(ctx, n.x - tw / 2, y + h + 7, tw, 18, 6); ctx.fill();
     ctx.fillStyle = done ? '#b9c4e6' : '#ffffff'; ctx.fillText(label, n.x, y + h + 10);
+    if (info.glitched) {
+      ctx.strokeStyle = withAlpha(C.coral, 0.7); ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) { const gy = y + ((t * 60 + i * 13) % h); ctx.beginPath(); ctx.moveTo(x - 4, gy); ctx.lineTo(x + w + 4, gy); ctx.stroke(); }
+      if (!info.reduced) ctx.restore();
+    }
   }
 
   // ---------------------------------------------------------------- fog
@@ -186,7 +192,7 @@
     // head
     ctx.fillStyle = body; rr(ctx, -17, -41, 34, 25, 9); ctx.fill(); ctx.strokeStyle = C.cyan; ctx.lineWidth = 1.6; ctx.stroke();
     // visor + eyes
-    const vg = ctx.createLinearGradient(-13, 0, 13, 0); vg.addColorStop(0, C.magenta); vg.addColorStop(1, C.cyan);
+    const vg = ctx.createLinearGradient(-13, 0, 13, 0); vg.addColorStop(0, o.redVisor ? '#ff2a3d' : C.magenta); vg.addColorStop(1, o.redVisor ? '#5a0010' : C.cyan);
     ctx.fillStyle = vg; rr(ctx, -13, -34, 26, 10, 5); ctx.fill();
     const blink = o.reduced ? 1 : ((t % 4) < 0.12 ? 0.2 : 1);
     ctx.fillStyle = '#ffffff'; glow(ctx, '#ffffff', 8);
@@ -225,8 +231,33 @@
   }
 
   // ---------------------------------------------------------------- characters
+  const TUX_BEAK = typeof Path2D !== 'undefined' ? new Path2D('M47 70 Q60 63 73 70 Q60 82 47 70Z') : null;
+  const TUX_CROWN = typeof Path2D !== 'undefined' ? new Path2D('M36 36 Q34 10 60 11 Q86 10 84 36 Z') : null;
+  const TUX_BAND = typeof Path2D !== 'undefined' ? new Path2D('M36 30 Q60 25 84 30 L84 35 Q60 31 36 35 Z') : null;
+  function liltux(ctx, x, y, s, t) { // the LilNux mascot, same look as the learning mode, with a neon rim
+    const wave = Math.sin(t * 4) * 0.25;
+    ctx.save(); ctx.translate(x, y + Math.sin(t * 2.2) * 2); ctx.scale(s, s); ctx.translate(-60, -80);
+    glow(ctx, C.cyan, 16); ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(60, 82, 38, 48, 0, 0, TAU); ctx.fill(); noGlow(ctx);
+    ctx.fillStyle = '#f5a623'; ctx.beginPath(); ctx.ellipse(40, 130, 17, 7, 0, 0, TAU); ctx.ellipse(80, 130, 17, 7, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.ellipse(22, 88, 10, 26, 0.32, 0, TAU); ctx.fill();
+    ctx.save(); ctx.translate(98, 70); ctx.rotate(-0.32 - 0.6 - wave); ctx.beginPath(); ctx.ellipse(0, 18, 10, 26, 0, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(60, 82, 38, 48, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fafafa'; ctx.beginPath(); ctx.ellipse(60, 94, 26, 34, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(48, 58, 9, 11, 0, 0, TAU); ctx.ellipse(72, 58, 9, 11, 0, 0, TAU); ctx.fill();
+    const blink = (t % 3.7) < 0.12 ? 0.15 : 1;
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(50, 60, 4.5, 4.5 * blink, 0, 0, TAU); ctx.ellipse(70, 60, 4.5, 4.5 * blink, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,143,163,0.55)'; ctx.beginPath(); ctx.arc(38, 72, 4, 0, TAU); ctx.arc(82, 72, 4, 0, TAU); ctx.fill();
+    if (TUX_BEAK) { ctx.fillStyle = '#f5a623'; ctx.fill(TUX_BEAK); }
+    ctx.fillStyle = '#294172'; ctx.beginPath(); ctx.ellipse(60, 36, 40, 7, 0, 0, TAU); ctx.fill();
+    if (TUX_CROWN) { ctx.fillStyle = '#3c6eb4'; ctx.fill(TUX_CROWN); }
+    if (TUX_BAND) { ctx.fillStyle = '#51a2da'; ctx.fill(TUX_BAND); }
+    ctx.restore();
+  }
+
   function character(ctx, id, x, y, s, t) {
     if (id === 'pip') return pip(ctx, x, y, s * 1.6, t);
+    if (id === 'liltux') return liltux(ctx, x, y + 6, s * 0.48, t);
     ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
     if (id === 'bios') {
       const led = (t % 1) < 0.5;
@@ -337,5 +368,5 @@
     for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; p.life -= dt; if (p.life <= 0) parts.splice(i, 1); }
   }
 
-  CK.Art = { C, rr, glow, noGlow, withAlpha, background, trace, tracePoints, pointAlong, pathLen, node, fog, colonel, pip, character, creature, burst, spawnBurst, stepParticles };
+  CK.Art = { liltux, C, rr, glow, noGlow, withAlpha, background, trace, tracePoints, pointAlong, pathLen, node, fog, colonel, pip, character, creature, burst, spawnBurst, stepParticles };
 })(typeof window !== 'undefined' ? window : globalThis);
