@@ -143,7 +143,16 @@
       if (!sk || !state.equipped.includes(id) || f.outcome) return;
       if (sk.fight.type === 'scan') feedback(f.use(id, 0, 0)); else ui.select(id);
     };
+    const held = { q: false, e: false };
+    const applyMove = () => f.setMove((held.e ? 1 : 0) - (held.q ? 1 : 0));
+    sc.keyup = function (e) {
+      const k = String(e.key || '').toLowerCase();
+      if (k === 'blur') { held.q = held.e = false; applyMove(); return; }
+      if (k === 'q' || k === 'e') { held[k] = false; applyMove(); }
+    };
     sc.key = function (e) {
+      const k = String(e.key || '').toLowerCase();
+      if (k === 'q' || k === 'e') { held[k] = true; applyMove(); e.preventDefault(); return; }
       const n = parseInt(e.key, 10);
       if (n >= 1 && n <= 5 && state.equipped[n - 1]) { sc.skill(state.equipped[n - 1]); e.preventDefault(); }
     };
@@ -229,7 +238,10 @@
       ctx.fillText(def.name.toUpperCase() + (def.boss && f.enemies[0] ? `  ·  PHASE ${f.enemies[0].phase + 1}/${def.phases}` : ''), 980, 16);
       A.rr(ctx, 760, 20 + fs, 220, 12, 6); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
       A.rr(ctx, 760 + 220 * (1 - tot / max), 20 + fs, 220 * (tot / max), 12, 6); ctx.fillStyle = A.C.magenta; ctx.fill();
-      ctx.textAlign = 'center';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillStyle = 'rgba(200,215,255,0.55)';
+      ctx.font = `700 ${fontPx(view, 11)}px "Adwaita Sans", Cantarell, system-ui, sans-serif`;
+      ctx.fillText('Q ◀  move  ▶ E   ·   1–5 skills   ·   click to fire', f.W / 2, f.H - 6);
+      ctx.textBaseline = 'top';
       for (const p of pops) { ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.color; ctx.font = `900 ${fontPx(view, 16)}px system-ui, sans-serif`; ctx.fillText(p.text, p.x, p.y); }
       ctx.globalAlpha = 1;
       if (f.outcome) {

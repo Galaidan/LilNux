@@ -20,7 +20,7 @@
       v: 1, region: 'firmware', node: 'f0', prev: null, explored: { firmware: ['f0'] }, cleared: {},
       learned: [], equipped: [], upgrades: [], modules: [], bits: 0, memories: [], tasksDone: [], codex: [],
       checkpoint: { region: 'firmware', node: 'f0' }, stats: { clean: 0, fights: 0, wins: 0 },
-      chapterDone: false, seenIntro: false,
+      chapterDone: false, seenIntro: false, log: [],
       story: { liltuxMet: false, liltuxTaken: false, restUnlocked: false, rests: 0, lastSeen: 0, glitched: [], oddLogs: [], flicker: false, playMs: 0, lastReminderMs: 0 },
     };
   }
@@ -51,6 +51,10 @@
     if (isObj(raw.stats)) for (const k of Object.keys(s.stats)) if (Number.isFinite(raw.stats[k])) s.stats[k] = raw.stats[k];
     s.chapterDone = raw.chapterDone === true;
     s.seenIntro = raw.seenIntro === true;
+    if (Array.isArray(raw.log)) {
+      s.log = raw.log.filter((e) => isObj(e) && typeof e.html === 'string' && typeof e.kind === 'string')
+        .map((e) => ({ who: typeof e.who === 'string' ? e.who : '', kind: e.kind, html: e.html, at: Number.isFinite(e.at) ? e.at : 0 })).slice(-150);
+    }
     if (isObj(raw.story)) {
       const r = raw.story; const st = s.story;
       for (const k of ['liltuxMet', 'liltuxTaken', 'restUnlocked', 'flicker']) st[k] = r[k] === true;

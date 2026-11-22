@@ -101,6 +101,8 @@
     }
     function onWheel(e) { if (scene && scene.pinch) { scene.pinch(e.deltaY < 0 ? 1.08 : 1 / 1.08); e.preventDefault(); } }
     function onKey(e) { if (engine.running && scene && scene.key) scene.key(e); }
+    function onKeyUp(e) { if (scene && scene.keyup) scene.keyup(e); }
+    function onBlur() { if (scene && scene.keyup) scene.keyup({ key: 'blur' }); }
     function onResize() { computeView(); }
 
     document.addEventListener('visibilitychange', onVis);
@@ -110,6 +112,8 @@
     canvas.addEventListener('pointercancel', onUp);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     root.addEventListener('keydown', onKey);
+    root.addEventListener('keyup', onKeyUp);
+    root.addEventListener('blur', onBlur);
     root.addEventListener('resize', onResize);
     function unbind() {
       document.removeEventListener('visibilitychange', onVis);
@@ -119,6 +123,8 @@
       canvas.removeEventListener('pointercancel', onUp);
       canvas.removeEventListener('wheel', onWheel);
       root.removeEventListener('keydown', onKey);
+      root.removeEventListener('keyup', onKeyUp);
+      root.removeEventListener('blur', onBlur);
       root.removeEventListener('resize', onResize);
     }
 

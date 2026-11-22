@@ -7,7 +7,7 @@ const FRESH = {
   v: 1, region: 'firmware', node: 'f0', prev: null, explored: { firmware: ['f0'] }, cleared: {},
   learned: [], equipped: [], upgrades: [], modules: [], bits: 0, memories: [], tasksDone: [], codex: [],
   checkpoint: { region: 'firmware', node: 'f0' }, stats: { clean: 0, fights: 0, wins: 0 },
-  chapterDone: false, seenIntro: false,
+  chapterDone: false, seenIntro: false, log: [],
   story: { liltuxMet: false, liltuxTaken: false, restUnlocked: false, rests: 0, lastSeen: 0, glitched: [], oddLogs: [], flicker: false, playMs: 0, lastReminderMs: 0 },
 };
 
@@ -64,4 +64,12 @@ test('load repairs the story block', () => {
   const s = CK.State.load({ story: { liltuxMet: 'yes', rests: 3, lastSeen: 'x', glitched: ['g13', 4], oddLogs: 'no', flicker: true } });
   assert.equal(s.story.liltuxMet, false); assert.equal(s.story.rests, 3); assert.equal(s.story.lastSeen, 0);
   assert.deepEqual(s.story.glitched, ['g13']); assert.deepEqual(s.story.oddLogs, []); assert.equal(s.story.flicker, true);
+});
+
+test('load keeps a clean, capped message log', () => {
+  const entries = Array.from({ length: 170 }, (_, i) => ({ who: 'Pip', kind: 'say', html: 'line ' + i, at: i }));
+  const s = CK.State.load({ log: entries.concat([{ who: 5 }, 'junk', { html: 'ok', kind: 'toast' }]) });
+  assert.equal(s.log.length, 150);
+  assert.equal(s.log[s.log.length - 1].html, 'ok');
+  assert.ok(s.log.every((e) => typeof e.html === 'string' && typeof e.kind === 'string'));
 });

@@ -11,8 +11,58 @@
     rootEl.classList.add('ck-ui');
     rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-bar"></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div>';
     const $ = (s) => rootEl.querySelector(s);
-    const ui = { selected: null, combatText: '', pipTab: null, mode: 'map' };
+    const ui = { selected: null, combatText: '', pipTab: null, mode: 'map', unread: 0 };
     let sayState = null;
+
+    // ------------------------------------------------------------ message log (everything said or shown)
+    function appendLog(ol, e) {
+      const li = document.createElement('li'); li.className = 'k-' + e.kind;
+      li.innerHTML = (e.who ? `<b>${esc(e.who)}</b> ` : '') + `<span>${e.html}</span>`;
+      ol.appendChild(li); ol.scrollTop = ol.scrollHeight;
+    }
+    function record(kind, who, html) {
+      const e = { who: who || '', kind, html: String(html), at: Date.now() };
+      const st = h.getState && h.getState();
+      if (st && Array.isArray(st.log)) { st.log.push(e); if (st.log.length > 150) st.log.splice(0, st.log.length - 150); }
+      const panel = $('.ck-log');
+      if (panel) appendLog(panel.querySelector('ol'), e);
+      else { ui.unread++; const b = $('.ck-unread'); if (b) { b.textContent = ui.unread; b.hidden = false; } }
+    }
+    ui.record = record;
+    const narrow = () => (root.innerWidth || 1000) < 700;
+    function collapseLegend() {
+      legendClosed = true; const el = $('.ck-legend');
+      if (el) { el.classList.add('closed'); const t = el.querySelector('[data-ck=legend]'); t.setAttribute('aria-expanded', 'false'); t.querySelector('span').textContent = '▸'; }
+    }
+    ui.openLog = function () {
+      if ($('.ck-log')) return;
+      if (narrow()) collapseLegend(); // phones: one panel at a time
+      const box = document.createElement('aside'); box.className = 'ck-log'; box.setAttribute('aria-label', 'Message log');
+      box.innerHTML = '<header><b>💬 Message log</b><button class="ck-btn" data-ck="closelog" aria-label="Close message log">✕</button></header><ol></ol>';
+      $('.ck-layer').appendChild(box);
+      const st = h.getState && h.getState(); const ol = box.querySelector('ol');
+      ((st && st.log) || []).forEach((e) => appendLog(ol, e));
+      if (!ol.children.length) ol.innerHTML = '<li class="k-system"><span>No messages yet.</span></li>';
+      ui.unread = 0; const b = $('.ck-unread'); if (b) b.hidden = true;
+    };
+    ui.closeLog = function () { const l = $('.ck-log'); if (l) l.remove(); };
+
+    // ------------------------------------------------------------ map legend
+    const LEGEND = [['character', 'Talk · safe spot'], ['problem', 'Problem — fix it or fight it'], ['circuit', 'Broken circuit — rotate to repair'],
+      ['item', 'Item — module or bits'], ['memory', 'Memory fragment'], ['boss', 'Boss'], ['exit', 'Way onward · Home']];
+    let legendClosed = (root.innerWidth || 1000) < 700;
+    ui.legend = function (show, accent) {
+      let el = $('.ck-legend');
+      if (!show) { if (el) el.remove(); return; }
+      if (!el) { el = document.createElement('aside'); el.className = 'ck-legend'; $('.ck-layer').appendChild(el); }
+      const K = CK.Art.KIND;
+      el.classList.toggle('closed', legendClosed);
+      el.innerHTML = `<button class="ck-btn" data-ck="legend" aria-expanded="${!legendClosed}">🗺 Legend <span>${legendClosed ? '▸' : '▾'}</span></button>
+        <ul>${LEGEND.map(([k, label]) => `<li data-kind="${k}"><i style="border-color:${k === 'exit' ? (accent || K.exit.color) : K[k].color}"></i>${esc(label)}</li>`).join('')}
+        <li class="ck-leg-note"><i class="dim"></i>Dimmed with ✓ — done or visited</li>
+        <li class="ck-leg-note"><i class="line lit" style="border-color:${accent || '#38f2ff'}"></i>Glowing line — restored path</li>
+        <li class="ck-leg-note"><i class="line"></i>Dashed line — not restored yet</li></ul>`;
+    };
 
     // ------------------------------------------------------------ HUD
     ui.hud = function (state, opts) {
@@ -28,6 +78,7 @@
         </div>
         <div class="ck-hud-right">
           ${opts.canRest ? '<button class="ck-btn" data-ck="rest" aria-label="Rest (systemctl suspend)" title="Rest — systemctl suspend">💤 Rest</button>' : ''}
+          <button class="ck-btn ck-logbtn" data-ck="log" aria-label="Message log" title="Message log">💬<b class="ck-unread" ${ui.unread ? '' : 'hidden'}>${ui.unread}</b></button>
           <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip"><span class="ck-orb"></span><span>Pip</span></button>
           <button class="ck-btn" data-ck="exit" aria-label="Leave the adventure" title="Back to choose a mode">✕</button>
         </div>`;
@@ -82,6 +133,7 @@
         let i = 0;
         const show = () => {
           box.querySelector('p').innerHTML = code(lines[i]);
+          record('say', ch.name, code(lines[i]));
           box.querySelector('[data-ck=next]').textContent = i === lines.length - 1 ? 'Got it ✓' : 'Next ▶';
         };
         sayState = {
@@ -182,6 +234,7 @@
         box.querySelector('form').addEventListener('submit', (e) => {
           e.preventDefault(); if (done) return;
           const v = input.value; input.value = '';
+          if (v.trim()) record('you', 'You', `<code>${esc(v)}</code>`);
           const line = document.createElement('div'); line.className = 'cmd'; line.textContent = shell.prompt() + v; out.appendChild(line);
           const res = shell.run(v);
           if (res.pending) shell.cancel();
@@ -207,11 +260,13 @@
       return new Promise((resolve) => {
         const box = document.createElement('div'); box.className = 'ck-modal ck-choice';
         box.innerHTML = `<div class="ck-card"><h2>${esc(title)}</h2>${text ? `<p>${code(text)}</p>` : ''}<div class="ck-options">${options.map((o, i) => `<button class="ck-btn ${o.primary ? 'ck-primary' : ''}" data-i="${i}">${o.html || esc(o.label)}</button>`).join('')}</div></div>`;
-        box.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (!b) return; box.remove(); resolve(options[+b.dataset.i].value); });
+        box.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (!b) return; box.remove(); record('you', 'You', esc(options[+b.dataset.i].label)); resolve(options[+b.dataset.i].value); });
         $('.ck-layer').appendChild(box);
+        record('system', '', '❓ ' + esc(title));
       });
     };
     ui.toast = function (html) {
+      record('toast', '', html);
       const t = document.createElement('div'); t.className = 'ck-toast'; t.innerHTML = html;
       $('.ck-toasts').appendChild(t);
       setTimeout(() => t.classList.add('out'), 3000); setTimeout(() => t.remove(), 3500);
@@ -220,6 +275,7 @@
       return new Promise((resolve) => {
         const b = document.createElement('div'); b.className = 'ck-banner';
         b.innerHTML = `<div><small>${esc(subtitle || '')}</small><h1>${esc(title)}</h1></div>`;
+        record('system', '', `★ ${esc(title)}${subtitle ? ' — ' + esc(subtitle) : ''}`);
         $('.ck-layer').appendChild(b);
         let gone = false; const end = () => { if (gone) return; gone = true; b.remove(); resolve(); };
         b.addEventListener('click', end); setTimeout(end, ms || 2600);
@@ -233,6 +289,9 @@
       const d = b.dataset;
       if (d.ck === 'exit') return h.onExit();
       if (d.ck === 'rest') return h.onRest && h.onRest();
+      if (d.ck === 'log') return $('.ck-log') ? ui.closeLog() : ui.openLog();
+      if (d.ck === 'closelog') return ui.closeLog();
+      if (d.ck === 'legend') { legendClosed = !legendClosed; if (!legendClosed && narrow()) ui.closeLog(); const el = $('.ck-legend'); if (el) { el.classList.toggle('closed', legendClosed); b.setAttribute('aria-expanded', String(!legendClosed)); b.querySelector('span').textContent = legendClosed ? '▸' : '▾'; } return; }
       if (d.ck === 'pip') return ui.pipOpen() ? ui.closePip() : ui.pip();
       if (d.ck === 'closepip') return ui.closePip();
       if (d.ck === 'next' && sayState) return sayState.next();

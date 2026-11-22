@@ -240,6 +240,20 @@ const tests = {
     await pg.click('.ck-choice button >> text=Keep playing');
     assert.equal(await pg.$('.ck-choice'), null);
   },
+  async 'revisiting a station needs no reply'(b) {
+    const pg = await newPage(b);
+    await addPlayer(pg); await openKernel(pg); await settle(pg);
+    await step(pg);
+    assert.equal(await pg.evaluate(() => CK._test.main.state.node), 'f1');
+    for (const to of ['f0', 'f1']) {
+      await pg.evaluate((h) => CK._test.mapScene.tapNode(h), to);
+      await wait(1600);
+    }
+    assert.equal(await pg.evaluate(() => CK._test.main.state.node), 'f1');
+    const s = await info(pg);
+    assert.equal(s.say, false, 'no dialogue box'); assert.equal(s.choice, false); assert.equal(s.busy, false);
+    assert.match(await pg.textContent('.ck-toasts'), /Pip/);
+  },
 };
 
 (async () => {

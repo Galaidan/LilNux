@@ -368,5 +368,5 @@
     for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; p.life -= dt; if (p.life <= 0) parts.splice(i, 1); }
   }
 
-  CK.Art = { liltux, C, rr, glow, noGlow, withAlpha, background, trace, tracePoints, pointAlong, pathLen, node, fog, colonel, pip, character, creature, burst, spawnBurst, stepParticles };
+  CK.Art = { KIND, liltux, C, rr, glow, noGlow, withAlpha, background, trace, tracePoints, pointAlong, pathLen, node, fog, colonel, pip, character, creature, burst, spawnBurst, stepParticles };
 })(typeof window !== 'undefined' ? window : globalThis);

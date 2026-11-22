@@ -71,6 +71,7 @@
     const map = CK.Scenes.map({ engine, state, onArrive: (r) => arrive(r), onBlocked: (why, id) => blocked(why, id), onFlicker: () => save() });
     engineRef = engine; cur = { engine, ui, host, map };
     engine.setScene(map); engine.start();
+    ui.legend(true, R.region(state.region).accent);
     refresh();
 
     function canRest() {
@@ -134,7 +135,7 @@
       for (const id of R.claimTasks(state)) { const t = W.TASKS[id]; ui.toast(`✅ Task done for <b>${W.CHARACTERS[t.giver].name}</b>: ${t.text} <b>+${t.bits} bits</b>`); sound('good'); }
       if (state.stats.clean >= CLEAN_BADGE_AT) h.giveBadge(...BADGES.clean);
     }
-    function backToMap() { engine.setScene(map); map.setState(state); ui.closePip(); ui.skillBar(state, 'map'); }
+    function backToMap() { engine.setScene(map); map.setState(state); ui.closePip(); ui.skillBar(state, 'map'); ui.legend(true, R.region(state.region).accent); }
     function teacherOf(skill) { return W.SKILLS[skill].teacher; }
 
     // ------------------------------------------------------------ arrivals
@@ -162,9 +163,9 @@
       const skill = Object.keys(W.SKILLS).find((k) => W.SKILLS[k].teacher === who);
       const first = !state.codex.includes(skill);
       if (first) await say(who, W.CHARACTERS[who].lines);
-      else await say(who, [who === 'pip' ? 'Still here. Still PID 1. Still not going anywhere — that’s literally my whole job.' : 'Back again? Go on — the machine won’t fix itself.']);
+      else ui.toast(`<b>${W.CHARACTERS[who].name}:</b> ${who === 'pip' ? 'Still here. Still PID 1. Still not going anywhere — that’s literally my whole job.' : 'Back again? Go on — the machine won’t fix itself.'}`);
       if (skill && !state.learned.includes(skill)) { m.learning = skill; m.learnExample = W.SKILLS[skill].example; await ui.learn(skill); m.learning = null; m.learnExample = null; sound('win'); xp(10); }
-      if (skill && state.learned.includes(skill) && !state.equipped.includes(skill)) {
+      if (first && skill && state.learned.includes(skill) && !state.equipped.includes(skill)) {
         const out = await ui.choice(`Your skill slots are full`, state.equipped.map((s) => ({ label: `Swap out ${W.SKILLS[s].cmd}`, html: `🔁 Swap out <code>${W.SKILLS[s].cmd}</code> for <code>${W.SKILLS[skill].cmd}</code>`, value: s }))
           .concat([{ label: 'Keep my loadout', html: '✋ Keep my loadout (swap later in Pip → Items)', value: null }]),
           `You have ${state.equipped.length} slots. A RAM stick adds one. Which skill should make room for ${W.SKILLS[skill].cmd}?`);
@@ -213,7 +214,7 @@
             resolve(false);
           },
         });
-        engine.setScene(sc);
+        ui.legend(false); engine.setScene(sc);
       });
     }
 
@@ -229,7 +230,7 @@
             ui.toast(`⚡ Circuit restored! +${rw.bits} bits`); claim(); resolve();
           },
         });
-        engine.setScene(sc);
+        ui.legend(false); engine.setScene(sc);
       });
     }
 
@@ -273,16 +274,16 @@
 
     async function exit() {
       if (state.region === 'firmware') {
-        R.enterRegion(state, 'grub'); map.setState(state); save();
+        R.enterRegion(state, 'grub'); map.setState(state); save(); ui.legend(true, R.region(state.region).accent);
         await intro();
       }
     }
 
     async function meetLilTux() {
       const st = state.story;
-      if (st.liltuxTaken) { await say('pip', ['Home is cold and glitching. Lil Tux is gone… We’ll find him, Colonel.']); return; }
+      if (st.liltuxTaken) { ui.toast('<b>Pip:</b> Home is cold and glitching. Lil Tux is gone… We’ll find him, Colonel.'); return; }
+      if (st.liltuxMet && st.restUnlocked) { ui.toast('<b>Lil Tux:</b> Still here! Rest with 💤 whenever you like. I’ll keep watch. 🐧'); return; }
       if (!st.liltuxMet) { await say('liltux', W.CHARACTERS.liltux.lines); sound('win'); }
-      else await say('liltux', ['Still here! Go on, get some rest. I’ll keep watch. 🐧']);
       if (!st.restUnlocked) {
         m.learning = 'rest'; m.learnExample = 'systemctl suspend';
         await ui.learn('rest', { id: 'rest', cmd: 'systemctl suspend', name: 'Rest', icon: '💤', teacher: 'liltux', learnTest: /^systemctl\s+suspend$/,

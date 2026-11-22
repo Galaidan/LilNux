@@ -116,6 +116,18 @@ const tests = {
     await pg.waitForTimeout(300);
     assert.ok(await pg.evaluate((t) => H.scene.fight.time > t, t0));
   },
+  async 'q and e move the Colonel in fights'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => { H.startFight('glitchMite'); H.scene.fight.enemies.forEach((e) => { e.shootTimer = 999; }); });
+    await pg.waitForTimeout(100);
+    await pg.keyboard.down('e'); await pg.waitForTimeout(400); await pg.keyboard.up('e');
+    const x1 = await pg.evaluate(() => H.scene.fight.colonel.x);
+    assert.ok(x1 > 560, 'moved right: ' + x1);
+    await pg.waitForTimeout(200);
+    assert.equal(await pg.evaluate(() => H.scene.fight.colonel.x), x1, 'stops on key up');
+    await pg.keyboard.down('Q'); await pg.waitForTimeout(400); await pg.keyboard.up('Q');
+    assert.ok(await pg.evaluate((x) => H.scene.fight.colonel.x < x - 60, x1), 'moved left (caps lock too)');
+  },
 };
 
 (async () => {

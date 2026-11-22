@@ -5,7 +5,7 @@
 
   const W = 1000; const H = 600;
   const BOX = { x0: 60, x1: 940, y0: 50, y1: 330 };
-  const SHOT_SPEED = 700; const SHOT_R = 8; const ORB_R = 10; const HEAT_DECAY = 25; const MAX_DT = 0.05;
+  const MOVE_SPEED = 420; const SHOT_SPEED = 700; const SHOT_R = 8; const ORB_R = 10; const HEAT_DECAY = 25; const MAX_DT = 0.05;
 
   function create(opts) {
     const def = CK.World.CREATURES[opts.creature];
@@ -33,7 +33,7 @@
       W, H, creature: def, kid,
       colonel: { x: 500, y: 540, r: 26, stability: 100, maxStability: 100 },
       enemies, shots: [], orbs: [], heat: 0, overheatedUntil: 0, cooldowns: {}, time: 0, outcome: null, events: [],
-      hintAvailable: kid, freeDashUntil: 0,
+      hintAvailable: kid, freeDashUntil: 0, moveDir: 0,
     };
     const ev = (type, x, y) => f.events.push({ type, x, y });
     const hittable = (e) => !e.cloaked || f.time < e.revealedUntil;
@@ -72,6 +72,7 @@
       f.time += dt;
       f.heat = Math.max(0, f.heat - HEAT_DECAY * dt);
       const c = f.colonel;
+      if (f.moveDir) c.x = Math.max(40, Math.min(960, c.x + f.moveDir * MOVE_SPEED * dt));
 
       for (const e of f.enemies) {
         moveEnemy(e, dt);
@@ -114,6 +115,8 @@
       else if (!f.enemies.length) f.outcome = 'win';
     };
 
+    f.setMove = function (dir) { f.moveDir = dir > 0 ? 1 : dir < 0 ? -1 : 0; };
+
     f.use = function (skillId, x, y) {
       if (f.outcome) return { ok: false, reason: 'over' };
       if (!state.equipped.includes(skillId)) return { ok: false, reason: 'not-equipped' };
@@ -148,5 +151,5 @@
     return f;
   }
 
-  CK.Fight = { create, W, H };
+  CK.Fight = { create, W, H, MOVE_SPEED };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -108,6 +108,34 @@ const tests = {
     await pg.screenshot({ path: path.join(SHOTS, 'ck-dialogue.png') });
     assert.deepEqual(pg.errs, []);
   },
+  async 'log records dialogue, toasts, choices and typed commands'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => { H.ui.say('bios', ['First line', 'Second line']); });
+    await pg.click('.ck-say [data-ck=next]'); await pg.click('.ck-say [data-ck=next]');
+    await pg.evaluate(() => { H.ui.toast('A <b>toast</b> message'); H.ui.choice('Pick one', [{ label: 'Alpha', value: 1 }, { label: 'Beta', value: 2 }]); });
+    await pg.click('.ck-choice button >> text=Beta');
+    await pg.evaluate(() => { H.ui.learn('ls'); });
+    await pg.fill('.ck-learn input', 'ls -a'); await pg.press('.ck-learn input', 'Enter'); await pg.waitForTimeout(1500);
+    await pg.click('[data-ck=log]');
+    const t = await pg.textContent('.ck-log');
+    for (const want of ['Bios', 'First line', 'Second line', 'toast message', 'Pick one', 'You', 'Beta', 'ls -a']) assert.ok(t.includes(want), 'log has ' + want);
+    assert.ok(await pg.evaluate(() => H.state.log.length >= 6), 'stored in the save');
+    await pg.click('.ck-log [data-ck=closelog]');
+    assert.equal(await pg.$('.ck-log'), null);
+  },
+  async 'legend shows the node colours'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => H.ui.legend(true));
+    const rows = await pg.$$eval('.ck-legend [data-kind]', (els) => els.map((e) => [e.dataset.kind, getComputedStyle(e.querySelector('i')).borderColor, e.textContent]));
+    const kinds = rows.map((r) => r[0]);
+    for (const k of ['character', 'problem', 'item', 'memory', 'circuit', 'boss', 'exit']) assert.ok(kinds.includes(k), k);
+    const coral = await pg.evaluate(() => CK.Art.C.coral);
+    const prob = rows.find((r) => r[0] === 'problem');
+    const hex = (rgb) => '#' + rgb.match(/\d+/g).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('');
+    assert.equal(hex(prob[1]), coral);
+    await pg.click('.ck-legend [data-ck=legend]');
+    assert.equal(await pg.$eval('.ck-legend', (e) => e.classList.contains('closed')), true, 'collapses');
+  },
 };
 
 (async () => {

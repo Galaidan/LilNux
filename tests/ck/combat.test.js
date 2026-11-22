@@ -162,3 +162,13 @@ test('scripted win against glitch mites', () => {
 test('scripted win against the Corrupt Boot Glitch', () => {
   assert.equal(bot(Fight.create({ creature: 'bootGlitch', state: st(['echo', 'ls']), kid: false, seed: 1 })), 'win');
 });
+
+test('the Colonel moves left and right along the lane', () => {
+  const f = Fight.create({ creature: 'glitchMite', state: st(['echo']), kid: false, seed: 1 });
+  freeze(f); f.enemies.forEach((e) => (e.shootTimer = 999));
+  f.setMove(1); run(f, 0.5);
+  assert.ok(Math.abs(f.colonel.x - (500 + Fight.MOVE_SPEED * 0.5)) < 8, 'moved right ' + f.colonel.x);
+  f.setMove(0); const x = f.colonel.x; run(f, 0.3); assert.equal(f.colonel.x, x, 'stops');
+  f.setMove(-1); run(f, 5); assert.equal(f.colonel.x, 40, 'clamped at the left wall');
+  f.setMove(1); run(f, 5); assert.equal(f.colonel.x, 960, 'clamped at the right wall');
+});
