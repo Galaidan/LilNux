@@ -4,10 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>CK harness</title>
+  <link rel="stylesheet" href="../../css/ck.css">
   <style>html, body { margin: 0; height: 100%; background: #060a1c; overflow: hidden; } #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }</style>
 </head>
 <body>
-  <canvas id="c"></canvas>
+  <div id="ck-root"><canvas id="c"></canvas><div id="ck-ui"></div></div>
+  <script src="../../js/terminal.js"></script>
   <script src="../../js/ck/state.js"></script>
   <script src="../../js/ck/world.js"></script>
   <script src="../../js/ck/rules.js"></script>
@@ -16,6 +18,7 @@
   <script src="../../js/ck/engine.js"></script>
   <script src="../../js/ck/art.js"></script>
   <script src="../../js/ck/scenes.js"></script>
+  <script src="../../js/ck/ui.js"></script>
   <script>
     // Test page: ?ckdebug is required for CK._test hooks.
     window.H = {};
@@ -25,6 +28,13 @@
       const scene = CK.Scenes.map({ engine, state: st, onArrive: (r) => (H.arrived = r), onBlocked: (why) => (H.blocked = why) });
       engine.setScene(scene); engine.start();
       Object.assign(H, { state: st, engine, scene });
+      H.ui = CK.UI.create(document.getElementById('ck-ui'), {
+        user: 'tester', getState: () => H.state, onExit: () => (H.exited = true),
+        onEquip: (id) => CK.Rules.equip(H.state, id), onUnequip: (id) => CK.Rules.unequip(H.state, id),
+        onBuy: (id) => CK.Rules.buyUpgrade(H.state, id), onSkill: (id) => (H.skill = id),
+        onLearned: (id) => CK.Rules.learn(H.state, id), speak: () => {},
+      });
+      H.ui.hud(H.state); H.ui.skillBar(H.state, 'map');
     });
   </script>
 </body>
