@@ -18,7 +18,10 @@ skills that are real Linux commands, and deploy them to fix problems. Hooks come
 **unlocking new things and upgrading**, especially physical hardware modules that enhance
 skills.
 
-Success looks like: the kids ask to play it; after playing, the family can say what the
+**Who plays it:** the two older kids (16 and 13) and the parents. The youngest two (5 and 3)
+won't play this mode for a while; they start with the existing LilNux learning worlds.
+
+Success looks like: the teens ask to play it; after playing, the family can say what the
 BIOS, bootloader, kernel, init/systemd, file system, shell, packages and network do, and
 recognise the real commands (`ls`, `cd`, `kill`, `chmod`, `grep`, `sudo`, …) and what they're for.
 
@@ -53,7 +56,8 @@ recognise the real commands (`ls`, `cd`, `kill`, `chmod`, `grep`, `sudo`, …) a
 **Anti-goals** (would be a failure even if it works)
 - Wrong or misleading Linux facts.
 - Manipulative hooks: daily-login pressure, streak punishment, timers that nag, any money.
-- Punishing kids: losing all progress, unwinnable fights for young players.
+- Punishing players: losing all progress, unwinnable fights.
+- Feeling babyish to a 13- or 16-year-old.
 - Neon that's hard to read (low contrast text, colour-only cues).
 - Working only on desktop, or breaking the existing LilNux mode.
 
@@ -166,8 +170,15 @@ Each region: ~10–20 minutes. Whole adventure: roughly 2–3 hours.
   "Clean Fixer", "Memory Restored", "Panic Defeated").
 - No daily-login rewards, streaks, timers or purchases.
 
-### 6.9 Kid mode (existing per-player setting)
-Slower creatures, bigger hitboxes, light aim assist, free hints, gentler stability loss.
+### 6.9 Tone and difficulty
+- **Writing:** aimed at teens and adults — witty, a bit of humour, real terms used
+  confidently and explained in a line (e.g. "PID", "process", "permissions"). Short lines
+  in fights; longer story beats between regions.
+- **Default difficulty:** a real challenge for a 13–16-year-old: moving targets that need
+  leading, cooldown and overheat management, bosses with phases.
+- **Kid mode** (existing per-player setting) is only a *slightly* easier version, suited to
+  the 13-year-old if wanted: creatures ~20% slower, slightly bigger hitboxes, a free hint per
+  fight. No heavy aim assist.
 
 ## 7. Look and feel — "Neon Circuit" (*proposal*)
 
