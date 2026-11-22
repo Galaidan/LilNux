@@ -179,3 +179,9 @@ body.ck-open { overflow: hidden; }
   .ck-legend { top: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 84px); }
   .ck-mode { height: 30px; padding: 0 9px; font-size: 10.5px; letter-spacing: .08em; }
 }
+
+/* Hover info */
+.ck-tip { position: fixed; z-index: 9; max-width: 280px; padding: 8px 12px; border-radius: 12px; pointer-events: none;
+  background: rgba(10, 14, 38, .96); border: 1px solid var(--c-cyan); color: var(--c-ink); font-size: 13px; line-height: 1.4; box-shadow: 0 0 18px rgba(56, 242, 255, .25); }
+.ck-tip b { color: var(--c-cyan); }
+.ck-tip small { color: var(--c-dim); }

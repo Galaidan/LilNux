@@ -99,6 +99,7 @@
       if (pinching) { if (!pointers.size) pinching = false; return; }
       if (scene && scene.pointer) scene.pointer('up', pt(e), e);
     }
+    function onLeave(e) { if (scene && scene.pointer) scene.pointer('leave', pt(e), e); }
     function onWheel(e) { if (scene && scene.pinch) { scene.pinch(e.deltaY < 0 ? 1.08 : 1 / 1.08); e.preventDefault(); } }
     function onKey(e) { if (engine.running && scene && scene.key) scene.key(e); }
     function onKeyUp(e) { if (scene && scene.keyup) scene.keyup(e); }
@@ -110,6 +111,7 @@
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
     canvas.addEventListener('pointercancel', onUp);
+    canvas.addEventListener('pointerleave', onLeave);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     root.addEventListener('keydown', onKey);
     root.addEventListener('keyup', onKeyUp);
@@ -121,6 +123,7 @@
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
+      canvas.removeEventListener('pointerleave', onLeave);
       canvas.removeEventListener('wheel', onWheel);
       root.removeEventListener('keydown', onKey);
       root.removeEventListener('keyup', onKeyUp);

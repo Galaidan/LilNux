@@ -254,6 +254,23 @@ const tests = {
     assert.equal(s.say, false, 'no dialogue box'); assert.equal(s.choice, false); assert.equal(s.busy, false);
     assert.match(await pg.textContent('.ck-toasts'), /Pip/);
   },
+  async 'hover info on nodes, characters and every button'(b) {
+    const pg = await newPage(b);
+    await addPlayer(pg); await openKernel(pg); await settle(pg);
+    await wait(800);
+    const n = await pg.evaluate(() => CK._test.nodeScreenPos('f1'));
+    await pg.mouse.move(n.x, n.y); await wait(200);
+    const tip = await pg.textContent('.ck-tip');
+    assert.ok(/Power Rail/.test(tip) && /Pip/.test(tip), 'node tip: ' + tip);
+    const c = await pg.evaluate(() => { const p = CK._test.mapScene.colonelPos(); return CK._test.main.map && CK._test.engineToScreen(p.x, p.y - 62); });
+    await pg.mouse.move(c.x, c.y); await wait(200);
+    assert.match(await pg.textContent('.ck-tip'), /Colonel Kernel/);
+    await pg.mouse.move(1150, 650); await wait(200);
+    assert.equal(await pg.$eval('.ck-tip', (e) => e.hidden), true, 'hidden over empty space');
+    await pg.click('[data-ck=pip]'); await pg.click('.ck-tab[data-tab=items]');
+    const untitled = await pg.$$eval('#ck-root button', (bs) => bs.filter((x) => x.offsetParent && !(x.title || '').trim()).map((x) => x.outerHTML.slice(0, 70)));
+    assert.deepEqual(untitled, []);
+  },
 };
 
 (async () => {

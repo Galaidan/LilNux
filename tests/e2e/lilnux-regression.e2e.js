@@ -24,7 +24,11 @@ const SOLVE = {
     if (!(await pg.$(sel))) { console.log('MISSING', sel); failed = true; }
   }
   if (!/Learn/.test(await pg.textContent('.hub-card.learn')) || !/Colonel Kernel/.test(await pg.textContent('.hub-card.adventure'))) { console.log('HUB TEXT'); failed = true; }
+  const untitledHub = await pg.$$eval('button', (bs) => bs.filter((x) => x.offsetParent && !(x.title || '').trim()).map((x) => x.outerHTML.slice(0, 60)));
+  if (untitledHub.length) { console.log('UNTITLED', untitledHub); failed = true; }
   await pg.click('.hub-card.learn [data-go=map]');
+  const untitledMap = await pg.$$eval('button', (bs) => bs.filter((x) => x.offsetParent && !(x.title || '').trim()).map((x) => x.outerHTML.slice(0, 60)));
+  if (untitledMap.length) { console.log('UNTITLED', untitledMap); failed = true; }
   if (!(await pg.$('.mode-banner.learn'))) { console.log('MISSING learn banner'); failed = true; }
   const worlds = await pg.evaluate(() => window.LILNUX_WORLDS.map((w) => ({
     id: w.id,

@@ -46,7 +46,21 @@
       return best;
     }
 
+    function hoverAt(p) {
+      const near = (x, y, r) => Math.hypot(p.x - x, p.y - y) < r;
+      if (near(pos.x, pos.y - 62, 34)) return { type: 'colonel' };
+      if (near(pos.x - 46 * sc.facing, pos.y - 104, 24)) return { type: 'pip' };
+      if (region.home && visible().includes(region.home) && !(state.story && state.story.liltuxTaken)) {
+        const hn = region.nodes[region.home]; if (near(hn.x + 62, hn.y - 44, 34)) return { type: 'liltux' };
+      }
+      const id = nodeAt(p);
+      return id ? { type: 'node', id } : null;
+    }
+    const hover = (info, p) => { if (o.onHover) o.onHover(info, p && p.sx, p && p.sy); };
     sc.pointer = function (type, p) {
+      if (type === 'leave') { hover(null); return; }
+      if (type === 'move' && p.kind === 'mouse' && !(drag && drag.moved)) hover(sc.locked || travel ? null : hoverAt(p), p);
+      if (type === 'down' || (drag && drag.moved)) hover(null);
       if (type === 'cancel') { drag = null; return; }
       if (type === 'down') drag = { sx: p.sx, sy: p.sy, px: pan.x, py: pan.y, moved: false };
       else if (type === 'move' && drag) {

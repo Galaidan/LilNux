@@ -18,8 +18,7 @@ skills that are real Linux commands, and deploy them to fix problems. Hooks come
 **unlocking new things and upgrading**, especially physical hardware modules that enhance
 skills.
 
-**Who plays it:** the two older kids (16 and 13) and the parents. The youngest two (5 and 3)
-won't play this mode for a while; they start with the existing LilNux learning worlds.
+**Who plays it:** the teens and grown-ups in the family. Younger kids start with the LilNux learning worlds.
 
 Success looks like: the teens ask to play it; after playing, the family can say what the
 BIOS, bootloader, kernel, init/systemd, file system, shell, packages and network do, and
@@ -57,7 +56,7 @@ recognise the real commands (`ls`, `cd`, `kill`, `chmod`, `grep`, `sudo`, …) a
 - Wrong or misleading Linux facts.
 - Manipulative hooks: daily-login pressure, streak punishment, timers that nag, any money.
 - Punishing players: losing all progress, unwinnable fights.
-- Feeling babyish to a 13- or 16-year-old.
+- Feeling babyish to a teenager.
 - Neon that's hard to read (low contrast text, colour-only cues).
 - Working only on desktop, or breaking the existing LilNux mode.
 
@@ -174,10 +173,10 @@ Each region: ~10–20 minutes. Whole adventure: roughly 2–3 hours.
 - **Writing:** aimed at teens and adults — witty, a bit of humour, real terms used
   confidently and explained in a line (e.g. "PID", "process", "permissions"). Short lines
   in fights; longer story beats between regions.
-- **Default difficulty:** a real challenge for a 13–16-year-old: moving targets that need
+- **Default difficulty:** a real challenge for a teenager: moving targets that need
   leading, cooldown and overheat management, bosses with phases.
 - **Kid mode** (existing per-player setting) is only a *slightly* easier version, suited to
-  the 13-year-old if wanted: creatures ~20% slower, slightly bigger hitboxes, a free hint per
+  younger teens if wanted: creatures ~20% slower, slightly bigger hitboxes, a free hint per
   fight. No heavy aim assist.
 
 ## 7. Look and feel — "Neon Circuit" (*proposal*)

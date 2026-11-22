@@ -19,11 +19,11 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 
 - GitHub: `Galaidan/LilNux`. Default branch `main` = live site (GitHub Pages, once the repo is public and
   Pages is set to `main` / root).
-- **`ck-ux-tweaks` is pushed but NOT merged into `main` yet.** It adds: the 💬 message log, Q/E movement
-  in fights, no forced dialogue when revisiting a station, the map colour legend, and this handoff.
-  The user asked before for "push it" = merge into `main` and push. Ask before merging.
+- Everything is merged into `main` (latest: message log, Q/E movement in fights, no forced dialogue on revisits,
+  map colour legend, hover info on map nodes/characters and titles on every button). "Push it" from the user
+  means merge into `main` and push.
 - Leftover remote branches already merged (safe to delete on github.com — this sandbox can't delete
-  remote branches): `colonel-kernel-design`, `ck-story-update`.
+  remote branches): `colonel-kernel-design`, `ck-story-update`, `ck-ux-tweaks`.
 - Commit identity used: `Galaidan <Galaidan@users.noreply.github.com>`. Don't put personal details in commits.
 
 ## Design documents (the source of truth)
@@ -56,8 +56,9 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 - Tone: witty, never babyish (Adventure is for teens/adults; the youngest kids use Learn mode).
 - Touch targets ≥ 44px; works on iPhone portrait; respect reduced motion and the sound toggle.
 - Privacy: the user doesn't want their information shared with outside services or in public files.
-  ⚠ `docs/superpowers/specs/2026-11-22-colonel-kernel-design.md` §1 currently lists the kids' exact ages —
-  consider replacing with "teens and adults" before the repo goes public.
+  Keep family details (names, ages) out of the repo — it's public for GitHub Pages. (Older commits still
+  contain the kids' ages in the first design doc; only a history rewrite + force-push would remove them,
+  and only if the user asks.)
 
 ## Code map (Adventure)
 
@@ -72,11 +73,11 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 | `js/ck/engine.js` | canvas loop, sizing (DPR ≤ 2), camera, pointer/keys, pinch |
 | `js/ck/art.js` | all drawing ("Neon Circuit" look), incl. Colonel, Pip, Lil Tux, creatures, fog |
 | `js/ck/scenes.js` | map, fight and puzzle scenes |
-| `js/ck/ui.js` | HUD, skill bar, Pip panel, dialogue, learning terminal, message log, legend |
+| `js/ck/ui.js` | HUD, skill bar, Pip panel, dialogue, learning terminal, message log, legend, hover tooltip |
 | `js/ck/main.js` | chapter flow, rest/wake, bridge to `game.js` (`CK.open` / `CK.close`) |
 
 When adding files: add them to `index.html`, `tests/e2e/ck-harness.html` if tests need them, and the
-`FILES` list in `sw.js`; bump `VERSION` in `sw.js` whenever shipped files change (currently `lilnux-v5`).
+`FILES` list in `sw.js`; bump `VERSION` in `sw.js` whenever shipped files change (currently `lilnux-v6`).
 
 ## Tests (run one at a time — the sandbox has limited memory)
 
@@ -90,7 +91,7 @@ node tests/e2e/lilnux-regression.e2e.js
 ```
 
 Browser tests use the pre-installed Playwright + Chromium. Debug hooks (`CK._test`) exist only with `?ckdebug`
-in the URL. Current status on `ck-ux-tweaks`: 76 unit tests + all e2e suites pass.
+in the URL. Current status on `main`: 76 unit tests + all e2e suites pass.
 
 ## Deferred polish (from the code review — user hasn't asked for these yet)
 

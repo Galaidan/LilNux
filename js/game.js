@@ -770,5 +770,15 @@
     if (!n && /^[a-dA-D]$/.test(e.key)) { const opts = $$('.opt'); const o = opts['abcd'.indexOf(e.key.toLowerCase())]; if (o && !o.disabled) o.click(); }
   });
 
+  // Hover info everywhere: any button without a title gets one from its label.
+  function titleButtons(root) {
+    (root.querySelectorAll ? root.querySelectorAll('button:not([title])') : []).forEach((b) => {
+      const t = (b.getAttribute('aria-label') || b.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t) b.title = t;
+    });
+  }
+  new MutationObserver((muts) => { for (const m of muts) m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.tagName === 'BUTTON' && !n.title) titleButtons(n.parentNode || document); else titleButtons(n); } }); })
+    .observe(document.body, { childList: true, subtree: true });
   go(me() ? 'hub' : 'players');
+  titleButtons(document);
 })();

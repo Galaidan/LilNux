@@ -9,7 +9,7 @@
   function create(rootEl, h) {
     const W = CK.World; const R = CK.Rules;
     rootEl.classList.add('ck-ui');
-    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-bar"></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div>';
+    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-bar"></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div><div class="ck-tip" role="tooltip" hidden></div>';
     const $ = (s) => rootEl.querySelector(s);
     const ui = { selected: null, combatText: '', pipTab: null, mode: 'map', unread: 0 };
     let sayState = null;
@@ -29,6 +29,14 @@
       else { ui.unread++; const b = $('.ck-unread'); if (b) { b.textContent = ui.unread; b.hidden = false; } }
     }
     ui.record = record;
+    ui.tip = function (html, x, y) {
+      const t = $('.ck-tip');
+      if (!html) { t.hidden = true; return; }
+      t.innerHTML = html; t.hidden = false;
+      const w = t.offsetWidth; const hgt = t.offsetHeight; const vw = root.innerWidth; const vh = root.innerHeight;
+      t.style.left = Math.max(8, Math.min(x + 16, vw - w - 8)) + 'px';
+      t.style.top = (y + 20 + hgt > vh - 8 ? y - hgt - 12 : y + 20) + 'px';
+    };
     const narrow = () => (root.innerWidth || 1000) < 700;
     function collapseLegend() {
       legendClosed = true; const el = $('.ck-legend');
@@ -38,7 +46,7 @@
       if ($('.ck-log')) return;
       if (narrow()) collapseLegend(); // phones: one panel at a time
       const box = document.createElement('aside'); box.className = 'ck-log'; box.setAttribute('aria-label', 'Message log');
-      box.innerHTML = '<header><b>💬 Message log</b><button class="ck-btn" data-ck="closelog" aria-label="Close message log">✕</button></header><ol></ol>';
+      box.innerHTML = '<header><b>💬 Message log</b><button class="ck-btn" data-ck="closelog" aria-label="Close message log" title="Close the message log">✕</button></header><ol></ol>';
       $('.ck-layer').appendChild(box);
       const st = h.getState && h.getState(); const ol = box.querySelector('ol');
       ((st && st.log) || []).forEach((e) => appendLog(ol, e));
@@ -57,7 +65,7 @@
       if (!el) { el = document.createElement('aside'); el.className = 'ck-legend'; $('.ck-layer').appendChild(el); }
       const K = CK.Art.KIND;
       el.classList.toggle('closed', legendClosed);
-      el.innerHTML = `<button class="ck-btn" data-ck="legend" aria-expanded="${!legendClosed}">🗺 Legend <span>${legendClosed ? '▸' : '▾'}</span></button>
+      el.innerHTML = `<button class="ck-btn" data-ck="legend" aria-expanded="${!legendClosed}" title="Show or hide what the map colours mean">🗺 Legend <span>${legendClosed ? '▸' : '▾'}</span></button>
         <ul>${LEGEND.map(([k, label]) => `<li data-kind="${k}"><i style="border-color:${k === 'exit' ? (accent || K.exit.color) : K[k].color}"></i>${esc(label)}</li>`).join('')}
         <li class="ck-leg-note"><i class="dim"></i>Dimmed with ✓ — done or visited</li>
         <li class="ck-leg-note"><i class="line lit" style="border-color:${accent || '#38f2ff'}"></i>Glowing line — restored path</li>
@@ -79,7 +87,7 @@
         <div class="ck-hud-right">
           ${opts.canRest ? '<button class="ck-btn" data-ck="rest" aria-label="Rest (systemctl suspend)" title="Rest — systemctl suspend">💤 Rest</button>' : ''}
           <button class="ck-btn ck-logbtn" data-ck="log" aria-label="Message log" title="Message log">💬<b class="ck-unread" ${ui.unread ? '' : 'hidden'}>${ui.unread}</b></button>
-          <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip"><span class="ck-orb"></span><span>Pip</span></button>
+          <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip" title="Pip’s panel: quests, items, combat tips and tasks"><span class="ck-orb"></span><span>Pip</span></button>
           <button class="ck-btn" data-ck="exit" aria-label="Leave the adventure" title="Back to choose a mode">✕</button>
         </div>`;
     };
@@ -127,7 +135,7 @@
         const box = document.createElement('div');
         box.className = 'ck-say'; box.style.setProperty('--acc', ch.color);
         box.innerHTML = `<div class="ck-say-who"></div><div class="ck-say-body"><div class="ck-say-name">${esc(ch.name)} <small>${esc(ch.title)}</small></div><p></p>
-          <div class="ck-say-actions"><button class="ck-btn" data-ck="speak" aria-label="Read aloud">🔊</button><button class="ck-btn ck-primary" data-ck="next">Next ▶</button></div></div>`;
+          <div class="ck-say-actions"><button class="ck-btn" data-ck="speak" aria-label="Read aloud" title="Read this line aloud">🔊</button><button class="ck-btn ck-primary" data-ck="next" title="Next line (Enter)">Next ▶</button></div></div>`;
         box.querySelector('.ck-say-who').appendChild(portrait(speaker));
         $('.ck-layer').appendChild(box);
         let i = 0;
@@ -167,7 +175,7 @@
         const why = { bits: `need ${u.cost} bits`, needs: u.needs ? `needs ${W.MODULES[u.needs] ? W.MODULES[u.needs].name : u.needs}` : 'locked' }[cb.reason] || '';
         return `<div class="ck-skillrow">
           <span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(owned ? u.cmd : s.cmd)}</code><small>${esc(s.blurb)}</small></div>
-          ${on ? `<button class="ck-btn" data-unequip="${id}" ${inFight ? 'disabled' : ''}>Unequip</button>` : `<button class="ck-btn" data-equip="${id}" ${inFight || state.equipped.length >= st.slots ? 'disabled' : ''}>Equip</button>`}
+          ${on ? `<button class="ck-btn" data-unequip="${id}" ${inFight ? 'disabled' : ''} title="Take ${esc(s.cmd)} out of your skill bar to free a slot">Unequip</button>` : `<button class="ck-btn" data-equip="${id}" ${inFight || state.equipped.length >= st.slots ? 'disabled' : ''} title="Put ${esc(s.cmd)} in your skill bar (uses one slot)">Equip</button>`}
           ${owned ? `<span class="ck-owned">✓ <code>${esc(u.cmd)}</code></span>` : `<button class="ck-btn ck-up" data-buy="${u.id}" ${cb.ok && !inFight ? '' : 'disabled'} title="${esc(u.blurb)}">⬆ <code>${esc(u.cmd)}</code> · ${u.cost}b${why ? `<small>${why}</small>` : ''}</button>`}
         </div>`;
       }).join('') || '<p class="ck-dim">No skills learned yet.</p>';
@@ -204,10 +212,10 @@
       const state = h.getState();
       let panel = $('.ck-pip');
       if (!panel) { panel = document.createElement('aside'); panel.className = 'ck-pip'; $('.ck-layer').appendChild(panel); }
-      const tabs = [['quests', '📜 Quests'], ['items', '🎒 Items'], ['combat', '⚔️ Combat'], ['tasks', '✅ Tasks']];
+      const tabs = [['quests', '📜 Quests', 'What to do next, and where'], ['items', '🎒 Items', 'Motherboard, skills, upgrades and your command codex'], ['combat', '⚔️ Combat', 'Pip’s fight tips'], ['tasks', '✅ Tasks', 'Side jobs from the characters you meet']];
       const body = { quests: tabQuests, items: tabItems, combat: tabCombat, tasks: tabTasks }[ui.pipTab](state);
-      panel.innerHTML = `<header><span class="ck-orb big"></span><div><b>Pip</b><small>PID 1 · always running · mildly judgmental</small></div><button class="ck-btn" data-ck="closepip" aria-label="Close Pip">✕</button></header>
-        <nav>${tabs.map(([id, l]) => `<button class="ck-tab ${id === ui.pipTab ? 'on' : ''}" data-tab="${id}">${l}</button>`).join('')}</nav>
+      panel.innerHTML = `<header><span class="ck-orb big"></span><div><b>Pip</b><small>PID 1 · always running · mildly judgmental</small></div><button class="ck-btn" data-ck="closepip" aria-label="Close Pip" title="Close Pip’s panel">✕</button></header>
+        <nav>${tabs.map(([id, l, tip]) => `<button class="ck-tab ${id === ui.pipTab ? 'on' : ''}" data-tab="${id}" title="${tip}">${l}</button>`).join('')}</nav>
         <div class="ck-pip-body">${body}</div>`;
     };
     ui.closePip = function () { const p = $('.ck-pip'); if (p) p.remove(); ui.pipTab = null; };
@@ -259,7 +267,7 @@
     ui.choice = function (title, options, text) {
       return new Promise((resolve) => {
         const box = document.createElement('div'); box.className = 'ck-modal ck-choice';
-        box.innerHTML = `<div class="ck-card"><h2>${esc(title)}</h2>${text ? `<p>${code(text)}</p>` : ''}<div class="ck-options">${options.map((o, i) => `<button class="ck-btn ${o.primary ? 'ck-primary' : ''}" data-i="${i}">${o.html || esc(o.label)}</button>`).join('')}</div></div>`;
+        box.innerHTML = `<div class="ck-card"><h2>${esc(title)}</h2>${text ? `<p>${code(text)}</p>` : ''}<div class="ck-options">${options.map((o, i) => `<button class="ck-btn ${o.primary ? 'ck-primary' : ''}" data-i="${i}" title="${esc(o.title || o.label)}">${o.html || esc(o.label)}</button>`).join('')}</div></div>`;
         box.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (!b) return; box.remove(); record('you', 'You', esc(options[+b.dataset.i].label)); resolve(options[+b.dataset.i].value); });
         $('.ck-layer').appendChild(box);
         record('system', '', '❓ ' + esc(title));

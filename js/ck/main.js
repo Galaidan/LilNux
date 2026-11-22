@@ -68,7 +68,28 @@
       speak: (t) => { if (h.speak) h.speak(t); },
     });
 
-    const map = CK.Scenes.map({ engine, state, onArrive: (r) => arrive(r), onBlocked: (why, id) => blocked(why, id), onFlicker: () => save() });
+    const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    function describe(hv) {
+      if (!hv) return null;
+      if (hv.type === 'colonel') return '<b>Colonel Kernel</b> — that’s you. Click a connected node to move.';
+      if (hv.type === 'pip') return '<b>Pip · PID 1</b> — your companion. Open Pip’s panel for quests, items and tasks.';
+      if (hv.type === 'liltux') return '<b>Lil Tux</b> — the Linux mascot. Lives at Home, the booted desktop.';
+      const reg = R.region(state.region); const n = reg.nodes[hv.id]; const done = R.isCleared(state, hv.id);
+      let what = '';
+      if (n.kind === 'start') what = 'Starting point · safe spot';
+      else if (n.kind === 'character') { const c = W.CHARACTERS[n.ref]; what = `${escH(c.name)} — ${escH(c.title)}${done ? ' · safe spot' : ' · go and talk to them'}`; }
+      else if (n.kind === 'problem') what = done ? '✓ Fixed' : `⚠ ${escH(n.ref.title)} — fix it with the right skill, or fight it`;
+      else if (n.kind === 'circuit') what = done ? '✓ Circuit restored' : 'Broken circuit — rotate tiles to repair it';
+      else if (n.kind === 'item') what = done ? '✓ Collected' : typeof n.ref === 'string' ? `Hardware module: ${escH(W.MODULES[n.ref].name)}` : 'Hidden cache of bits';
+      else if (n.kind === 'memory') what = done ? '✓ Memory recovered' : 'Memory fragment — a lost log line';
+      else if (n.kind === 'boss') { const c = W.CREATURES[n.ref.creature]; what = done ? `✓ ${escH(c.name)} defeated` : `☠ Boss: ${escH(c.name)}`; }
+      else if (n.kind === 'exit') what = 'The way onward to the next region';
+      const where = hv.id === state.node ? 'You are here' : R.neighbors(reg, state.node).includes(hv.id) ? 'Click to go here' : 'Not directly connected — follow the lines';
+      const glitch = state.story.glitched.includes(hv.id) ? '<br>⚠ Something is wrong here…' : '';
+      return `<b>${escH(n.label)}</b><br>${what}${glitch}<br><small>${where}</small>`;
+    }
+    const map = CK.Scenes.map({ engine, state, onArrive: (r) => { ui.tip(null); arrive(r); }, onBlocked: (why, id) => blocked(why, id), onFlicker: () => save(),
+      onHover: (hv, x, y) => ui.tip(describe(hv), x, y) });
     engineRef = engine; cur = { engine, ui, host, map };
     engine.setScene(map); engine.start();
     ui.legend(true, R.region(state.region).accent);
@@ -329,6 +350,7 @@
     }
 
     if (CK.Engine.debug) {
+      CK._test.engineToScreen = (x, y) => engine.toScreen(x, y);
       CK._test.main = {
         get state() { return state; }, ui, map,
         sceneKind: () => (engine.scene === map ? 'map' : engine.scene && engine.scene.fight ? 'fight' : engine.scene && engine.scene.grid ? 'puzzle' : 'none'),
