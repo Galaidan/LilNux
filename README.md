@@ -24,6 +24,36 @@ cd ~/LilNux
 Remove the shortcut with `./install-shortcut.sh --remove`.
 If the scripts say “Permission denied”, run `chmod +x play.sh install-shortcut.sh` first (you’ll learn why in World 5!).
 
+## 🎮 Colonel Kernel (videogame mode — Chapter 1)
+
+A futuristic adventure for teens and grown-ups. **Colonel Kernel** wakes up inside a dark,
+broken computer with no memory of who he is. With his companion **Pip** (PID 1), he restores
+the machine region by region, following the real Linux boot order, and slowly works out
+that *he is the kernel*.
+
+- **Explore:** tap glowing circuit nodes to move. Fog of war hides everything you haven't explored.
+- **Learn real commands as powers:** characters teach you `echo`, `ls` and `cd`. You learn each by typing the real command.
+- **Quick fix or fight:** equip the right skill and walk into a problem to fix it cleanly — or it turns into a
+  skillshot fight. Tap or click to aim, keys `1`–`5` (or the skill bar) to pick a skill, shoot down incoming orbs, watch your heat.
+- **Repair circuits:** rotate tiles to route power from the source to the core.
+- **Upgrade:** find RAM, CPU, fan and SSD modules for your motherboard, and buy command-option upgrades
+  (`ls -a`, `cd -`, `echo -n`) with bits.
+- **Pip's panel:** quests, items and motherboard, combat notes, side tasks, and a codex of every command you've learned.
+
+Chapter 1 covers the **Firmware Foundry** (BIOS/UEFI) and the **GRUB Gate** (bootloader). Start it from the
+🎮 button in the top bar or on the world map. It uses the same family players, XP and badges as the learning worlds.
+Kid mode makes fights a little gentler (slower enemies, one free hint per fight).
+
+### Tests (for whoever maintains this)
+
+```bash
+node --test tests/ck/*.test.js
+node tests/e2e/ck-engine.e2e.js && node tests/e2e/ck-ui.e2e.js && node tests/e2e/ck-scenes.e2e.js
+node tests/e2e/ck-chapter.e2e.js && node tests/e2e/lilnux-regression.e2e.js
+```
+
+The browser tests use Playwright with Chromium.
+
 ## What’s inside
 
 | World | You learn |

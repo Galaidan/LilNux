@@ -1,3 +1,8 @@
+/* Full-screen host for the Colonel Kernel mode */
+#ck-root { position: fixed; inset: 0; z-index: 40; background: #060a1c; }
+#ck-root .ck-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+body.ck-open { overflow: hidden; }
+
 /* Colonel Kernel — Neon Circuit overlay styles */
 .ck-ui {
   --c-cyan: #38f2ff; --c-magenta: #ff4fd8; --c-violet: #8b5cff; --c-mint: #6dffb0; --c-amber: #ffb347; --c-coral: #ff5d73;

@@ -21,6 +21,10 @@
     { id: 'quester', emoji: '🏡', name: 'Real-World Quester', how: 'Complete 10 real-computer quests' },
     { id: 'explorer', emoji: '🧪', name: 'Sandbox Scientist', how: 'Run 25 commands in Free Play' },
     { id: 'legend', emoji: '🎓', name: 'Graduate', how: 'Finish every world' },
+    { id: 'ck-r1', emoji: '🔥', name: 'Firmware Fixer', how: 'Colonel Kernel: restore the Firmware Foundry' },
+    { id: 'ck-r2', emoji: '🐛', name: 'Bootloader Boss', how: 'Colonel Kernel: restore the GRUB Gate' },
+    { id: 'ck-clean', emoji: '🧼', name: 'Clean Fixer', how: 'Colonel Kernel: 3 clean fixes' },
+    { id: 'ck-ch1', emoji: '🎖️', name: 'Chapter 1: Boot Sequence', how: 'Colonel Kernel: finish chapter 1' },
   ];
   const TUX = `<svg class="tux-svg" viewBox="0 0 120 140" aria-hidden="true"><ellipse cx="40" cy="130" rx="17" ry="7" fill="#f5a623"/><ellipse cx="80" cy="130" rx="17" ry="7" fill="#f5a623"/><ellipse cx="22" cy="88" rx="10" ry="26" fill="#1a1a1a" transform="rotate(18 22 88)"/><ellipse cx="98" cy="88" rx="10" ry="26" fill="#1a1a1a" transform="rotate(-18 98 88)"/><ellipse cx="60" cy="82" rx="38" ry="48" fill="#222"/><ellipse cx="60" cy="94" rx="26" ry="34" fill="#fafafa"/><ellipse cx="48" cy="58" rx="9" ry="11" fill="#fff"/><ellipse cx="72" cy="58" rx="9" ry="11" fill="#fff"/><circle class="tux-eye" cx="50" cy="60" r="4.5" fill="#111"/><circle class="tux-eye" cx="70" cy="60" r="4.5" fill="#111"/><circle cx="51.5" cy="58" r="1.4" fill="#fff"/><circle cx="71.5" cy="58" r="1.4" fill="#fff"/><path d="M47 70 Q60 63 73 70 Q60 82 47 70Z" fill="#f5a623"/><circle cx="38" cy="72" r="4" fill="#ff8fa3" opacity=".55"/><circle cx="82" cy="72" r="4" fill="#ff8fa3" opacity=".55"/><ellipse cx="60" cy="36" rx="40" ry="7" fill="#294172"/><path d="M36 36 Q34 10 60 11 Q86 10 84 36 Z" fill="#3c6eb4"/><path d="M50 14 Q60 20 70 14" stroke="#294172" stroke-width="3" fill="none"/><path d="M36 30 Q60 25 84 30 L84 35 Q60 31 36 35 Z" fill="#51a2da"/></svg>`;
 
@@ -127,6 +131,7 @@
       <button class="brand" data-go="map" title="World map"><span class="logo">${TUX}</span><span>LilNux</span></button>
       <nav class="top-actions">
         <button class="ghost" data-go="map" title="World map">🗺️<span class="lbl"> Map</span></button>
+        <button class="ghost" data-go="kernel" title="Colonel Kernel — the videogame">🎮<span class="lbl"> Kernel</span></button>
         <button class="ghost" data-go="sandbox" title="Free play terminal">🧪<span class="lbl"> Free Play</span></button>
         <button class="ghost" data-go="cheats" title="Cheat sheet">📜<span class="lbl"> Cheat Sheet</span></button>
         <button class="ghost" data-go="badges" title="Badges">🏅<span class="lbl"> Badges</span></button>
@@ -145,10 +150,21 @@
   function go(where, arg) {
     stopSpeak();
     if (where !== 'world') run = null;
+    if (where !== 'kernel' && window.CK && CK.close) CK.close();
     if (!me() && where !== 'players') where = 'players';
     window.scrollTo(0, 0);
-    ({ players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate })[where](arg);
+    ({ players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel })[where](arg);
     renderTop();
+  }
+
+  // ---------------------------------------------------------------- Colonel Kernel (videogame mode)
+  function openKernel() {
+    renderMap();
+    if (!window.CK || !CK.open) { toast('Colonel Kernel could not load.'); return; }
+    CK.open({
+      root: document.body, player: me(), save, addXP, giveBadge, speak,
+      sound: SFX, soundOn: () => S.sound, onExit: () => go('map'),
+    });
   }
 
   // ---------------------------------------------------------------- players screen
@@ -231,6 +247,7 @@
       }).join('')}</div>
       <div class="map-foot">
         ${allDone ? '<button class="primary" data-go="certificate">🎓 Print my certificate</button>' : ''}
+        <button class="primary" data-go="kernel">🎮 Colonel Kernel</button>
         <button class="ghost" data-go="sandbox">🧪 Free Play terminal</button>
         <button class="ghost" data-go="cheats">📜 Cheat sheet</button>
         ${!p.unlockAll && !allDone ? '<button class="ghost" data-act="unlock">🔓 Unlock all worlds</button>' : ''}
