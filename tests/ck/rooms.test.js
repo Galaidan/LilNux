@@ -70,3 +70,25 @@ test('no tunnelling at max step', () => {
   const d = R.moveCircle(room, 240, 40, 7, 0, -500);
   assert.ok(d.y >= 23 - 0.01, `y=${d.y}`);
 });
+
+test('doors are solid until opened; doorAt and entryPoint', () => {
+  const r = R.parse(R.TRAINING); assert.ok(r.solid(14, 0)); assert.deepEqual(Object.keys(r.doors), ['n']);
+  r.setDoor('n', 'open'); assert.equal(r.solid(14, 0), false); assert.equal(r.doorKind('n'), 'open');
+  assert.equal(R.doorAt(r, 15 * 16, 4), 'n'); assert.equal(R.doorAt(r, 15 * 16, 40), null);
+  assert.deepEqual(R.entryPoint(r, 'n'), { x: 15 * 16, y: 2 * 16 + 8 });
+});
+test('shots fly over the void and retracted bridges but not walls', () => {
+  const r = R.parse(['#~_=!', '.....']);
+  assert.deepEqual([0, 1, 2, 3, 4].map((x) => r.blocksShots(x, 0)), [true, false, false, false, true]);
+  assert.equal(r.solid(2, 0), true); r.openBridge(); assert.equal(r.solid(2, 0), false);
+});
+test('props list and nearestProp', () => {
+  const r = R.parse(['.t..*', '.....', 'p.c.>']);
+  assert.deepEqual(r.props.map((p) => p.kind), ['terminal', 'crystal', 'pedestal', 'npc', 'gate']);
+  assert.equal(R.nearestProp(r, 24, 24, 10, ['terminal', 'npc']).kind, 'terminal');
+  assert.equal(R.nearestProp(r, 72, 40, 10, ['terminal']), null);
+});
+test('clearTile turns a block into floor and drops its prop', () => {
+  const r = R.parse(['.b.', '...']); assert.ok(r.solid(1, 0)); r.clearTile(1, 0);
+  assert.equal(r.solid(1, 0), false); assert.equal(r.props.length, 0);
+});
