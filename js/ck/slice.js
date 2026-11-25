@@ -25,8 +25,8 @@
     host.innerHTML = `
       <canvas class="ck-pix" aria-label="Colonel Kernel training room"></canvas>
       <div class="ck-shud">
-        <div class="ck-bar">Stability<div class="ck-segs" role="img" aria-label="Stability"></div></div>
-        <div class="ck-bar">Heat<div class="ck-heat" role="img" aria-label="Heat"><b></b></div></div>
+        <div class="ck-sbar">Stability<div class="ck-ssegs" role="img" aria-label="Stability"></div></div>
+        <div class="ck-sbar">Heat<div class="ck-sheat" role="img" aria-label="Heat"><b></b></div></div>
         <span class="ck-spacer"></span>
         <button type="button" class="ck-sbtn" data-sl="reset" title="Reset the room">↻</button>
         <button type="button" class="ck-sbtn" data-sl="exit" title="Back to the menu">✕</button>
@@ -49,7 +49,8 @@
     let resetTimer = 0;
 
     const pipEl = host.querySelector('.ck-pipline');
-    const say = (html) => { pipEl.innerHTML = html || ''; };
+    let sayTimer = 0; // Pip's line clears itself so it doesn't cover the room for long on a phone
+    const say = (html) => { pipEl.innerHTML = html || ''; clearTimeout(sayTimer); if (html) sayTimer = setTimeout(() => { pipEl.innerHTML = ''; }, 9000); };
     const sound = (k) => { try { if (h.sound && h.sound[k] && (!h.soundOn || h.soundOn())) h.sound[k](); } catch (e) { /* ignore */ } };
 
     function onEvent(ev) {
@@ -75,8 +76,8 @@
     }
 
     // ---- HUD ----
-    const segs = host.querySelector('.ck-segs'); segs.innerHTML = '<i></i>'.repeat(10);
-    const heat = host.querySelector('.ck-heat'); const heatBar = heat.querySelector('b');
+    const segs = host.querySelector('.ck-ssegs'); segs.innerHTML = '<i></i>'.repeat(10);
+    const heat = host.querySelector('.ck-sheat'); const heatBar = heat.querySelector('b');
     function hud() {
       const P = sim.player; const on = Math.ceil((P.stability / P.maxStability) * 10);
       segs.querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < on));
@@ -102,7 +103,7 @@
     });
 
     say(LINES.intro);
-    cur = { host, engine, input, cleanup() { clearInterval(hudTimer); clearTimeout(resetTimer); root.removeEventListener('pointerdown', onFirstTouch); } };
+    cur = { host, engine, input, cleanup() { clearInterval(hudTimer); clearTimeout(resetTimer); clearTimeout(sayTimer); root.removeEventListener('pointerdown', onFirstTouch); } };
     if (CK.PixEngine.debug) {
       CK._test = CK._test || {};
       CK._test.slice = { engine, input, scene, events, reset, get sim() { return sim; } };

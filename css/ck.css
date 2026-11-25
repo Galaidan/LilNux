@@ -200,14 +200,14 @@ body.ck-open { overflow: hidden; }
 .ck-shud { position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top));
   display: flex; align-items: center; gap: 10px; pointer-events: none; }
 .ck-shud > * { pointer-events: auto; }
-.ck-bar { display: flex; flex-direction: column; gap: 3px; font: 800 10px var(--mono); letter-spacing: .1em; color: var(--c-dim); text-transform: uppercase; }
-.ck-segs { display: flex; gap: 2px; }
-.ck-segs i { width: 12px; height: 8px; background: #1c2448; border: 1px solid #2b3768; }
-.ck-segs i.on { background: var(--c-mint); border-color: var(--c-mint); box-shadow: 0 0 6px var(--c-mint); }
-.ck-segs.low i.on { background: var(--c-coral); border-color: var(--c-coral); box-shadow: 0 0 6px var(--c-coral); }
-.ck-heat { width: 80px; height: 8px; background: #1c2448; border: 1px solid #2b3768; position: relative; }
-.ck-heat b { position: absolute; inset: 0 auto 0 0; background: var(--c-amber); }
-.ck-heat.hot b { background: var(--c-coral); }
+.ck-sbar { display: flex; flex-direction: column; gap: 3px; font: 800 10px var(--mono); letter-spacing: .1em; color: var(--c-dim); text-transform: uppercase; }
+.ck-ssegs { display: flex; gap: 2px; }
+.ck-ssegs i { width: 12px; height: 8px; background: #1c2448; border: 1px solid #2b3768; }
+.ck-ssegs i.on { background: var(--c-mint); border-color: var(--c-mint); box-shadow: 0 0 6px var(--c-mint); }
+.ck-ssegs.low i.on { background: var(--c-coral); border-color: var(--c-coral); box-shadow: 0 0 6px var(--c-coral); }
+.ck-sheat { width: 80px; height: 8px; background: #1c2448; border: 1px solid #2b3768; position: relative; }
+.ck-sheat b { position: absolute; inset: 0 auto 0 0; background: var(--c-amber); }
+.ck-sheat.hot b { background: var(--c-coral); }
 .ck-sbtn { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--edge); background: var(--glass); color: var(--c-ink);
   font: 700 14px var(--font); cursor: pointer; }
 .ck-sbtn:focus-visible { outline: 2px solid var(--c-cyan); outline-offset: 2px; }
@@ -227,7 +227,7 @@ body.ck-open { overflow: hidden; }
 .ck-stick { position: fixed; width: 80px; height: 80px; margin: -40px 0 0 -40px; border-radius: 50%; border: 2px solid rgba(56, 242, 255, .5); background: rgba(56, 242, 255, .08); pointer-events: none; }
 .ck-stick[hidden] { display: none; }
 .ck-knob { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: rgba(56, 242, 255, .55); box-shadow: 0 0 12px var(--c-cyan); }
-.ck-btns { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); width: 190px; height: 170px; pointer-events: none; }
+.ck-tbtns { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); width: 190px; height: 170px; pointer-events: none; }
 .ck-tbtn { position: absolute; pointer-events: auto; touch-action: none; border-radius: 50%; border: 2px solid var(--edge); background: rgba(14, 20, 48, .7); color: var(--c-ink);
   font: 700 20px var(--font); display: flex; align-items: center; justify-content: center; padding: 0; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ck-tbtn.on { background: rgba(56, 242, 255, .35); border-color: var(--c-cyan); box-shadow: 0 0 14px var(--c-cyan); }

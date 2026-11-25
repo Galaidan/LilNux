@@ -31,6 +31,12 @@ const tests = {
       return set.size;
     });
     assert.ok(colours > 3, `only ${colours} colours`);
+    const hud = await pg.$$eval('#ck-slice .ck-shud > *', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.right, r.top, r.bottom]; }));
+    for (let i = 0; i < hud.length; i++) for (let j = i + 1; j < hud.length; j++) {
+      const [a, c] = [hud[i], hud[j]]; const overlap = a[0] < c[1] - 1 && c[0] < a[1] - 1 && a[2] < c[3] - 1 && c[2] < a[3] - 1;
+      assert.ok(!overlap, `HUD items ${i} and ${j} overlap`);
+    }
+    assert.ok(hud[0][0] < 200, 'stability bar sits at the left');
     await pg.screenshot({ path: path.join(SHOTS, 'ck-slice-desktop.png') });
     assert.deepEqual(pg.errs, []);
   },
@@ -63,6 +69,8 @@ const tests = {
     const boxes = await pg.$$eval('#ck-slice .ck-tbtn', (bs) => bs.filter((x) => !x.hidden).map((x) => { const r = x.getBoundingClientRect(); return [x.dataset.act, r.width, r.height]; }));
     assert.equal(boxes.length, 5);
     boxes.forEach(([a, w, h]) => assert.ok(w >= 44 && h >= 44, `${a} ${w}x${h}`));
+    const inside = await pg.$$eval('#ck-slice .ck-tbtn', (bs) => bs.filter((x) => !x.hidden).map((x) => { const r = x.getBoundingClientRect(); return [x.dataset.act, r.right <= innerWidth - 8 && r.bottom <= innerHeight - 8 && r.left >= 0 && r.top >= 0]; }));
+    inside.forEach(([a, ok]) => assert.ok(ok, `${a} button is clipped by the screen edge`));
     await pg.screenshot({ path: path.join(SHOTS, 'ck-slice-phone.png') });
     assert.deepEqual(pg.errs, []);
   },
