@@ -1,7 +1,7 @@
 // Plays all 8 LilNux learning worlds with correct answers. Run: node tests/e2e/lilnux-regression.e2e.js
 const { chromium } = require('playwright');
 const path = require('path');
-const URL = 'file://' + path.resolve(__dirname, '../../index.html');
+const URL = require('url').pathToFileURL(path.resolve(__dirname, '../../index.html')).href;
 const SOLVE = {
   'cd Mu  (then press Tab, then Enter)': ['TAB:cd Mu'],
   'sudo dnf install fortune-mod   then   fortune': ['sudo dnf install fortune-mod', 'y', 'fortune'],

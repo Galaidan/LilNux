@@ -2,8 +2,8 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const assert = require('node:assert/strict');
-const URL = 'file://' + path.resolve(__dirname, '../../index.html') + '?ckdebug';
-const SHOTS = process.env.SHOTS || '/tmp';
+const URL = require('url').pathToFileURL(path.resolve(__dirname, '../../index.html')).href + '?ckdebug';
+const SHOTS = process.env.SHOTS || require('os').tmpdir();
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function newPage(b, init) {

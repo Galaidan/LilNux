@@ -2,8 +2,8 @@
 const { chromium, devices } = require('playwright');
 const path = require('path');
 const assert = require('node:assert/strict');
-const URL = 'file://' + path.resolve(__dirname, 'ck-harness.html') + '?ckdebug';
-const SHOTS = process.env.SHOTS || '/tmp';
+const URL = require('url').pathToFileURL(path.resolve(__dirname, 'ck-harness.html')).href + '?ckdebug';
+const SHOTS = process.env.SHOTS || require('os').tmpdir();
 
 async function page(b, opts) {
   const ctx = await b.newContext(opts || { viewport: { width: 1280, height: 800 } });
