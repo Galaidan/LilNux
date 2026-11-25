@@ -30,7 +30,7 @@
     if (st.liltuxTaken) { st.flicker = true; return { type: 'flicker' }; }
     const options = ['flicker'];
     const reg = CK.Rules.region(state.region);
-    const circuits = (state.cleared[state.region] || []).filter((id) => reg.nodes[id] && reg.nodes[id].kind === 'circuit' && id !== state.node);
+    const circuits = (state.cleared[state.region] || []).filter((id) => reg.nodes[id] && reg.nodes[id].kind === 'circuit' && id !== state.node && id !== state.checkpoint.node);
     if (circuits.length) options.push('rebreak');
     const nextLog = ODD_LOGS.find((l) => !st.oddLogs.includes(l));
     if (nextLog) options.push('oddlog');

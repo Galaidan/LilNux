@@ -67,7 +67,7 @@
 
       const inFight = () => !!sim && sim.hadFoes && !sim.outcome && sim.enemies.some((e) => !e.dead);
       const ui = cur.ui = CK.UI.create(host.querySelector('.ck-ui-host'), {
-        user: (player.name || 'colonel').toLowerCase().replace(/[^a-z0-9]/g, '') || 'colonel',
+        user: h.user || (player.name || 'colonel').toLowerCase().replace(/[^a-z0-9]/g, '') || 'colonel',
         getState: () => state,
         onExit: () => { CK.close(); if (h.onExit) h.onExit(); },
         onEquip: (id) => { if (!inFight()) { R.equip(state, id); toolsChanged(); save(); } },
@@ -121,7 +121,7 @@
         for (const p of room.props) {
           if (p.kind === 'terminal' && node.kind === 'circuit') p.broken = !R.isCleared(state, id);
           if (p.kind === 'crystal') p.taken = state.memories.includes(node.ref);
-          if (p.kind === 'pedestal') { p.icon = typeof node.ref === 'string' ? 'mod_' + node.ref : 'bits'; p.taken = true; }
+          if (p.kind === 'pedestal') { p.icon = typeof node.ref === 'string' ? 'mod_' + node.ref : 'bits'; p.taken = R.isCleared(state, id); }
         }
         sim = makeSim();
         const at = fromSide ? CK.Rooms.entryPoint(room, fromSide) : { x: room.player.x, y: room.player.y };
@@ -138,7 +138,7 @@
         input.setTools(state.equipped); ui.action(true); onNear(null); refresh();
       }
       function toolsChanged() {
-        input.setTools(state.equipped); ui.action(true);
+        input.setTools(state.equipped); ui.action(!puzzle);
         if (sim) { sim.tools.length = 0; sim.tools.push(...state.equipped); sim.upgrades.length = 0; sim.upgrades.push(...state.upgrades); Object.assign(sim.mods, R.stats(state)); }
       }
 
@@ -179,6 +179,7 @@
       }
       function onTouch(p) {
         if (p.kind === 'crystal' && !p.taken) { p.taken = true; busy(() => memory(reg().nodes[roomId])); }
+        else if (p.kind === 'pedestal' && !p.taken) { p.taken = true; takeItem(); }
         else if (p.kind === 'gate') busy(() => exit());
       }
 
@@ -193,6 +194,8 @@
           default: break;
         }
         if (ev.type === 'parry' && !firsts.parry) { firsts.parry = true; ui.toast(LINES.parry); }
+        if (ev.type === 'lock') sound('pop');
+        if (ev.type === 'lock-none' && Date.now() - (firsts.lockNone || 0) > 4000) { firsts.lockNone = Date.now(); ui.toast('◎ Nothing in view to lock onto. Face a creature first (cloaked ones need <code>ls</code>).'); }
         if (ev.type === 'sigkill' && !firsts.sigkill) { firsts.sigkill = true; ui.toast(LINES.sigkill); }
         if (ev.type === 'switch' && roomId === 'f1' && !state.switches.includes('f1')) {
           state.switches.push('f1'); room.openBridge(); save(); ui.toast('⚡ The bridge slides out across the gap.');
@@ -210,7 +213,6 @@
         busy(async () => {
           if (node.kind === 'character') await meet(node.ref, true);
           else if (node.kind === 'problem' && !R.isCleared(state, id)) await problemEntry();
-          else if (node.kind === 'item' && r.first) item(node);
         });
       }
       async function learn(skill) {
@@ -244,6 +246,12 @@
         room.tiles.forEach((row, ty) => row.forEach((c, tx) => { if (c === '_' && Math.hypot(tx * TL + 8 - P.x, ty * TL + 8 - P.y) <= 3 * TL + 2) close = true; }));
         if (close) busy(async () => { await say('pip', LINES.echoGap); await learn('echo'); });
       }
+      // Touching the pedestal takes what's on it; the room counts as visited from then on.
+      function takeItem() {
+        const node = reg().nodes[roomId]; if (R.isCleared(state, roomId)) return;
+        R.clear(state, roomId); state.checkpoint = { region: state.region, node: roomId };
+        item(node); refresh();
+      }
       function item(node) {
         if (typeof node.ref === 'string') {
           R.installModule(state, node.ref); const mod = W.MODULES[node.ref];
@@ -275,7 +283,6 @@
       // ---- fights -----------------------------------------------------------------------------------------
       const teacherOf = (skill) => W.SKILLS[skill].teacher;
       async function problemEntry() {
-        state.stats.fights++;
         if (!state.learned.includes('trap')) { // the first problem room: Pip teaches the parry before the creatures wake
           await say('pip', ['Creatures ahead — and they shoot signals. Lesson three: trap. In bash, `trap` runs your handler when a signal arrives.',
             'Down here: time it right and you catch what they throw and send it back. Mistime it and you’re open for a moment. A red ! means a lunge is coming.']);
@@ -286,7 +293,7 @@
       function onClear() {
         const node = reg().nodes[roomId]; const clean = sim.clean;
         busy(async () => {
-          state.stats.wins++;
+          state.stats.wins++; state.stats.fights++;
           if (node.kind === 'problem') {
             const rw = R.clearRoom(state, roomId, { clean }); xp(rw.xp); sound('win');
             ui.toast(rw.clean ? `🧼 <b>Clean fix — no hits!</b> +${rw.bits} bits` : `⚔️ Room cleared! +${rw.bits} bits`);
@@ -309,7 +316,7 @@
         });
       }
       function onLose() {
-        lock++; sound('bad');
+        lock++; sound('bad'); state.stats.fights++;
         setTimeout(() => {
           lock--; if (!cur) return;
           bossFight = false;
@@ -330,7 +337,7 @@
             scene.place(sim.player.x + IN[0] * 24, sim.player.y + IN[1] * 24); return;
           }
           const r = R.move(state, to); if (!r.ok) return;
-          bossFight = true; state.stats.fights++; save(); enterRoom(to, OPP[side]);
+          bossFight = true; save(); enterRoom(to, OPP[side]);
         });
       }
 
@@ -413,6 +420,10 @@
         if (remindPending && !lock && !ui.busy() && !inFight()) { remindPending = false; breakReminder(); }
       }
       async function wake(ev) {
+        const here = reg().nodes[state.node];
+        if (bossFight || (R.BLOCKING[here.kind] && !R.isCleared(state, state.node))) { // never wake up inside a fight
+          bossFight = false; state.region = state.checkpoint.region; state.node = state.checkpoint.node; state.prev = null; R.reveal(state, state.node);
+        }
         save(); enterRoom(state.node, null);
         const region = reg();
         if (ev.type === 'taken') {

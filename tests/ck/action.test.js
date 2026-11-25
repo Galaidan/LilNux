@@ -291,3 +291,76 @@ test('echo bolts fly over the void and trip a switch', () => {
   const s = mk({ room, spawns: [] }); press(s, { tool: 'echo', ax: 1, ay: 0 }); run(s, 0.5);
   const sw = s.events.filter((v) => v.type === 'switch'); assert.equal(sw.length, 1); assert.deepEqual([sw[0].tx, sw[0].ty], [4, 1]);
 });
+test('kill reaches 30 px: a revealed mite 33 px away (centre to centre) is hit', () => {
+  const room = Rooms.parse(Rooms.TRAINING);
+  const s = mk({ room, spawns: [{ kind: 'glitchMite', x: room.player.x + 33, y: room.player.y }] });
+  freeze(s); s.enemies[0].revealedUntil = 99;
+  press(s, { kill: true, ax: 1, ay: 0 });
+  assert.equal(s.enemies[0].hp, 30 - T.KILL_DMG);
+  assert.equal(T.KILL_RANGE, 30); assert.equal(T.KILL9_RANGE, 34);
+});
+
+// ---- targeting: a soft target that attacks aim at, plus a lock-on toggle -----------------------------
+function place3(s, spots) { // spots: [deg, dist] per enemy, 0 deg = right, 90 = up; null = far away behind
+  const P = s.player;
+  s.enemies.forEach((e, i) => { const sp = spots[i]; if (!sp) { e.x = P.x - 140; e.y = P.y + 60; return; } e.x = P.x + Math.cos((sp[0] * Math.PI) / 180) * sp[1]; e.y = P.y - Math.sin((sp[0] * Math.PI) / 180) * sp[1]; e.revealedUntil = 999; });
+}
+const boltDeg = (b) => (Math.atan2(-b.vy, b.vx) * 180) / Math.PI;
+test('soft target: the best visible creature in front, never one behind or cloaked', () => {
+  const s = mk(); freeze(s); press(s, { mx: 1 });
+  place3(s, [[40, 80], [180, 30], null]); s.enemies[2].revealedUntil = 0; s.enemies[2].x = s.player.x + 40; s.enemies[2].y = s.player.y;
+  press(s, {});
+  assert.equal(s.target, 'e0', 'the one ahead at 40 deg, not the closer one behind nor the cloaked one dead ahead');
+  press(s, { tool: 'echo' }); assert.ok(Math.abs(boltDeg(s.bolts[0]) - 40) < 2, `bolt ${boltDeg(s.bolts[0])}`);
+});
+test('soft target is sticky: a slightly better creature does not steal it', () => {
+  const s = mk(); freeze(s); press(s, { mx: 1 });
+  place3(s, [[10, 90], [0, 140], null]); press(s, {}); assert.equal(s.target, 'e0');
+  Object.assign(s.enemies[1], { x: s.player.x + 85, y: s.player.y }); press(s, {});
+  assert.equal(s.target, 'e0', 'kept');
+  Object.assign(s.enemies[1], { x: s.player.x + 30, y: s.player.y }); press(s, {});
+  assert.equal(s.target, 'e1', 'a much better one takes over');
+});
+test('kill swings toward the soft target: out of reach, the lunge heads for it', () => {
+  const s = mk(); freeze(s); s.player.face = { x: 0, y: 1 }; // facing down
+  place3(s, [[-40, 60], null, null]); // lower right, 50 deg off the facing, out of reach
+  press(s, {}); assert.equal(s.target, 'e0');
+  const x0 = s.player.x; const y0 = s.player.y; press(s, { kill: true });
+  const moved = Math.atan2(s.player.y - y0, s.player.x - x0); const want = Math.atan2(s.enemies[0].y - y0, s.enemies[0].x - x0);
+  assert.ok(Math.hypot(s.player.x - x0, s.player.y - y0) > 5 && Math.abs(moved - want) < 0.05, 'lunged at the target');
+  assert.ok(Math.abs(Math.atan2(s.player.face.y, s.player.face.x) - want) < 0.05, 'and turned to face it');
+});
+test('mouse aim targets only creatures close to the aim line; otherwise it aims freely', () => {
+  const s = mk(); freeze(s); place3(s, [[45, 80], null, null]);
+  press(s, { ax: 1, ay: 0 }); assert.equal(s.target, null);
+  press(s, { tool: 'echo', ax: 1, ay: 0 }); assert.ok(Math.abs(boltDeg(s.bolts[0])) < 1);
+  run(s, 0.4);
+  const a = (40 * Math.PI) / 180; press(s, { ax: Math.cos(a), ay: -Math.sin(a) }); assert.equal(s.target, 'e0');
+});
+test('Q cycles to the next creature', () => {
+  const s = mk(); freeze(s); press(s, { mx: 1 });
+  place3(s, [[10, 60], [100, 70], [200, 70]]); press(s, {}); assert.equal(s.target, 'e0');
+  press(s, { cycle: true }); assert.notEqual(s.target, 'e0');
+  const seen = new Set([s.target]); press(s, { cycle: true }); seen.add(s.target); press(s, { cycle: true }); seen.add(s.target);
+  assert.equal(seen.size, 3, 'cycling visits every visible creature');
+});
+test('lock-on: the Colonel keeps facing the target while moving away and sideways', () => {
+  const s = mk(); freeze(s); press(s, { mx: 1 }); place3(s, [[0, 70], null, null]);
+  press(s, { lock: true }); assert.equal(s.locked, true); assert.ok(drain(s).includes('lock'));
+  run(s, 0.3, { mx: -1 }); run(s, 0.3, { my: 1 });
+  const e = s.enemies[0]; const to = Math.atan2(e.y - s.player.y, e.x - s.player.x); const f = Math.atan2(s.player.face.y, s.player.face.x);
+  assert.ok(Math.abs(to - f) < 0.05, 'still facing it');
+  press(s, { tool: 'echo', ax: 0, ay: 1 }); // mouse points away: a lock wins
+  assert.ok(Math.abs(Math.atan2(s.bolts[0].vy, s.bolts[0].vx) - to) < 0.1);
+});
+test('lock-on lets go when the target dies, re-cloaks, or you toggle it off', () => {
+  const s = mk(); freeze(s); press(s, { mx: 1 }); place3(s, [[0, 60], [20, 90], null]);
+  press(s, { lock: true }); s.enemies[0].dead = true; press(s, {});
+  assert.equal(s.locked, false); assert.ok(drain(s).includes('unlock'));
+  press(s, { lock: true }); assert.equal(s.locked, true); s.enemies[1].revealedUntil = 0; press(s, {}); assert.equal(s.locked, false);
+  s.enemies[1].revealedUntil = 999; press(s, {}); press(s, { lock: true }); press(s, { lock: true }); assert.equal(s.locked, false);
+});
+test('lock-on with nothing in view stays off', () => {
+  const s = mk(); freeze(s); press(s, { mx: 1 }); place3(s, [null, null, null]);
+  drain(s); press(s, { lock: true }); assert.equal(s.locked, false); assert.ok(drain(s).includes('lock-none'));
+});

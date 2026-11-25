@@ -220,7 +220,10 @@ const tests = {
     const pg2 = await openWith(b, Object.assign({ node: 'f5', prev: 'f3', explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f6', 'f9'] }, cleared: { firmware: ['f1', 'f3', 'f5'] } }, learnedFw));
     await settle(pg2);
     await toDoor(pg2, 'n'); await waitRoom(pg2, 'f6'); await settle(pg2);
-    assert.ok(await pg2.evaluate(() => CK._test.main.state.modules.includes('ram') && CK.Rules.stats(CK._test.main.state).slots === 3));
+    assert.deepEqual(await pg2.evaluate(() => { const p = CK._test.main.room.props.find((x) => x.kind === 'pedestal'); return [p.icon, !!p.taken, CK._test.main.state.modules.includes('ram')]; }), ['mod_ram', false, false], 'the RAM stick waits on its pedestal');
+    await pg2.evaluate(() => { const m = CK._test.main; const p = m.room.props.find((x) => x.kind === 'pedestal'); m.place(p.x, (p.ty + 1) * 16 + 9); });
+    await pg2.waitForFunction(() => CK._test.main.state.modules.includes('ram'), null, { timeout: 3000 }); await settle(pg2);
+    assert.ok(await pg2.evaluate(() => CK.Rules.stats(CK._test.main.state).slots === 3 && CK.Rules.isCleared(CK._test.main.state, 'f6') && CK._test.main.room.props.find((x) => x.kind === 'pedestal').taken));
   },
   async 'exit to GRUB Gate'(b) {
     const pg = await openWith(b, Object.assign({ node: 'f12', prev: 'f10', explored: { firmware: ['f10', 'f11', 'f12', 'f13'] }, cleared: { firmware: ['f12'] }, modules: ['fan'] }, learnedFw));
@@ -292,6 +295,7 @@ const tests = {
     assert.deepEqual(await pg.evaluate(() => [CK._test.main.state.node, CK._test.main.state.prev]), ['f3', 'f5']);
     await walk(pg, 'e', 'f5'); await settle(pg);
     assert.deepEqual(await pg.evaluate(() => CK._test.main.sim.enemies.map((e) => e.hp)), [30, 30, 30], 'fresh creatures');
+    assert.equal(await pg.evaluate(() => CK._test.main.state.stats.fights), 0, 'backing out is not a fight');
   },
   async 'clean clear counts and pays the clean reward'(b) {
     const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', bits: 3, checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
@@ -301,6 +305,7 @@ const tests = {
     await settle(pg);
     const s = await pg.evaluate(() => ({ clean: CK._test.main.state.stats.clean, bits: CK._test.main.state.bits, n: CK._test.main.room.doorKind('n') }));
     assert.deepEqual([s.clean, s.bits, s.n], [1, 18, 'open']);
+    assert.deepEqual(await pg.evaluate(() => [CK._test.main.state.stats.fights, CK._test.main.state.stats.wins]), [1, 1]);
   },
   async 'losing reboots at the checkpoint with loot kept'(b) {
     const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', bits: 7, checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
@@ -371,7 +376,8 @@ const tests = {
     await pg.keyboard.press('j'); await wait(300);
     assert.equal(await pg.evaluate(() => CK._test.main.room.doorKind('n')), 'open');
     await walk(pg, 'n', 'f14'); await settle(pg);
-    assert.equal(await pg.evaluate(() => CK._test.main.state.bits), 20);
+    await pg.evaluate(() => { const m = CK._test.main; const p = m.room.props.find((x) => x.kind === 'pedestal'); m.place(p.x, (p.ty + 1) * 16 + 9); });
+    await pg.waitForFunction(() => CK._test.main.state.bits === 20, null, { timeout: 3000 });
   },
   async 'dark room lights up with ls'(b) {
     const pg = await openWith(b, Object.assign({ node: 'f1', prev: 'f0', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f2', 'f3', 'f4'] }, cleared: { firmware: ['f1'] } }, learnedFw));
@@ -524,6 +530,101 @@ const tests = {
     const r = await pg.evaluate(() => ({ st: CK._test.main.sim.player.stability, red: CK._test.main.engine.reducedMotion, paused: CK._test.main.busy() }));
     assert.ok(r.red && r.st < 100, 'a hit landed with reduced motion on: ' + JSON.stringify(r));
     assert.equal(await pg.evaluate(() => window.__flash), 0);
+  },
+  // ---- polish: deferred minors, reach, health bars ----
+  async 'resting while away mid-fight wakes at the checkpoint'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg); await walk(pg, 'e', 'f5'); await settle(pg);
+    await pg.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange'));
+      CK._test.main.state.story.lastSeen = Date.now() - 6 * 60 * 1000;
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await wait(300); await settle(pg);
+    assert.equal(await pg.evaluate(() => CK._test.main.roomId), 'f3', 'woke in the safe room, not in the fight');
+  },
+  async 'equipping during a puzzle keeps the action bar hidden'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f5', prev: 'f3', explored: { firmware: ['f3', 'f5', 'f6', 'f7', 'f9'] }, cleared: { firmware: ['f1', 'f3', 'f5'] } }, learnedFw));
+    await settle(pg); await walk(pg, 's', 'f9'); await settle(pg);
+    await useProp(pg, 'terminal'); await pg.waitForFunction(() => CK._test.main.sceneKind() === 'puzzle', null, { timeout: 3000 });
+    await pg.evaluate(() => CK._test.main.ui.pip('items')); await pg.click('[data-unequip=ls]');
+    assert.equal(await pg.evaluate(() => document.querySelector('.ck-act').hidden), true);
+  },
+  async 'the Adventure terminal uses the same user name as Learn mode'(b) {
+    const pg = await page(b, { viewport: { width: 1280, height: 720 } }, INDEX);
+    pg.on('dialog', (d) => d.accept());
+    await pg.fill('input[name=name]', '9lives'); await pg.click('#pform button[type=submit]');
+    await openAdv(pg); await settle(pg);
+    await walk(pg, 'e', 'f1'); await pg.waitForSelector('.ck-say');
+    while (await pg.$('.ck-say')) { await pg.click('.ck-say [data-ck=next]'); }
+    await pg.waitForSelector('.ck-learn');
+    assert.match(await pg.textContent('.ck-learn .p'), /\[user9lives@/);
+  },
+  async 'enemies show health bars once you can see them'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg); await walk(pg, 'e', 'f5'); await settle(pg);
+    await pg.evaluate(() => { const s = CK._test.main.sim; s.enemies.forEach((e) => { e.speed = 0; e.shootTimer = e.lungeTimer = 999; }); s.enemies[0].revealedUntil = 999; s.enemies[0].hp = 15; s.enemies[1].revealedUntil = 0; });
+    await wait(250);
+    const bars = await pg.evaluate(() => CK._test.main.scene.bars);
+    const b0 = bars.find((x) => x.id === 'e0'); assert.ok(b0, JSON.stringify(bars)); assert.equal(b0.frac, 0.5);
+    assert.ok(!bars.some((x) => x.id === 'e1'), 'a cloaked mite gives nothing away');
+    const px = await pg.evaluate((bb) => { const m = CK._test.main; const d = m.engine.bctx.getImageData(Math.round(bb.x - m.scene.cam.x) + 1, Math.round(bb.y - m.scene.cam.y), 1, 1).data; return [d[0], d[1], d[2]]; }, b0);
+    assert.deepEqual(px, [255, 179, 71], 'half health reads amber');
+  },
+  async 'bosses get a named health bar in the HUD'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f10', prev: 'f9', explored: { firmware: ['f9', 'f10', 'f12'] }, cleared: { firmware: ['f1', 'f3', 'f5', 'f9', 'f10'] } }, learnedFw));
+    await settle(pg);
+    assert.equal(await pg.isVisible('.ck-bossbar'), false);
+    await place(pg, 280, 200); await wait(100);
+    await toDoor(pg, 's'); await pg.waitForSelector('.ck-choice'); await pg.click('.ck-choice button >> text=Fight!');
+    await waitRoom(pg, 'f12'); await settle(pg); await wait(250);
+    assert.ok(await pg.isVisible('.ck-bossbar')); assert.match(await pg.textContent('.ck-bossbar'), /Corrupt Boot Glitch/);
+    assert.match(await pg.getAttribute('.ck-bossbar [role=img]', 'aria-label'), /220 of 220/);
+    await pg.evaluate(() => { CK._test.main.sim.enemies[0].hp = 110; }); await wait(250);
+    assert.match(await pg.getAttribute('.ck-bossbar [role=img]', 'aria-label'), /110 of 220/);
+    await clearFoes(pg, false); await pg.waitForFunction(() => CK.Rules.isCleared(CK._test.main.state, 'f12'), null, { timeout: 3000 }); await settle(pg);
+    assert.equal(await pg.isVisible('.ck-bossbar'), false);
+  },
+  // ---- targeting ----
+  async 'a reticle marks the soft target; L locks on, Q picks the next one'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg); await walk(pg, 'e', 'f5'); await settle(pg);
+    await pg.evaluate(() => {
+      const m = CK._test.main; const s = m.sim; m.place(14 * 16 + 8, 9 * 16 + 8); s.player.face = { x: 1, y: 0 };
+      s.enemies.forEach((e, i) => { e.speed = 0; e.shootTimer = e.lungeTimer = 999; e.revealedUntil = 999; e.x = s.player.x + [70, 20, -60][i]; e.y = s.player.y + [-10, -70, 30][i]; });
+    });
+    await wait(200);
+    assert.deepEqual(await pg.evaluate(() => CK._test.main.scene.reticle), { id: 'e0', locked: false });
+    await pg.keyboard.press('l'); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), true);
+    assert.deepEqual(await pg.evaluate(() => CK._test.main.scene.reticle), { id: 'e0', locked: true });
+    await pg.keyboard.press('q'); await wait(150);
+    assert.notEqual(await pg.evaluate(() => CK._test.main.sim.target), 'e0');
+    await pg.keyboard.press('l'); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), false);
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-target.png') });
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'phone: the lock toggle sits by the joystick and only shows in a fight'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw), null, { ...devices['iPhone 13 landscape'] });
+    await settle(pg);
+    assert.equal(await pg.isVisible('#ck-root .ck-tbtn-lock'), false, 'no toggle in a safe room');
+    await walk(pg, 'e', 'f5'); await settle(pg);
+    await pg.evaluate(() => { const s = CK._test.main.sim; s.enemies.forEach((e) => { e.speed = 0; e.shootTimer = e.lungeTimer = 999; e.revealedUntil = 999; }); CK._test.main.place(14 * 16 + 8, 9 * 16 + 8); s.player.face = { x: 0, y: -1 }; const e = s.enemies[0]; e.x = s.player.x + 10; e.y = s.player.y - 60; });
+    await wait(200);
+    assert.ok(await pg.isVisible('#ck-root .ck-tbtn-lock'));
+    const r = await pg.$eval('#ck-root .ck-tbtn-lock', (x) => { const b = x.getBoundingClientRect(); return { w: b.width, h: b.height, left: b.left, right: b.right, top: b.top, bottom: b.bottom, vw: innerWidth, vh: innerHeight, label: x.getAttribute('aria-label'), pressed: x.getAttribute('aria-pressed') }; });
+    assert.ok(r.w >= 44 && r.h >= 44, JSON.stringify(r)); assert.ok(r.right < r.vw * 0.3, 'on the left, by the stick'); assert.ok(r.left >= 0 && r.bottom <= r.vh && r.top >= 0, 'on screen');
+    assert.match(r.label, /lock/i); assert.equal(r.pressed, 'false');
+    const tap = () => pg.evaluate(() => { const el = document.querySelector('#ck-root .ck-tbtn-lock'); const b = el.getBoundingClientRect();
+      for (const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, { pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + b.height / 2, bubbles: true, cancelable: true, pointerType: 'touch' })); });
+    await tap(); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), true);
+    assert.equal(await pg.getAttribute('#ck-root .ck-tbtn-lock', 'aria-pressed'), 'true');
+    await tap(); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), false);
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-lock-phone.png') });
+    assert.deepEqual(pg.errs, []);
   },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);

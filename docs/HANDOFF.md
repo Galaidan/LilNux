@@ -94,7 +94,7 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 
 When adding files: add them to `index.html`, `tests/e2e/ck-harness.html` if tests need them, and the
 `FILES` list in `sw.js` (`tests/ck/wiring.test.js` checks this); bump `VERSION` in `sw.js` whenever shipped
-files change (currently `lilnux-v9`).
+files change (currently `lilnux-v10`).
 
 ## Tests (run one at a time — the sandbox has limited memory)
 
@@ -109,9 +109,9 @@ On the Windows PC, Playwright + Chromium live outside the repo in `C:\ClaudeBro\
 `$env:NODE_PATH = 'C:\ClaudeBro\.pw\node_modules'` first (and `$env:SHOTS` for screenshots). Debug hooks
 (`CK._test`) exist only with `?ckdebug` in the URL; `ck-adventure.e2e.js` includes a full Chapter 1 playthrough.
 
-## Deferred polish (user hasn't asked for these yet)
+## Deferred polish
 
-- Adventure's terminal user name differs from Learn mode's for names starting with a digit.
+Nothing open right now.
 
 ## Working with this user
 

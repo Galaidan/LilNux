@@ -58,7 +58,7 @@
     function handle(ev) {
       const P = sim.player;
       switch (ev.type) {
-        case 'hit': burst(ev.x, ev.y, COL.magenta, 6, 60); if (ev.n) pops.push({ x: ev.x, y: ev.y - 10, n: ev.n, life: 0.6 }); hitstop = Math.max(hitstop, 0.05); break;
+        case 'hit': burst(ev.x, ev.y, COL.magenta, 6, 60); if (ev.n) pops.push({ x: ev.x, y: ev.y - 22, n: ev.n, life: 0.6 }); hitstop = Math.max(hitstop, 0.05); break;
         case 'kill': burst(ev.x, ev.y, COL.violet, 14, 90); burst(ev.x, ev.y, COL.white, 4, 40); rings.push({ x: ev.x, y: ev.y, r0: 4, r1: 22, life: 0.3, max: 0.3, color: COL.magenta }); hitstop = Math.max(hitstop, 0.06); shake(); break;
         case 'hurt': burst(P.x, P.y - 10, COL.coral, 8, 70); hurtFlash = 0.08; shake(); break;
         case 'parry': rings.push({ x: ev.x, y: ev.y, r0: 4, r1: 26, life: 0.25, max: 0.25, color: COL.cyan }); burst(ev.x, ev.y, COL.cyan, 8, 80); hitstop = Math.max(hitstop, 0.05); break;
@@ -69,6 +69,7 @@
         case 'echo': burst(P.x + P.face.x * 8, P.y - 10 + P.face.y * 8, COL.cyan, 3, 40); break;
         case 'overheat': burst(P.x, P.y - 20, COL.amber, 10, 50); break;
         case 'clear': rings.push({ x: P.x, y: P.y - 10, r0: 10, r1: 260, life: 0.8, max: 0.8, color: COL.mint }); break;
+        case 'lock': rings.push({ x: ev.x, y: ev.y - 8, r0: 22, r1: 10, life: 0.2, max: 0.2, color: COL.magenta }); break;
         case 'heavy': arcs.push({ x: P.x, y: P.y - 10, dir: Math.atan2(P.face.y, P.face.x), life: 0.16, combo: 3, big: true }); hitstop = Math.max(hitstop, 0.07); shake(); break;
         case 'charge': rings.push({ x: P.x, y: P.y - 12, r0: 16, r1: 6, life: 0.25, max: 0.25, color: COL.gold }); break;
         case 'break': burst(ev.x, ev.y, COL.magenta, 14, 80); burst(ev.x, ev.y, COL.white, 5, 50); shake(); break;
@@ -99,9 +100,9 @@
       if (inp.mouse) { ax = inp.mouse.x + cam.x - P.x; ay = inp.mouse.y + cam.y - (P.y - 10); const l = Math.hypot(ax, ay); if (l > 1) { ax /= l; ay /= l; } else { ax = 0; ay = 0; } }
       if (hitstop > 0) {
         hitstop -= dt; // buffer presses made during hit-stop so they aren't lost
-        if (inp.kill || inp.trap || inp.dash || inp.tool) {
+        if (inp.kill || inp.trap || inp.dash || inp.tool || inp.lock || inp.cycle) {
           pending = pending || {};
-          for (const k of ['kill', 'trap', 'dash']) if (inp[k]) pending[k] = true;
+          for (const k of ['kill', 'trap', 'dash', 'lock', 'cycle']) if (inp[k]) pending[k] = true;
           if (inp.tool) pending.tool = inp.tool;
         }
       }
@@ -111,7 +112,8 @@
         const calm = !sim.enemies.some((e) => !e.dead);
         if (o.onUse && (inp.use || (inp.kill && near && near.kind === 'npc' && calm))) { if (near) { inp.kill = false; o.onUse(near); } }
         const press = pending || {}; pending = null;
-        sim.step(dt, { mx: inp.mx, my: inp.my, ax, ay, kill: inp.kill || !!press.kill, killHeld: !!inp.killHeld, trap: inp.trap || !!press.trap, dash: inp.dash || !!press.dash, tool: inp.tool || press.tool || null });
+        sim.step(dt, { mx: inp.mx, my: inp.my, ax, ay, kill: inp.kill || !!press.kill, killHeld: !!inp.killHeld, trap: inp.trap || !!press.trap, dash: inp.dash || !!press.dash, lock: inp.lock || !!press.lock, cycle: inp.cycle || !!press.cycle, tool: inp.tool || press.tool || null });
+        if (input && input.setLock) input.setLock(sim.locked, sim.enemies.some((e) => !e.dead));
       }
       for (const ev of sim.events.splice(0)) handle(ev);
       checkPlace(P);
@@ -222,6 +224,7 @@
       for (const b of sim.bolts) Pix.draw(g, spr.bolt, b.x, b.y + 2, { glow: 0.9 });
       drawEffects(g);
       drawTells(g);
+      drawReticle(g);
 
       // screen space: darkness, glitches, drifting motes, then the vignette
       g.setTransform(1, 0, 0, 1, 0, 0);
@@ -234,6 +237,7 @@
       }
       g.globalAlpha = 1;
       if (vig) g.drawImage(vig, 0, 0);
+      drawBars(g, sx, sy); // last, so they stay readable over the vignette
     }
 
     function drawColonel(g, P) {
@@ -341,14 +345,53 @@
       g.globalAlpha = 0.08; g.fillStyle = COL.magenta; g.fillRect(0, 0, view.w, view.h); g.globalAlpha = 1;
     }
 
+    // The target reticle: corner brackets round the soft target (cyan), solid magenta when locked on.
+    const FOE_SIZE = { glitchMite: 16, loopWisp: 24, bootGlitch: 48, kernelWraith: 64 };
+    let reticle = null;
+    function drawReticle(g) {
+      const e = sim.target && sim.enemies.find((x) => x.id === sim.target && !x.dead);
+      if (!e) { reticle = null; return; }
+      reticle = { id: e.id, locked: !!sim.locked };
+      const sz = FOE_SIZE[e.kind] || 16; const pulse_ = sim.locked && !reduced() ? Math.round(Math.sin(t * 8)) : 0;
+      const h = Math.round(sz / 2) + 3 - pulse_; const cx = Math.round(e.x); const cy = Math.round(e.y + e.r + 2 - sz / 2); const L = sz >= 48 ? 7 : 4;
+      const corners = (w, col) => {
+        g.fillStyle = col;
+        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          const x = cx + sx * h; const y = cy + sy * h;
+          g.fillRect(sx < 0 ? x - (w >> 1) : x - L + 1 - (w >> 1), y - (w >> 1), L + w - 1, w);
+          g.fillRect(x - (w >> 1), sy < 0 ? y - (w >> 1) : y - L + 1 - (w >> 1), w, L + w - 1);
+        }
+      };
+      g.globalAlpha = 0.8; corners(3, A.cliff3); g.globalAlpha = sim.locked ? 1 : 0.85; corners(1, sim.locked ? COL.magenta : COL.cyan); g.globalAlpha = 1;
+    }
+
+    // Health bars over creatures you can see (bosses get a named bar in the HUD instead). Cloaked = no bar.
+    const FOE_H = { glitchMite: 16, loopWisp: 24 };
+    let bars = [];
+    function drawBars(g, sx, sy) {
+      bars = [];
+      for (const e of sim.enemies) {
+        if (e.dead || e.boss) continue;
+        const visible = !e.cloaked || sim.time < e.revealedUntil || sim.time < e.stunUntil;
+        if (!visible) continue;
+        const w = e.kind === 'loopWisp' ? 18 : 14; const frac = Math.max(0, Math.min(1, e.hp / e.maxHp));
+        const x = Math.round(e.x - w / 2); const y = Math.round(e.y + e.r + 2 - (FOE_H[e.kind] || 16) - 4);
+        const X = x - Math.round(cam.x) + sx; const Y = y - Math.round(cam.y) + sy;
+        g.fillStyle = A.cliff3; g.fillRect(X - 1, Y - 1, w + 2, 4);
+        g.fillStyle = '#1c2448'; g.fillRect(X, Y, w, 2);
+        g.fillStyle = frac > 0.5 ? COL.mint : frac > 0.25 ? COL.amber : COL.coral; g.fillRect(X, Y, Math.max(1, Math.round(frac * w)), 2);
+        bars.push({ id: e.id, x, y, w, frac });
+      }
+    }
+
     // Effects draw normally (not additive) with a dark under-stroke, so they read on the pale plaza.
     function drawEffects(g) {
       for (const a of arcs) {
         const al = Math.max(0, a.life / 0.1); const w = a.combo === 3 ? 3 : 2;
         g.globalAlpha = al * 0.55; g.strokeStyle = A.cliff2; g.lineWidth = w + 2;
-        g.beginPath(); g.arc(a.x, a.y, 18, a.dir - 0.9, a.dir + 0.9); g.stroke();
+        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
         g.globalAlpha = al; g.strokeStyle = a.combo === 3 ? COL.magenta : COL.white; g.lineWidth = w;
-        g.beginPath(); g.arc(a.x, a.y, 18, a.dir - 0.9, a.dir + 0.9); g.stroke();
+        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
       }
       for (const r of rings) {
         const k = 1 - r.life / r.max; const rad = r.r0 + (r.r1 - r.r0) * k; const al = Math.max(0, r.life / r.max);
@@ -387,6 +430,8 @@
       // debug: put the Colonel somewhere (the door latch resets, so the real crossing code runs)
       place(x, y) { sim.player.x = x; sim.player.y = y; latch = null; },
       get transitioning() { return slideT > 0; },
+      get bars() { return bars; },
+      get reticle() { return reticle; },
       resize(view) {
         if (!view || (deep && deep.img.width === view.w && deep.img.height === view.h)) return;
         deep = Art.deep(view.w, view.h, 3); vig = Art.vignette(view.w, view.h); seedMotes(view.w, view.h);

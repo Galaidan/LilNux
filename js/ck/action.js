@@ -7,14 +7,16 @@
   const TUNING = {
     MOVE: 110, PLAYER_R: 7, IFRAMES_HURT: 0.6, ATTACK_MOVE_MUL: 0.4,
     DASH_DIST: 70, DASH_TIME: 0.15, DASH_CD: 0.35,
-    KILL_DMG: 12, KILL_TIME: 0.22, KILL_CHAIN: 0.4, KILL_RANGE: 22, KILL_LUNGE: 10, KILL_COOL_HEAT: 8, KILL_ARC_DEG: 70, KNOCK: 4,
+    KILL_DMG: 12, KILL_TIME: 0.22, KILL_CHAIN: 0.4, KILL_RANGE: 30, KILL_LUNGE: 10, KILL_COOL_HEAT: 8, KILL_ARC_DEG: 70, KNOCK: 4,
     PARRY: 0.18, PARRY_KID: 0.30, PARRY_RECOVER: 0.35, STUN: 1.2, REFLECT_MUL: 2,
     ECHO_SPEED: 260, ECHO_DMG: 10, ECHO_CD: 0.35, ECHO_HEAT: 9, OVERHEAT_LOCK: 1.5, HEAT_DECAY: 25, BOLT_R: 3, ORB_R: 3,
     LS_CD: 3, LS_HEAT: 15, LS_REVEAL: 4, LS_REVEAL_A: 7, ECHO_N_MUL: 0.75,
-    KILL9_CHARGE: 0.6, KILL9_DMG: 40, KILL9_RANGE: 26, KILL9_ARC_DEG: 100, BREAK_REACH: 30,
+    KILL9_CHARGE: 0.6, KILL9_DMG: 40, KILL9_RANGE: 34, KILL9_ARC_DEG: 100, BREAK_REACH: 36,
     MITE: { r: 6, speed: 45, shootEvery: 2.4, orbSpeed: 80, orbDmg: 8, contactDmg: 6,
       lungeEvery: 3.5, lungeTell: 0.4, lungeSpeed: 160, lungeTime: 0.3, lungeDmg: 10 },
-    KID_SPEED: 0.8, KID_STABILITY: 130, AIM_CONE_DEG: 60,
+    KID_SPEED: 0.8, KID_STABILITY: 130,
+    // targeting: a soft target in front of you; mouse aim narrows it; lock-on holds it
+    TARGET: { CONE_DEG: 60, AIM_CONE_DEG: 20, RANGE: 170, KEEP: 200, KEEP_DEG: 90, LOCK_RANGE: 260, STEAL: 0.6, ANGLE_W: 1.5 },
   };
 
   const len = (x, y) => Math.hypot(x, y);
@@ -33,7 +35,7 @@
     const maxStability = kid ? T.KID_STABILITY : 100;
 
     const s = {
-      room, kid, tools, upgrades, mods, breakables, time: 0, outcome: null, clean: false, events: [], hadFoes: spawnList.length > 0,
+      room, kid, tools, upgrades, mods, breakables, target: null, locked: false, time: 0, outcome: null, clean: false, events: [], hadFoes: spawnList.length > 0,
       player: {
         x: room.player.x, y: room.player.y, face: { x: 0, y: 1 }, stability: maxStability, maxStability,
         dashT: 0, dashCd: 0, dashDir: { x: 0, y: 1 }, iframes: 0, attackT: 0, combo: 0, chainT: 0,
@@ -230,9 +232,13 @@
 
       let mv = { x: inp.mx || 0, y: inp.my || 0 };
       if (len(mv.x, mv.y) > 1) mv = norm(mv.x, mv.y);
-      const aimIn = norm(inp.ax || 0, inp.ay || 0);
-      const aim = aimIn.x || aimIn.y ? aimIn : P.face;
+      const aimIn = norm(inp.ax || 0, inp.ay || 0); const aiming = !!(aimIn.x || aimIn.y);
       const free = P.recoverT <= 0;
+      updateTarget(aiming ? aimIn : len(mv.x, mv.y) > 0.1 ? norm(mv.x, mv.y) : P.face, aiming);
+      if (inp.cycle) cycleTarget();
+      if (inp.lock) toggleLock();
+      const tgt = byId(s.target);
+      const aim = tgt ? toward(tgt) : aiming ? aimIn : P.face; // every attack goes at the target when there is one
 
       if (inp.dash && free && P.dashT <= 0 && P.dashCd <= 0) {
         P.dashT = T.DASH_TIME; P.dashDir = mv.x || mv.y ? norm(mv.x, mv.y) : P.face; P.attackT = 0;
@@ -240,7 +246,7 @@
       }
       if (inp.trap) startParry();
       if (inp.kill && free && P.dashT <= 0 && P.attackT <= 0) swing(aim);
-      if (inp.tool) useTool(inp.tool, aimFor(inp.tool, aimIn));
+      if (inp.tool) useTool(inp.tool, aim);
       // `kill -9`: keep kill held to charge, release to strike
       if (upgrades.includes('kill-9')) {
         if (inp.killHeld && P.dashT <= 0) {
@@ -265,6 +271,7 @@
         P.moving = len(mv.x, mv.y) > 0.1;
         if (P.moving && P.attackT <= 0) P.face = norm(mv.x, mv.y);
       }
+      if (s.locked && tgt && P.dashT <= 0) P.face = toward(tgt); // locked on: always face it, so moving strafes
       updateParry(dt);
 
       for (const e of s.enemies) updateEnemy(e, dt);
@@ -286,19 +293,45 @@
         if (!P.parryCaught) { P.recoverT = T.PARRY_RECOVER; ev('parry-miss'); }
       }
     }
-    // With no explicit aim, echo snaps to the nearest hittable enemy inside the facing cone.
-    function aimFor(tool, aimIn) {
-      if (aimIn.x || aimIn.y) return aimIn;
-      if (tool !== 'echo') return P.face;
-      const half = (T.AIM_CONE_DEG / 2) * (Math.PI / 180);
-      let best = null; let bestD = Infinity;
-      for (const e of alive()) {
-        if (!hittable(e)) continue;
-        const dx = e.x - P.x; const dy = e.y - P.y; const d = len(dx, dy);
-        if (d < 1e-6 || angleBetween(P.face, norm(dx, dy)) > half) continue;
-        if (d < bestD) { bestD = d; best = norm(dx, dy); }
+    // ---- targeting ------------------------------------------------------------------------------
+    // The soft target is the visible creature that best fits where you face, move or point (closer and
+    // more in line scores better). It sticks until another is clearly better. Lock-on holds it until it
+    // dies, cloaks again or gets far away. Cloaked creatures are never targeted: that would give them away.
+    const TG = T.TARGET; const rad = (d) => (d * Math.PI) / 180;
+    const byId = (id) => (id ? s.enemies.find((e) => e.id === id) : null);
+    const toward = (e) => norm(e.x - P.x, e.y - P.y);
+    const valid = (e, range) => !!e && !e.dead && hittable(e) && len(e.x - P.x, e.y - P.y) <= range;
+    const scoreOf = (e, ref) => len(e.x - P.x, e.y - P.y) * (1 + angleBetween(ref, toward(e)) * TG.ANGLE_W);
+    function updateTarget(ref, aiming) {
+      if (s.locked) {
+        if (valid(byId(s.target), TG.LOCK_RANGE)) return;
+        s.locked = false; ev('unlock');
       }
-      return best || P.face;
+      const cone = rad(aiming ? TG.AIM_CONE_DEG : TG.CONE_DEG);
+      let best = null; let bs = Infinity;
+      for (const e of alive()) {
+        if (!valid(e, TG.RANGE) || angleBetween(ref, toward(e)) > cone) continue;
+        const sc = scoreOf(e, ref); if (sc < bs) { bs = sc; best = e; }
+      }
+      const cur = byId(s.target);
+      if (!aiming && valid(cur, TG.KEEP) && angleBetween(ref, toward(cur)) <= rad(TG.KEEP_DEG)) {
+        if (best && best !== cur && bs < TG.STEAL * scoreOf(cur, ref)) s.target = best.id;
+        return;
+      }
+      s.target = best ? best.id : null;
+    }
+    // Q / next target: go round the visible creatures by direction, and turn to face the new one.
+    function cycleTarget() {
+      const list = alive().filter((e) => valid(e, TG.KEEP)).sort((a, b) => Math.atan2(a.y - P.y, a.x - P.x) - Math.atan2(b.y - P.y, b.x - P.x));
+      if (!list.length) return;
+      const next = list[(list.findIndex((e) => e.id === s.target) + 1) % list.length];
+      s.target = next.id; P.face = toward(next); ev('target', next.x, next.y);
+    }
+    function toggleLock() {
+      if (s.locked) { s.locked = false; ev('unlock'); return; }
+      const t = byId(s.target);
+      if (!t) { ev('lock-none'); return; }
+      s.locked = true; P.face = toward(t); ev('lock', t.x, t.y);
     }
 
     return s;

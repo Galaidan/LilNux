@@ -155,6 +155,12 @@ const tests = {
     await pg.waitForTimeout(1600);
     assert.equal(await pg.evaluate(() => H.learned && H.state.learned.includes('kill')), true);
   },
+  async 'no leftover old-map wording'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => H.ui.pip('quests'));
+    assert.doesNotMatch(await pg.getAttribute('[data-ck=pip]', 'title'), /combat/);
+    assert.doesNotMatch(await pg.textContent('.ck-pip'), /nodes?\b/);
+  },
   async 'portrait is pixel art'(b) {
     const pg = await page(b);
     await pg.evaluate(() => { H.ui.say('bios', ['Hello.']); });

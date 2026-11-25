@@ -66,3 +66,8 @@ test('break reminder after 35 minutes, then not again for another 35', () => {
   assert.equal(Story.addPlayTime(s, 10 * 60e3), false);
   assert.equal(Story.addPlayTime(s, 25 * 60e3), true);
 });
+
+test('rebreak never breaks the checkpoint room', () => {
+  const s = midChapter(); s.node = 'f10'; s.checkpoint = { region: 'firmware', node: 'f9' };
+  for (let seed = 1; seed <= 40; seed++) { const c = State.clone(s); const ev = Story.rest(c, rng(seed)); assert.notEqual(ev.type, 'rebreak', `seed ${seed}`); }
+});

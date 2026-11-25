@@ -184,3 +184,16 @@ test('SSD speeds movement and dashing; dark rooms; Home accent; clean task', () 
   assert.equal(GR.nodes.g13.accent, '#f5a623');
   assert.equal(W.TASKS['pip-clean'].text, 'Clear 3 problem rooms without taking a hit');
 });
+test('kill and trap reject made-up signals the way bash does', () => {
+  const k = W.SKILLS.kill; const t = W.SKILLS.trap;
+  const bad = k.term('kill -banana 5'); assert.equal(bad.ok, false); assert.match(bad.html, /bash: kill: banana: invalid signal specification/);
+  for (const ok of ['kill -9 4242', 'kill -KILL 4242', 'kill -SIGTERM 4242', 'kill -term 4242', 'kill -s TERM 4242']) assert.ok(k.term(ok).ok, ok);
+  assert.ok(!k.learnTest.test('kill -banana 5') || !k.term('kill -banana 5').ok);
+  assert.equal(k.term('kill -99 4242').ok, false);
+  const tb = t.term("trap 'echo x' FOO"); assert.equal(tb.ok, false); assert.match(tb.html, /bash: trap: FOO: invalid signal specification/);
+  for (const ok of ["trap 'echo caught' INT", "trap 'echo bye' EXIT", "trap 'echo x' SIGTERM HUP"]) assert.ok(t.term(ok).ok, ok);
+});
+test('kill 1 is not permitted (and Pip takes it personally)', () => {
+  const r = W.SKILLS.kill.term('kill 1');
+  assert.ok(r.ok); assert.match(r.html, /bash: kill: \(1\) - Operation not permitted/); assert.match(r.html, /PID 1/);
+});

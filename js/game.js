@@ -222,7 +222,7 @@
     renderHub();
     if (!window.CK || !CK.open) { toast('Colonel Kernel could not load.'); return; }
     CK.open({
-      root: document.body, player: me(), save, addXP, giveBadge, speak,
+      root: document.body, player: me(), user: unixName(me().name), save, addXP, giveBadge, speak,
       sound: SFX, soundOn: () => S.sound, onExit: () => go('hub'),
     });
   }
