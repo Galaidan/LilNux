@@ -585,6 +585,47 @@ const tests = {
     await clearFoes(pg, false); await pg.waitForFunction(() => CK.Rules.isCleared(CK._test.main.state, 'f12'), null, { timeout: 3000 }); await settle(pg);
     assert.equal(await pg.isVisible('.ck-bossbar'), false);
   },
+  // ---- targeting ----
+  async 'a reticle marks the soft target; L locks on, Q picks the next one'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg); await walk(pg, 'e', 'f5'); await settle(pg);
+    await pg.evaluate(() => {
+      const m = CK._test.main; const s = m.sim; m.place(14 * 16 + 8, 9 * 16 + 8); s.player.face = { x: 1, y: 0 };
+      s.enemies.forEach((e, i) => { e.speed = 0; e.shootTimer = e.lungeTimer = 999; e.revealedUntil = 999; e.x = s.player.x + [70, 20, -60][i]; e.y = s.player.y + [-10, -70, 30][i]; });
+    });
+    await wait(200);
+    assert.deepEqual(await pg.evaluate(() => CK._test.main.scene.reticle), { id: 'e0', locked: false });
+    await pg.keyboard.press('l'); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), true);
+    assert.deepEqual(await pg.evaluate(() => CK._test.main.scene.reticle), { id: 'e0', locked: true });
+    await pg.keyboard.press('q'); await wait(150);
+    assert.notEqual(await pg.evaluate(() => CK._test.main.sim.target), 'e0');
+    await pg.keyboard.press('l'); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), false);
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-target.png') });
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'phone: the lock toggle sits by the joystick and only shows in a fight'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw), null, { ...devices['iPhone 13 landscape'] });
+    await settle(pg);
+    assert.equal(await pg.isVisible('#ck-root .ck-tbtn-lock'), false, 'no toggle in a safe room');
+    await walk(pg, 'e', 'f5'); await settle(pg);
+    await pg.evaluate(() => { const s = CK._test.main.sim; s.enemies.forEach((e) => { e.speed = 0; e.shootTimer = e.lungeTimer = 999; e.revealedUntil = 999; }); CK._test.main.place(14 * 16 + 8, 9 * 16 + 8); s.player.face = { x: 0, y: -1 }; const e = s.enemies[0]; e.x = s.player.x + 10; e.y = s.player.y - 60; });
+    await wait(200);
+    assert.ok(await pg.isVisible('#ck-root .ck-tbtn-lock'));
+    const r = await pg.$eval('#ck-root .ck-tbtn-lock', (x) => { const b = x.getBoundingClientRect(); return { w: b.width, h: b.height, left: b.left, right: b.right, top: b.top, bottom: b.bottom, vw: innerWidth, vh: innerHeight, label: x.getAttribute('aria-label'), pressed: x.getAttribute('aria-pressed') }; });
+    assert.ok(r.w >= 44 && r.h >= 44, JSON.stringify(r)); assert.ok(r.right < r.vw * 0.3, 'on the left, by the stick'); assert.ok(r.left >= 0 && r.bottom <= r.vh && r.top >= 0, 'on screen');
+    assert.match(r.label, /lock/i); assert.equal(r.pressed, 'false');
+    const tap = () => pg.evaluate(() => { const el = document.querySelector('#ck-root .ck-tbtn-lock'); const b = el.getBoundingClientRect();
+      for (const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(t, { pointerId: 7, clientX: b.left + b.width / 2, clientY: b.top + b.height / 2, bubbles: true, cancelable: true, pointerType: 'touch' })); });
+    await tap(); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), true);
+    assert.equal(await pg.getAttribute('#ck-root .ck-tbtn-lock', 'aria-pressed'), 'true');
+    await tap(); await wait(150);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.locked), false);
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-lock-phone.png') });
+    assert.deepEqual(pg.errs, []);
+  },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);
     const step = async (side, id) => { await walk(pg, side, id); await settle(pg); };

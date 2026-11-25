@@ -229,3 +229,7 @@ body.ck-open { overflow: hidden; }
 .ck-bossbar [role=img] i { position: absolute; inset: 0 auto 0 0; width: calc(var(--hp) * 100%); background: #ff5d73; }
 .ck-bossbar [role=img]::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--phases) - 2px), #060a1c calc(100% / var(--phases) - 2px) calc(100% / var(--phases))); }
+
+/* lock-on toggle: small, by the stick on the left, above where the thumb usually lands */
+.ck-tbtn-lock { width: 44px; height: 44px; left: max(14px, env(safe-area-inset-left)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 132px); font-size: 20px; }
+.ck-tbtn-lock.locked { border-color: var(--c-magenta); background: rgba(255, 79, 216, .3); box-shadow: 0 0 12px rgba(255, 79, 216, .6); }

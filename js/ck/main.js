@@ -194,6 +194,8 @@
           default: break;
         }
         if (ev.type === 'parry' && !firsts.parry) { firsts.parry = true; ui.toast(LINES.parry); }
+        if (ev.type === 'lock') sound('pop');
+        if (ev.type === 'lock-none' && Date.now() - (firsts.lockNone || 0) > 4000) { firsts.lockNone = Date.now(); ui.toast('◎ Nothing in view to lock onto. Face a creature first (cloaked ones need <code>ls</code>).'); }
         if (ev.type === 'sigkill' && !firsts.sigkill) { firsts.sigkill = true; ui.toast(LINES.sigkill); }
         if (ev.type === 'switch' && roomId === 'f1' && !state.switches.includes('f1')) {
           state.switches.push('f1'); room.openBridge(); save(); ui.toast('⚡ The bridge slides out across the gap.');

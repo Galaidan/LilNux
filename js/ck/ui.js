@@ -181,7 +181,7 @@
         return `<div class="ck-skillrow"><span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(s.cmd)}</code> <span class="ck-dim">· always on</span><small>${esc(s.blurb)}</small></div>
           ${s.upgrade ? upButton(state, s.upgrade, locked) : ''}</div>`;
       }).join('') + '<div class="ck-skillrow"><span class="i">»</span><div><b>Dash</b> <span class="ck-dim">· always on</span><small>Space / Shift, or the » button. You can’t be hit mid-dash.</small></div></div>';
-      const controls = '<p class="ck-dim">WASD or the left thumb to move · J / click: <code>kill</code> · K / right-click: <code>trap</code> · Space: dash · 1–3: tools · E: talk / use</p>';
+      const controls = '<p class="ck-dim">WASD or the left thumb to move · J / click: <code>kill</code> · K / right-click: <code>trap</code> · Space: dash · 1–3: tools · E: talk / use · L or ◎: lock on · Q: next target</p>';
       const tools = (locked ? '<p class="ck-dim">⏸ Creatures are awake. Change your loadout once the room is clear.</p>' : '') + R.TOOLS.filter((id) => state.learned.includes(id)).map((id) => {
         const s = W.SKILLS[id]; const on = state.equipped.includes(id);
         return `<div class="ck-skillrow"><span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(s.upgrade && state.upgrades.includes(s.upgrade.id) ? s.upgrade.cmd : s.cmd)}</code><small>${esc(s.blurb)}</small></div>

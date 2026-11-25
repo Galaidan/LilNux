@@ -5,7 +5,7 @@
 
   const KEYS = {
     w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right',
-    j: 'kill', k: 'trap', ' ': 'dash', shift: 'dash', '1': 'slot0', '2': 'slot1', '3': 'slot2', e: 'use', enter: 'use',
+    j: 'kill', k: 'trap', ' ': 'dash', shift: 'dash', '1': 'slot0', '2': 'slot1', '3': 'slot2', e: 'use', enter: 'use', l: 'lock', q: 'cycle',
   };
   function mapKey(key) { return (key && KEYS[String(key).toLowerCase()]) || null; }
   // Keys 1-3 fire the tools in loadout order.
@@ -22,7 +22,7 @@
     return { x: (dx / l) * m, y: (dy / l) * m };
   }
 
-  const PRESS = { kill: 1, trap: 1, dash: 1, echo: 1, ls: 1, cd: 1, use: 1, slot0: 1, slot1: 1, slot2: 1 };
+  const PRESS = { kill: 1, trap: 1, dash: 1, echo: 1, ls: 1, cd: 1, use: 1, lock: 1, cycle: 1, slot0: 1, slot1: 1, slot2: 1 };
   const STICK_R = 40;
   const BUTTONS = [
     { act: 'kill', label: '⚔', name: 'kill — strike' },
@@ -80,6 +80,7 @@
     // ---- touch pad ----
     const pad = document.createElement('div'); pad.className = 'ck-touchpad'; pad.hidden = true;
     pad.innerHTML = '<div class="ck-stick-zone" aria-hidden="true"><div class="ck-stick" hidden><div class="ck-knob"></div></div></div>'
+      + '<button type="button" class="ck-tbtn ck-tbtn-lock" data-act="lock" aria-label="Lock on to the target" aria-pressed="false" hidden>◎</button>'
       + '<div class="ck-tbtns">' + BUTTONS.map((b) => `<button type="button" class="ck-tbtn ck-tbtn-${b.act}" data-act="${b.act}" aria-label="${b.name}">${b.label}</button>`).join('') + '</div>';
     host.appendChild(pad);
     const zone = pad.querySelector('.ck-stick-zone'); const stickEl = pad.querySelector('.ck-stick'); const knob = pad.querySelector('.ck-knob');
@@ -138,7 +139,7 @@
         if (stick.v.x || stick.v.y) { mx = stick.v.x; my = stick.v.y; }
         const out = { mx, my, mouse: mouse && now() - lastMouseMove < 2000 ? mouse : null,
           kill: !!presses.kill, killHeld: killHold.key || killHold.mouse || killHold.touch,
-          trap: !!presses.trap, dash: !!presses.dash, use: !!presses.use, tool };
+          trap: !!presses.trap, dash: !!presses.dash, use: !!presses.use, lock: !!presses.lock, cycle: !!presses.cycle, tool };
         presses = {}; tool = null;
         return out;
       },
@@ -149,6 +150,12 @@
         pad.querySelectorAll('.ck-tbtn-echo, .ck-tbtn-ls, .ck-tbtn-cd').forEach((b) => { b.hidden = !tools.includes(b.dataset.act); });
       },
       // The touch context button: shown with a label near something to talk to or use.
+      // The lock-on toggle by the stick: shown only while there's something to fight; pressed while locked.
+      setLock(locked, show) {
+        const b = pad.querySelector('.ck-tbtn-lock');
+        if (b.hidden === !!show) b.hidden = !show;
+        const v = String(!!locked); if (b.getAttribute('aria-pressed') !== v) { b.setAttribute('aria-pressed', v); b.classList.toggle('locked', !!locked); }
+      },
       showUse(label) {
         const b = pad.querySelector('.ck-tbtn-use'); b.hidden = !label;
         if (label) { b.setAttribute('aria-label', label); b.title = label; }
