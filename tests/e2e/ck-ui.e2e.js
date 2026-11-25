@@ -136,6 +136,58 @@ const tests = {
     await pg.click('.ck-legend [data-ck=legend]');
     assert.equal(await pg.$eval('.ck-legend', (e) => e.classList.contains('closed')), true, 'collapses');
   },
+  async 'action HUD shows stability, heat and one chip per tool'(b) {
+    const pg = await page(b);
+    await learnAll(pg, ['echo', 'ls']);
+    await pg.evaluate(() => { H.ui.action(true); H.ui.actionTick({ time: 0, cooldowns: { echo: 0, ls: 1.5 }, player: { stability: 50, maxStability: 100, heat: 20, overheatUntil: 0 } }); });
+    assert.equal(await pg.$$eval('.ck-act .ck-ssegs i.on', (e) => e.length), 5);
+    assert.deepEqual(await pg.$$eval('.ck-act .ck-tool', (e) => e.map((x) => x.dataset.tool)), ['echo', 'ls']);
+    assert.match(await pg.getAttribute('.ck-act [data-tool=ls]', 'aria-label'), /recharging/);
+  },
+  async 'Pip panel has Quests, Items, Map and Tasks'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => H.ui.pip());
+    assert.deepEqual(await pg.$$eval('.ck-pip [data-tab]', (e) => e.map((x) => x.dataset.tab)), ['quests', 'items', 'map', 'tasks']);
+  },
+  async 'map tab marks here, lit, dim and unknown cells'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => { const s = H.state; s.node = 'f1'; s.explored.firmware = ['f0', 'f1', 'f3']; s.cleared.firmware = ['f1']; H.ui.pip('map'); });
+    const cls = (id) => pg.$eval(`.ck-map [data-node=${id}]`, (e) => [e.className, e.textContent, e.getAttribute('aria-label')]);
+    const [f1, f0, f3, f9] = [await cls('f1'), await cls('f0'), await cls('f3'), await cls('f9')];
+    assert.ok(/here/.test(f1[0]) && /lit/.test(f1[0])); assert.match(f1[2], /you are here/);
+    assert.match(f0[0], /lit/); assert.match(f3[0], /dim/);
+    assert.equal(f9[0], ''); assert.equal(f9[1], ''); assert.equal(f9[2], 'Unexplored');
+  },
+  async 'items tab keeps moves always on and locks loadout in a fight'(b) {
+    const pg = await page(b);
+    await learnAll(pg, ['kill', 'trap', 'echo', 'ls']);
+    await pg.evaluate(() => { H.fight = true; H.ui.pip('items'); });
+    assert.equal(await pg.$$eval('[data-equip=kill], [data-unequip=kill], [data-equip=trap], [data-unequip=trap]', (e) => e.length), 0);
+    assert.ok(await pg.$$eval('.ck-pip [data-equip], .ck-pip [data-unequip]', (e) => e.length > 0 && e.every((x) => x.disabled)));
+    assert.match(await pg.textContent('.ck-pip'), /always on/);
+    assert.equal(await pg.$$eval('[data-buy=kill-9]', (e) => e.length), 1);
+  },
+  async 'learn uses the skill’s own terminal responder'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => { H.learned = false; H.ui.learn('kill').then(() => (H.learned = true)); });
+    await pg.fill('.ck-learn input', 'kill -l'); await pg.press('.ck-learn input', 'Enter');
+    assert.match(await pg.textContent('.ck-learn'), /9\) SIGKILL/);
+    await pg.waitForTimeout(1600);
+    assert.equal(await pg.evaluate(() => H.learned && H.state.learned.includes('kill')), true);
+  },
+  async 'portrait is pixel art'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => { CK.Art = undefined; H.ui.say('bios', ['Hello.']); });
+    const lit = await pg.$eval('.ck-say canvas.ck-portrait', (c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; });
+    assert.ok(lit > 200, `${lit} lit pixels`);
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'rotate overlay in portrait on a phone'(b) {
+    const pg = await page(b, { ...devices['iPhone 13'] });
+    assert.equal(await pg.isVisible('.ck-rotate'), true);
+    const pg2 = await page(b, { ...devices['iPhone 13 landscape'] });
+    assert.equal(await pg2.isVisible('.ck-rotate'), false);
+  },
 };
 
 (async () => {

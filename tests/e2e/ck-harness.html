@@ -19,6 +19,11 @@
   <script src="../../js/ck/engine.js"></script>
   <script src="../../js/ck/art.js"></script>
   <script src="../../js/ck/scenes.js"></script>
+  <script src="../../js/ck/pixel.js"></script>
+  <script src="../../js/ck/sprites.js"></script>
+  <script src="../../js/ck/rooms.js"></script>
+  <script src="../../js/ck/foes.js"></script>
+  <script src="../../js/ck/action.js"></script>
   <script src="../../js/ck/ui.js"></script>
   <script>
     // Test page: ?ckdebug is required for CK._test hooks.
@@ -33,7 +38,7 @@
         user: 'tester', getState: () => H.state, onExit: () => (H.exited = true),
         onEquip: (id) => CK.Rules.equip(H.state, id), onUnequip: (id) => CK.Rules.unequip(H.state, id),
         onBuy: (id) => CK.Rules.buyUpgrade(H.state, id), onSkill: (id) => { H.skill = id; if (H.scene && H.scene.skill) H.scene.skill(id); },
-        onLearned: (id) => CK.Rules.learn(H.state, id), speak: () => {},
+        onLearned: (id) => CK.Rules.learn(H.state, id), speak: () => {}, inFight: () => !!H.fight,
       });
       H.ui.hud(H.state); H.ui.skillBar(H.state, 'map');
       H.startFight = function (creature, skills, kid) {

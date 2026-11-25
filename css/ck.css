@@ -258,3 +258,29 @@ body.ck-open { overflow: hidden; }
 @keyframes ck-turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
 @media (prefers-reduced-motion: reduce) { .ck-rotate .ph { animation: none; transform: rotate(-90deg); } }
 @media (orientation: portrait) and (pointer: coarse) { #ck-slice .ck-rotate { display: flex; } }
+
+/* ---------------------------------------------------------------- room-based Adventure */
+#ck-root .ck-pix { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; image-rendering: pixelated; image-rendering: crisp-edges; }
+#ck-root { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.ck-act { position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left)); top: calc(max(8px, env(safe-area-inset-top)) + 52px);
+  display: flex; gap: 8px; align-items: center; pointer-events: none; }
+.ck-act[hidden] { display: none; }
+.ck-prompt { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); padding: 6px 14px; border-radius: 12px;
+  background: var(--glass); border: 1px solid var(--edge); color: var(--c-ink); font: 700 14px var(--font); pointer-events: none; }
+.ck-prompt[hidden] { display: none; }
+.ck-prompt kbd { font: 800 12px var(--mono, monospace); color: var(--c-cyan); border: 1px solid #2b3768; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+@media (pointer: coarse) { .ck-prompt { display: none; } .ck-act .ck-tool { display: none; } }
+.ck-tbtn-cd { width: 44px; height: 44px; right: 80px; bottom: 124px; font-size: 18px; }
+.ck-tbtn-use { width: 56px; height: 56px; right: 0; bottom: 162px; border-color: var(--c-mint); font-size: 22px; }
+#ck-root .ck-rotate .ck-btn { min-height: 44px; }
+@media (orientation: portrait) and (pointer: coarse) { #ck-root .ck-rotate { display: flex; } }
+/* Pip's map: one square per room, lit = visited, dim = seen, blank = unknown */
+.ck-map { display: grid; gap: 4px; margin: 8px 0 12px; }
+.ck-map > div { min-width: 44px; min-height: 44px; border-radius: 6px; border: 1px solid #1c2448; background: #0b1026; display: flex; align-items: center; justify-content: center;
+  font: 700 18px var(--font); color: var(--c-dim); image-rendering: pixelated; }
+.ck-map > div.dim { background: #141c40; border-color: #2b3768; }
+.ck-map > div.lit { background: #1f3a5a; border-color: var(--c-cyan); color: var(--c-ink); }
+.ck-map > div.here { box-shadow: 0 0 0 2px var(--c-mint), 0 0 12px var(--c-mint); }
+.ck-map > div.empty { visibility: hidden; }
+.ck-mapkey { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; font-size: 13px; color: var(--c-dim); }
+.ck-mapkey b { color: var(--c-ink); display: inline-block; width: 22px; text-align: center; }

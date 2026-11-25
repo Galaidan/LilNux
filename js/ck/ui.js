@@ -9,7 +9,9 @@
   function create(rootEl, h) {
     const W = CK.World; const R = CK.Rules;
     rootEl.classList.add('ck-ui');
-    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-bar"></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div><div class="ck-tip" role="tooltip" hidden></div>';
+    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-act" hidden></div><div class="ck-bar"></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div><div class="ck-tip" role="tooltip" hidden></div>'
+      + '<div class="ck-prompt" hidden></div>'
+      + '<div class="ck-rotate"><div class="ph"></div><p><b>Turn your phone sideways to play.</b></p><p>The Adventure is played in landscape.</p><button type="button" class="ck-btn" data-ck="exit">Back to menu</button></div>';
     const $ = (s) => rootEl.querySelector(s);
     const ui = { selected: null, combatText: '', pipTab: null, mode: 'map', unread: 0 };
     let sayState = null;
@@ -92,6 +94,45 @@
         </div>`;
     };
 
+    // ------------------------------------------------------------ action HUD (rooms): stability, heat, tool chips
+    const inFight = () => !!(h.inFight && h.inFight()) || ui.mode === 'fight';
+    let chips = [];
+    ui.action = function (show) {
+      const el = $('.ck-act'); el.hidden = !show;
+      if (!show) return;
+      const st = h.getState(); const tools = st.equipped.filter((id) => R.TOOLS.includes(id));
+      el.innerHTML = '<div class="ck-sbar">Stability<div class="ck-ssegs" role="img" aria-label="Stability">' + '<i></i>'.repeat(10) + '</div></div>'
+        + '<div class="ck-sbar">Heat<div class="ck-sheat" role="img" aria-label="Heat"><b></b></div></div>'
+        + tools.map((id, i) => `<span class="ck-tool" data-tool="${id}" role="img" aria-label="${id} ready"><kbd>${i + 1}</kbd> ${esc(id)}</span>`).join('');
+      chips = tools.map((id) => ({ id, el: el.querySelector(`[data-tool="${id}"]`), last: -1 }));
+    };
+    ui.actionTick = function (sim) {
+      const el = $('.ck-act'); if (!sim || el.hidden) return;
+      const T = CK.Action.TUNING; const P = sim.player;
+      const segs = el.querySelector('.ck-ssegs'); const on = Math.ceil((P.stability / P.maxStability) * 10);
+      segs.querySelectorAll('i').forEach((x, i) => x.classList.toggle('on', i < on));
+      segs.classList.toggle('low', on <= 3);
+      segs.setAttribute('aria-label', `Stability ${Math.round(P.stability)} of ${P.maxStability}`);
+      const hot = sim.time < P.overheatUntil; const heat = el.querySelector('.ck-sheat');
+      heat.querySelector('b').style.width = Math.round(P.heat) + '%'; heat.classList.toggle('hot', hot);
+      heat.setAttribute('aria-label', hot ? 'Overheated' : `Heat ${Math.round(P.heat)} percent`);
+      const lock = hot ? (P.overheatUntil - sim.time) / T.OVERHEAT_LOCK : 0;
+      const full = { echo: T.ECHO_CD, ls: T.LS_CD };
+      for (const c of chips) {
+        const cd = Math.round(Math.min(1, Math.max(lock, full[c.id] ? (sim.cooldowns[c.id] || 0) / full[c.id] : 0)) * 100) / 100;
+        if (cd === c.last) continue;
+        c.last = cd; c.el.style.setProperty('--cd', cd);
+        const pad = rootEl.ownerDocument.querySelector(`.ck-tbtn-${c.id}`); if (pad) pad.style.setProperty('--cd', cd);
+        c.el.classList.toggle('busy', cd > 0);
+        c.el.setAttribute('aria-label', `${c.id} ${cd > 0 ? (hot ? 'locked: overheated' : 'recharging') : 'ready'}`);
+      }
+    };
+    // "E · Talk to Bios" near something you can use (keyboard players; phones get the ✋ button).
+    ui.prompt = function (text) {
+      const p = $('.ck-prompt'); p.hidden = !text;
+      if (text) p.innerHTML = `<kbd>E</kbd> ${esc(text)}`;
+    };
+
     // ------------------------------------------------------------ skill bar
     ui.skillBar = function (state, mode, fight) {
       ui.mode = mode;
@@ -118,10 +159,20 @@
     };
 
     // ------------------------------------------------------------ dialogue
+    const PORTRAIT = { colonel: 'colonel_down_0', pip: 'pip', bios: 'bios', grub: 'grub', liltux: 'liltux' };
     function portrait(speaker) {
       const c = document.createElement('canvas'); const dpr = Math.min(root.devicePixelRatio || 1, 2);
       c.width = 72 * dpr; c.height = 72 * dpr; c.className = 'ck-portrait';
-      const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const x = c.getContext('2d');
+      const key = PORTRAIT[speaker] || 'colonel_down_0';
+      if (CK.Sprites && CK.Pixel) { // pixel art, whole-number scale, no smoothing
+        const b = CK.Sprites.built()[key];
+        const k = Math.max(1, Math.floor(Math.min((64 * dpr) / b.w, (64 * dpr) / b.h)));
+        x.imageSmoothingEnabled = false;
+        x.drawImage(b.img, Math.round((c.width - b.w * k) / 2), Math.round((c.height - b.h * k) / 2), b.w * k, b.h * k);
+        return c;
+      }
+      x.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (speaker === 'colonel') CK.Art.colonel(x, 36, 60, 0.85, 1, { reduced: true });
       else if (speaker === 'pip') CK.Art.pip(x, 36, 38, 1.7, 1);
       else if (speaker === 'liltux') CK.Art.liltux(x, 36, 34, 0.42, 1);
@@ -161,7 +212,61 @@
 
     // ------------------------------------------------------------ Pip panel
     function canBuy(state, upId) { return R.buyUpgrade(CK.State.clone(state), upId); }
+    function upButton(state, u, locked) {
+      if (state.upgrades.includes(u.id)) return `<span class="ck-owned">✓ <code>${esc(u.cmd)}</code></span>`;
+      const cb = canBuy(state, u.id);
+      const why = { bits: `need ${u.cost} bits`, needs: u.needs ? `needs ${W.MODULES[u.needs] ? W.MODULES[u.needs].name : u.needs}` : 'locked' }[cb.reason] || '';
+      return `<button class="ck-btn ck-up" data-buy="${u.id}" ${cb.ok && !locked ? '' : 'disabled'} title="${esc(u.blurb)}">⬆ <code>${esc(u.cmd)}</code> · ${u.cost}b${why ? `<small>${why}</small>` : ''}</button>`;
+    }
     function tabItems(state) {
+      if (!R.TOOLS) return tabItemsOld(state);
+      const st = R.stats(state); const locked = inFight();
+      const count = (id) => state.modules.filter((m) => m === id).length;
+      const board = SLOTS.map(([id, label]) => {
+        const m = W.MODULES[id]; const n = count(id);
+        return `<div class="ck-slot ${n ? 'on' : ''}" data-slot="${id}" title="${n ? esc(m.real) : 'Empty slot'}"><b>${label}</b><span>${n ? `${m.icon} ${esc(m.name)}${n > 1 ? ' ×' + n : ''}` : '—'}</span></div>`;
+      }).join('');
+      const moves = R.MOVES.filter((id) => state.learned.includes(id)).map((id) => {
+        const s = W.SKILLS[id];
+        return `<div class="ck-skillrow"><span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(s.cmd)}</code> <span class="ck-dim">· always on</span><small>${esc(s.blurb)}</small></div>
+          ${s.upgrade ? upButton(state, s.upgrade, locked) : ''}</div>`;
+      }).join('') + '<div class="ck-skillrow"><span class="i">»</span><div><b>Dash</b> <span class="ck-dim">· always on</span><small>Space / Shift, or the » button. You can’t be hit mid-dash.</small></div></div>';
+      const controls = '<p class="ck-dim">WASD or the left thumb to move · J / click: <code>kill</code> · K / right-click: <code>trap</code> · Space: dash · 1–3: tools · E: talk / use</p>';
+      const tools = (locked ? '<p class="ck-dim">⏸ Creatures are awake. Change your loadout once the room is clear.</p>' : '') + R.TOOLS.filter((id) => state.learned.includes(id)).map((id) => {
+        const s = W.SKILLS[id]; const on = state.equipped.includes(id);
+        return `<div class="ck-skillrow"><span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(s.upgrade && state.upgrades.includes(s.upgrade.id) ? s.upgrade.cmd : s.cmd)}</code><small>${esc(s.blurb)}</small></div>
+          ${on ? `<button class="ck-btn" data-unequip="${id}" ${locked ? 'disabled' : ''} title="Take ${esc(s.cmd)} out of a tool slot">Unequip</button>` : `<button class="ck-btn" data-equip="${id}" ${locked || state.equipped.length >= st.slots ? 'disabled' : ''} title="Put ${esc(s.cmd)} in a tool slot">Equip</button>`}
+          ${s.upgrade ? upButton(state, s.upgrade, locked) : ''}</div>`;
+      }).join('');
+      const codex = state.codex.map((id) => { const s = W.SKILLS[id]; return `<li><code>${esc(s.cmd)}</code> — ${code(s.real)}<br><span class="ck-dim">Try in a real terminal:</span> <code>${esc(s.example)}</code></li>`; }).join('') || '<li class="ck-dim">Learn a command to fill your codex.</li>';
+      return `<p class="ck-bits"><b>${state.bits}</b> bits · ${state.equipped.length}/${st.slots} tool slots</p>
+        <h3>Moves</h3>${moves || '<p class="ck-dim">Pip will teach you to fight.</p>'}${controls}
+        <h3>Tools</h3>${tools || '<p class="ck-dim">No tools yet.</p>'}
+        <h3>Motherboard</h3><div class="ck-board">${board}</div>
+        <h3>Codex</h3><ul class="ck-codex">${codex}</ul>`;
+    }
+    // ------------------------------------------------------------ Pip's map
+    const MAP_ICON = { start: '⌂', character: '☺', problem: '⚠', circuit: '⚡', item: '◆', memory: '✦', boss: '☠', exit: '➜' };
+    const MAP_KEY = [['⌂', 'Start · safe room'], ['☺', 'Someone to talk to · safe room'], ['⚠', 'Problem room'], ['⚡', 'Broken circuit'], ['◆', 'Item'], ['✦', 'Memory'], ['☠', 'Boss'], ['➜', 'Way onward']];
+    function tabMap(state) {
+      const reg = R.region(state.region); const cells = reg.cells || {};
+      const ids = Object.keys(cells); if (!ids.length) return '<p class="ck-dim">No map here.</p>';
+      const cols = 1 + Math.max(...ids.map((id) => cells[id][0])); const rows = 1 + Math.max(...ids.map((id) => cells[id][1]));
+      const ex = state.explored[state.region] || [];
+      const at = {}; ids.forEach((id) => { at[cells[id].join(',')] = id; });
+      let html = '';
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        const id = at[x + ',' + y];
+        if (!id) { html += '<div class="empty" aria-hidden="true"></div>'; continue; }
+        const n = reg.nodes[id]; const here = id === state.node; const lit = here || R.isCleared(state, id); const seen = ex.includes(id);
+        const cls = [lit ? 'lit' : seen ? 'dim' : '', here ? 'here' : ''].join(' ').trim();
+        const label = !seen && !lit ? 'Unexplored' : `${n.label} — ${here ? 'you are here' : lit ? (n.kind === 'problem' || n.kind === 'boss' ? 'fixed' : 'visited') : 'not visited yet'}`;
+        html += `<div class="${cls}" data-node="${id}" role="img" aria-label="${esc(label)}" title="${esc(label)}">${lit || seen ? MAP_ICON[n.kind] || '' : ''}</div>`;
+      }
+      return `<div class="ck-map" style="grid-template-columns:repeat(${cols}, 44px)">${html}</div>
+        <ul class="ck-mapkey">${MAP_KEY.map(([i, t]) => `<li><b>${i}</b>${esc(t)}</li>`).join('')}<li><b>▣</b>Bright: visited · dim: seen · dark: unknown</li></ul>`;
+    }
+    function tabItemsOld(state) {
       const st = R.stats(state);
       const count = (id) => state.modules.filter((m) => m === id).length;
       const board = SLOTS.map(([id, label]) => {
@@ -212,8 +317,9 @@
       const state = h.getState();
       let panel = $('.ck-pip');
       if (!panel) { panel = document.createElement('aside'); panel.className = 'ck-pip'; $('.ck-layer').appendChild(panel); }
-      const tabs = [['quests', '📜 Quests', 'What to do next, and where'], ['items', '🎒 Items', 'Motherboard, skills, upgrades and your command codex'], ['combat', '⚔️ Combat', 'Pip’s fight tips'], ['tasks', '✅ Tasks', 'Side jobs from the characters you meet']];
-      const body = { quests: tabQuests, items: tabItems, combat: tabCombat, tasks: tabTasks }[ui.pipTab](state);
+      const tabs = [['quests', '📜 Quests', 'What to do next, and where'], ['items', '🎒 Items', 'Moves, tools, motherboard, upgrades and your command codex'], ['map', '🗺 Map', 'Rooms we’ve visited and seen'], ['tasks', '✅ Tasks', 'Side jobs from the characters you meet']];
+      if (!tabs.some(([id]) => id === ui.pipTab) && ui.pipTab !== 'combat') ui.pipTab = 'quests';
+      const body = { quests: tabQuests, items: tabItems, map: tabMap, combat: tabCombat, tasks: tabTasks }[ui.pipTab](state);
       panel.innerHTML = `<header><span class="ck-orb big"></span><div><b>Pip</b><small>PID 1 · always running · mildly judgmental</small></div><button class="ck-btn" data-ck="closepip" aria-label="Close Pip" title="Close Pip’s panel">✕</button></header>
         <nav>${tabs.map(([id, l, tip]) => `<button class="ck-tab ${id === ui.pipTab ? 'on' : ''}" data-tab="${id}" title="${tip}">${l}</button>`).join('')}</nav>
         <div class="ck-pip-body">${body}</div>`;
