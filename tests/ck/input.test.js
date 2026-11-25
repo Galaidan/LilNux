@@ -17,5 +17,13 @@ test('mapKey', () => {
   assert.equal(Input.mapKey('s'), 'down'); assert.equal(Input.mapKey('d'), 'right'); assert.equal(Input.mapKey('ArrowUp'), 'up');
   assert.equal(Input.mapKey(' '), 'dash'); assert.equal(Input.mapKey('Shift'), 'dash');
   assert.equal(Input.mapKey('j'), 'kill'); assert.equal(Input.mapKey('K'), 'trap');
-  assert.equal(Input.mapKey('1'), 'echo'); assert.equal(Input.mapKey('2'), 'ls'); assert.equal(Input.mapKey('x'), null);
+  assert.equal(Input.mapKey('1'), 'slot0'); assert.equal(Input.mapKey('2'), 'slot1'); assert.equal(Input.mapKey('x'), null);
+});
+
+test('number keys are tool slots; E and Enter are use', () => {
+  assert.deepEqual(['1', '2', '3', 'e', 'Enter', 'j', 'k', ' '].map(globalThis.CK.Input.mapKey), ['slot0', 'slot1', 'slot2', 'use', 'use', 'kill', 'trap', 'dash']);
+});
+test('slot keys resolve through the equipped order', () => {
+  const I = globalThis.CK.Input;
+  assert.equal(I.slotTool(['ls', 'echo'], 'slot0'), 'ls'); assert.equal(I.slotTool(['ls'], 'slot2'), null);
 });
