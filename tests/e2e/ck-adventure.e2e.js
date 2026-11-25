@@ -378,6 +378,93 @@ const tests = {
     assert.ok((await badges(pg)).includes('ck-ch1'));
     assert.deepEqual(pg.errs, []);
   },
+  // ---- Task 14: devices (ported from the retired Training Room suite) ----
+  async 'engine scale at PC and iPhone landscape; a pale plaza over a dark void'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw), null, { viewport: { width: 1920, height: 1080 } });
+    await settle(pg);
+    assert.deepEqual(await pg.evaluate(() => { const v = CK._test.main.engine.view; return [v.k, v.w, v.h]; }), [4, 480, 270]);
+    const lum = await pg.evaluate(() => {
+      const m = CK._test.main; const bctx = m.engine.bctx; const cam = m.scene.cam;
+      const L = (x, y) => { const d = bctx.getImageData(x, y, 1, 1).data; return 0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]; };
+      return { plaza: L(Math.round(17 * 16 + 4 - cam.x), Math.round(10 * 16 + 4 - cam.y)), corner: L(2, 268) };
+    });
+    assert.ok(lum.plaza > 150 && lum.corner < 40, JSON.stringify(lum));
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-desktop.png') });
+    const pg2 = await openWith(b, null, null, { ...devices['iPhone 13 landscape'] });
+    const v2 = await pg2.evaluate(() => { const e = CK._test.main.engine; const c = e.canvas.getBoundingClientRect(); return [e.view.k, CK.PixEngine.fit(Math.round(c.width * e.view.dpr), Math.round(c.height * e.view.dpr)).k]; });
+    assert.equal(v2[0], v2[1]);
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'touch pad on a phone: big buttons, equipped tools only, use near a character'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f1', prev: 'f0', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw), null, { ...devices['iPhone 13 landscape'] });
+    await settle(pg);
+    assert.ok(await pg.isVisible('#ck-root .ck-touchpad')); assert.equal(await pg.isVisible('#ck-root .ck-rotate'), false);
+    const shown = () => pg.$$eval('#ck-root .ck-tbtn', (bs) => bs.filter((x) => !x.hidden).map((x) => { const r = x.getBoundingClientRect(); return [x.dataset.act, r.width, r.height, r.right <= innerWidth - 8 && r.bottom <= innerHeight - 8 && r.left >= 0 && r.top >= 0]; }));
+    let boxes = await shown();
+    assert.deepEqual(boxes.map((x) => x[0]).sort(), ['dash', 'echo', 'kill', 'ls', 'trap']);
+    boxes.forEach(([a, w, h, inside]) => { assert.ok(w >= 44 && h >= 44, `${a} ${w}x${h}`); assert.ok(inside, `${a} clipped`); });
+    await walk(pg, 'e', 'f3'); await settle(pg);
+    await pg.evaluate(() => { const m = CK._test.main; const p = m.room.props.find((x) => x.kind === 'npc'); m.place(p.x, (p.ty + 1) * 16 + 9); });
+    await wait(200);
+    boxes = await shown(); const use = boxes.find((x) => x[0] === 'use');
+    assert.ok(use && use[1] >= 44 && use[3], 'the use button shows next to Bios');
+    assert.match(await pg.getAttribute('#ck-root .ck-tbtn-use', 'aria-label'), /Bios/);
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-phone.png') });
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'multi-touch: stick and kill at once, lift one, the other keeps working'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw), null, { ...devices['iPhone 13 landscape'] });
+    await settle(pg);
+    await place(pg, 14 * 16 + 8, 9 * 16 + 8); // open plaza, clear of pillars
+    const r = await pg.evaluate(() => {
+      const zone = document.querySelector('.ck-stick-zone'); const kill = document.querySelector('.ck-tbtn[data-act=kill]');
+      const z = zone.getBoundingClientRect(); const k = kill.getBoundingClientRect();
+      const fire = (el, type, id, x, y) => el.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: id === 1 }));
+      const sx = z.left + z.width / 3; const sy = z.top + z.height / 2;
+      fire(zone, 'pointerdown', 1, sx, sy); fire(zone, 'pointermove', 1, sx + 40, sy);
+      CK._test.main.events.length = 0;
+      fire(kill, 'pointerdown', 2, k.left + k.width / 2, k.top + k.height / 2);
+      window.__fire = fire; window.__kill = kill;
+      return { kx: k.left + k.width / 2, ky: k.top + k.height / 2 };
+    });
+    await wait(150);
+    const a = await pg.evaluate(() => ({ v: CK._test.main.input.stick.v.x, ev: CK._test.main.events.slice(), x: CK._test.main.sim.player.x }));
+    assert.ok(a.v > 0.5, `stick ${a.v}`); assert.ok(a.ev.includes('swing'), JSON.stringify(a.ev));
+    await pg.evaluate((q) => window.__fire(window.__kill, 'pointerup', 2, q.kx, q.ky), r);
+    await wait(200);
+    const c = await pg.evaluate(() => ({ v: CK._test.main.input.stick.v.x, x: CK._test.main.sim.player.x }));
+    assert.ok(c.v > 0.5, 'stick still held'); assert.ok(c.x > a.x, 'still moving ');
+  },
+  async 'rotate and blur freeze a boss fight'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f10', prev: 'f9', explored: { firmware: ['f9', 'f10', 'f12'] }, cleared: { firmware: ['f1', 'f3', 'f5', 'f9', 'f10'] } }, learnedFw), null, { ...devices['iPhone 13 landscape'] });
+    await settle(pg);
+    await toDoor(pg, 's'); await pg.waitForSelector('.ck-choice'); await pg.click('.ck-choice button >> text=Fight!');
+    await waitRoom(pg, 'f12'); await settle(pg);
+    await pg.setViewportSize({ width: 390, height: 664 }); await wait(300);
+    assert.ok(await pg.isVisible('#ck-root .ck-rotate'), 'rotate screen');
+    const t0 = await pg.evaluate(() => CK._test.main.sim.time); await wait(600);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.time), t0, 'frozen in portrait');
+    await pg.setViewportSize({ width: 750, height: 342 }); await wait(300);
+    const t1 = await pg.evaluate(() => CK._test.main.sim.time); assert.ok(t1 > t0, 'resumes in landscape');
+    const k = await pg.evaluate(() => { const e = CK._test.main.engine; const c = e.canvas.getBoundingClientRect(); const p = e.toBuffer(c.left + c.width / 2, c.top + c.height / 2); return [e.view.k, CK.PixEngine.fit(Math.round(c.width * e.view.dpr), Math.round(c.height * e.view.dpr)).k, Math.abs(p.x - e.view.w / 2) <= 1]; });
+    assert.deepEqual([k[0] === k[1], k[2]], [true, true]);
+    await pg.evaluate(() => window.dispatchEvent(new Event('blur'))); await wait(100);
+    const t2 = await pg.evaluate(() => CK._test.main.sim.time); await wait(400);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.time), t2, 'frozen while unfocused');
+    await pg.evaluate(() => window.dispatchEvent(new Event('focus'))); await wait(300);
+    assert.ok((await pg.evaluate(() => CK._test.main.sim.time)) > t2, 'resumes on focus');
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'tool chips show cooldown'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg);
+    assert.deepEqual(await pg.$$eval('#ck-root .ck-act [data-tool]', (els) => els.map((e) => e.dataset.tool)), ['echo', 'ls']);
+    await pg.keyboard.press('2'); await wait(250); await settle(pg);
+    const busy = await pg.evaluate(() => { const c = document.querySelector('.ck-act [data-tool=ls]'); return { cd: parseFloat(c.style.getPropertyValue('--cd')), label: c.getAttribute('aria-label') }; });
+    assert.ok(busy.cd > 0.4, JSON.stringify(busy)); assert.match(busy.label, /recharging/i);
+    await wait(3200);
+    assert.equal(await pg.evaluate(() => parseFloat(document.querySelector('.ck-act [data-tool=ls]').style.getPropertyValue('--cd'))), 0);
+  },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);
     const step = async (side, id) => { await walk(pg, side, id); await settle(pg); };

@@ -1,4 +1,4 @@
-/* Colonel Kernel — HTML overlays: HUD, skill bar, Pip panel, dialogue, learning terminal, modals. */
+/* Colonel Kernel — HTML overlays: HUD, action bar, Pip panel, dialogue, learning terminal, modals. */
 (function (root) {
   'use strict';
   const CK = (root.CK = root.CK || {});
@@ -9,7 +9,7 @@
   function create(rootEl, h) {
     const W = CK.World; const R = CK.Rules;
     rootEl.classList.add('ck-ui');
-    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-act" hidden></div><div class="ck-bar"></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div><div class="ck-tip" role="tooltip" hidden></div>'
+    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-act" hidden></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div>'
       + '<div class="ck-prompt" hidden></div>'
       + '<div class="ck-rotate"><div class="ph"></div><p><b>Turn your phone sideways to play.</b></p><p>The Adventure is played in landscape.</p><button type="button" class="ck-btn" data-ck="exit">Back to menu</button></div>';
     const $ = (s) => rootEl.querySelector(s);
@@ -31,22 +31,8 @@
       else { ui.unread++; const b = $('.ck-unread'); if (b) { b.textContent = ui.unread; b.hidden = false; } }
     }
     ui.record = record;
-    ui.tip = function (html, x, y) {
-      const t = $('.ck-tip');
-      if (!html) { t.hidden = true; return; }
-      t.innerHTML = html; t.hidden = false;
-      const w = t.offsetWidth; const hgt = t.offsetHeight; const vw = root.innerWidth; const vh = root.innerHeight;
-      t.style.left = Math.max(8, Math.min(x + 16, vw - w - 8)) + 'px';
-      t.style.top = (y + 20 + hgt > vh - 8 ? y - hgt - 12 : y + 20) + 'px';
-    };
-    const narrow = () => (root.innerWidth || 1000) < 700;
-    function collapseLegend() {
-      legendClosed = true; const el = $('.ck-legend');
-      if (el) { el.classList.add('closed'); const t = el.querySelector('[data-ck=legend]'); t.setAttribute('aria-expanded', 'false'); t.querySelector('span').textContent = '▸'; }
-    }
     ui.openLog = function () {
       if ($('.ck-log')) return;
-      if (narrow()) collapseLegend(); // phones: one panel at a time
       const box = document.createElement('aside'); box.className = 'ck-log'; box.setAttribute('aria-label', 'Message log');
       box.innerHTML = '<header><b>💬 Message log</b><button class="ck-btn" data-ck="closelog" aria-label="Close message log" title="Close the message log">✕</button></header><ol></ol>';
       $('.ck-layer').appendChild(box);
@@ -56,23 +42,6 @@
       ui.unread = 0; const b = $('.ck-unread'); if (b) b.hidden = true;
     };
     ui.closeLog = function () { const l = $('.ck-log'); if (l) l.remove(); };
-
-    // ------------------------------------------------------------ map legend
-    const LEGEND = [['character', 'Talk · safe spot'], ['problem', 'Problem — fix it or fight it'], ['circuit', 'Broken circuit — rotate to repair'],
-      ['item', 'Item — module or bits'], ['memory', 'Memory fragment'], ['boss', 'Boss'], ['exit', 'Way onward · Home']];
-    let legendClosed = (root.innerWidth || 1000) < 700;
-    ui.legend = function (show, accent) {
-      let el = $('.ck-legend');
-      if (!show) { if (el) el.remove(); return; }
-      if (!el) { el = document.createElement('aside'); el.className = 'ck-legend'; $('.ck-layer').appendChild(el); }
-      const K = CK.Art.KIND;
-      el.classList.toggle('closed', legendClosed);
-      el.innerHTML = `<button class="ck-btn" data-ck="legend" aria-expanded="${!legendClosed}" title="Show or hide what the map colours mean">🗺 Legend <span>${legendClosed ? '▸' : '▾'}</span></button>
-        <ul>${LEGEND.map(([k, label]) => `<li data-kind="${k}"><i style="border-color:${k === 'exit' ? (accent || K.exit.color) : K[k].color}"></i>${esc(label)}</li>`).join('')}
-        <li class="ck-leg-note"><i class="dim"></i>Dimmed with ✓ — done or visited</li>
-        <li class="ck-leg-note"><i class="line lit" style="border-color:${accent || '#38f2ff'}"></i>Glowing line — restored path</li>
-        <li class="ck-leg-note"><i class="line"></i>Dashed line — not restored yet</li></ul>`;
-    };
 
     // ------------------------------------------------------------ HUD
     ui.hud = function (state, opts) {
@@ -95,7 +64,7 @@
     };
 
     // ------------------------------------------------------------ action HUD (rooms): stability, heat, tool chips
-    const inFight = () => !!(h.inFight && h.inFight()) || ui.mode === 'fight';
+    const inFight = () => !!(h.inFight && h.inFight());
     let chips = [];
     ui.action = function (show) {
       const el = $('.ck-act'); el.hidden = !show;
@@ -133,31 +102,6 @@
       if (text) p.innerHTML = `<kbd>E</kbd> ${esc(text)}`;
     };
 
-    // ------------------------------------------------------------ skill bar
-    ui.skillBar = function (state, mode, fight) {
-      ui.mode = mode;
-      if (!state.equipped.includes(ui.selected)) ui.selected = state.equipped.find((id) => W.SKILLS[id].fight.type !== 'scan') || state.equipped[0] || null;
-      const btns = state.equipped.map((id, i) => {
-        const s = W.SKILLS[id]; const up = s.upgrade && state.upgrades.includes(s.upgrade.id) ? s.upgrade.cmd : s.cmd;
-        return `<button class="ck-skill ${mode === 'fight' && ui.selected === id ? 'sel' : ''}" data-skill="${id}" title="${esc(s.name)}: ${esc(s.blurb)}">
-          <span class="k">${i + 1}</span><span class="i">${s.icon}</span><code>${esc(up)}</code><span class="cd"></span></button>`;
-      }).join('');
-      $('.ck-bar').innerHTML = (state.equipped.length ? btns : '<span class="ck-hint">No skills yet — talk to Pip.</span>') +
-        (mode === 'fight' ? '<div class="ck-heat" title="Heat: firing too fast overheats you"><i></i><span>HEAT</span></div>' : '');
-      $('.ck-bar').classList.toggle('fight', mode === 'fight');
-      if (fight) ui.tick(fight);
-    };
-    ui.select = function (id) { ui.selected = id; rootEl.querySelectorAll('.ck-skill').forEach((b) => b.classList.toggle('sel', b.dataset.skill === id)); };
-    ui.tick = function (fight) {
-      rootEl.querySelectorAll('.ck-skill').forEach((b) => {
-        const id = b.dataset.skill; const total = W.SKILLS[id].fight.cd || 1;
-        const left = Math.max(0, (fight.cooldowns[id] || 0) - fight.time);
-        b.style.setProperty('--cd', Math.min(1, left / total).toFixed(3));
-      });
-      const heat = $('.ck-heat');
-      if (heat) { heat.querySelector('i').style.width = Math.round(fight.heat) + '%'; heat.classList.toggle('hot', fight.time < fight.overheatedUntil); }
-    };
-
     // ------------------------------------------------------------ dialogue
     const PORTRAIT = { colonel: 'colonel_down_0', pip: 'pip', bios: 'bios', grub: 'grub', liltux: 'liltux' };
     function portrait(speaker) {
@@ -165,18 +109,13 @@
       c.width = 72 * dpr; c.height = 72 * dpr; c.className = 'ck-portrait';
       const x = c.getContext('2d');
       const key = PORTRAIT[speaker] || 'colonel_down_0';
-      if (CK.Sprites && CK.Pixel) { // pixel art, whole-number scale, no smoothing
+      { // pixel art, whole-number scale, no smoothing
         const b = CK.Sprites.built()[key];
         const k = Math.max(1, Math.floor(Math.min((64 * dpr) / b.w, (64 * dpr) / b.h)));
         x.imageSmoothingEnabled = false;
         x.drawImage(b.img, Math.round((c.width - b.w * k) / 2), Math.round((c.height - b.h * k) / 2), b.w * k, b.h * k);
         return c;
       }
-      x.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (speaker === 'colonel') CK.Art.colonel(x, 36, 60, 0.85, 1, { reduced: true });
-      else if (speaker === 'pip') CK.Art.pip(x, 36, 38, 1.7, 1);
-      else if (speaker === 'liltux') CK.Art.liltux(x, 36, 34, 0.42, 1);
-      else CK.Art.character(x, speaker, 40, 50, 0.8, 1);
       return c;
     }
     ui.say = function (speaker, lines) {
@@ -219,7 +158,6 @@
       return `<button class="ck-btn ck-up" data-buy="${u.id}" ${cb.ok && !locked ? '' : 'disabled'} title="${esc(u.blurb)}">⬆ <code>${esc(u.cmd)}</code> · ${u.cost}b${why ? `<small>${why}</small>` : ''}</button>`;
     }
     function tabItems(state) {
-      if (!R.TOOLS) return tabItemsOld(state);
       const st = R.stats(state); const locked = inFight();
       const count = (id) => state.modules.filter((m) => m === id).length;
       const board = SLOTS.map(([id, label]) => {
@@ -266,30 +204,6 @@
       return `<div class="ck-map" style="grid-template-columns:repeat(${cols}, 44px)">${html}</div>
         <ul class="ck-mapkey">${MAP_KEY.map(([i, t]) => `<li><b>${i}</b>${esc(t)}</li>`).join('')}<li><b>▣</b>Bright: visited · dim: seen · dark: unknown</li></ul>`;
     }
-    function tabItemsOld(state) {
-      const st = R.stats(state);
-      const count = (id) => state.modules.filter((m) => m === id).length;
-      const board = SLOTS.map(([id, label]) => {
-        const m = W.MODULES[id]; const n = count(id);
-        return `<div class="ck-slot ${n ? 'on' : ''}" data-slot="${id}" title="${n ? esc(m.real) : 'Empty slot'}"><b>${label}</b><span>${n ? `${m.icon} ${esc(m.name)}${n > 1 ? ' ×' + n : ''}` : '—'}</span></div>`;
-      }).join('');
-      const inFight = ui.mode === 'fight';
-      const skills = (inFight ? '<p class="ck-dim">⏸ Fight paused. Loadout changes happen on the map, not mid-fight.</p>' : '') + state.learned.map((id) => {
-        const s = W.SKILLS[id]; const on = state.equipped.includes(id);
-        const u = s.upgrade || { id: '', cmd: s.cmd, cost: 0, blurb: '' }; const owned = !s.upgrade || state.upgrades.includes(u.id); const cb = canBuy(state, u.id);
-        const why = { bits: `need ${u.cost} bits`, needs: u.needs ? `needs ${W.MODULES[u.needs] ? W.MODULES[u.needs].name : u.needs}` : 'locked' }[cb.reason] || '';
-        return `<div class="ck-skillrow">
-          <span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(owned ? u.cmd : s.cmd)}</code><small>${esc(s.blurb)}</small></div>
-          ${on ? `<button class="ck-btn" data-unequip="${id}" ${inFight ? 'disabled' : ''} title="Take ${esc(s.cmd)} out of your skill bar to free a slot">Unequip</button>` : `<button class="ck-btn" data-equip="${id}" ${inFight || state.equipped.length >= st.slots ? 'disabled' : ''} title="Put ${esc(s.cmd)} in your skill bar (uses one slot)">Equip</button>`}
-          ${owned ? `<span class="ck-owned">✓ <code>${esc(u.cmd)}</code></span>` : `<button class="ck-btn ck-up" data-buy="${u.id}" ${cb.ok && !inFight ? '' : 'disabled'} title="${esc(u.blurb)}">⬆ <code>${esc(u.cmd)}</code> · ${u.cost}b${why ? `<small>${why}</small>` : ''}</button>`}
-        </div>`;
-      }).join('') || '<p class="ck-dim">No skills learned yet.</p>';
-      const codex = state.codex.map((id) => { const s = W.SKILLS[id]; return `<li><code>${esc(s.cmd)}</code> — ${code(s.real)}<br><span class="ck-dim">Try in a real terminal:</span> <code>${esc(s.example)}</code></li>`; }).join('') || '<li class="ck-dim">Learn a skill to fill your codex.</li>';
-      return `<p class="ck-bits"><b>${state.bits}</b> bits · ${state.equipped.length}/${st.slots} skill slots</p>
-        <h3>Motherboard</h3><div class="ck-board">${board}</div>
-        <h3>Skills</h3>${skills}
-        <h3>Codex</h3><ul class="ck-codex">${codex}</ul>`;
-    }
     function tabQuests(state) {
       const reg = R.region(state.region); const boss = reg.nodes[reg.boss];
       const done = W.REGIONS.filter((r) => (state.cleared[r.id] || []).includes(r.boss));
@@ -301,10 +215,6 @@
         <div class="ck-quest"><b>Who to talk to</b><p>${unlearned.length ? `Find <b>${esc(W.CHARACTERS[unlearned[0].ref].name)}</b> at <b>${esc(unlearned[0].label)}</b> to learn a new skill.` : 'You’ve met everyone in this chapter.'}</p></div>
         <div class="ck-quest"><b>Restored</b><p>${done.length ? done.map((r) => '✓ ' + esc(r.name)).join('<br>') : 'Nothing yet. The machine is still dark.'}</p></div>
         <div class="ck-quest"><b>Memories</b><p>${state.memories.length ? state.memories.slice(-3).map((m) => `<code>${esc(m)}</code>`).join('<br>') : 'None recovered yet. Look for violet ✦ nodes.'}</p></div>`;
-    }
-    function tabCombat() {
-      return `<div class="ck-quest"><b>Pip’s combat notes</b><p>${ui.combatText ? code(ui.combatText) : 'Pick a skill (keys 1–5 or tap it), then tap the arena to fire. Shoot down incoming orbs, watch your heat, and dash with cd once you have it. Simple. Mostly. I believe in you.'}</p></div>
-        <div class="ck-quest"><b>Clean fixes</b><p>Equip the right skill before walking into a problem and you can fix it instantly — no fight, bonus bits.</p></div>`;
     }
     function tabTasks(state) {
       return Object.values(W.TASKS).map((t) => {
@@ -318,8 +228,8 @@
       let panel = $('.ck-pip');
       if (!panel) { panel = document.createElement('aside'); panel.className = 'ck-pip'; $('.ck-layer').appendChild(panel); }
       const tabs = [['quests', '📜 Quests', 'What to do next, and where'], ['items', '🎒 Items', 'Moves, tools, motherboard, upgrades and your command codex'], ['map', '🗺 Map', 'Rooms we’ve visited and seen'], ['tasks', '✅ Tasks', 'Side jobs from the characters you meet']];
-      if (!tabs.some(([id]) => id === ui.pipTab) && ui.pipTab !== 'combat') ui.pipTab = 'quests';
-      const body = { quests: tabQuests, items: tabItems, map: tabMap, combat: tabCombat, tasks: tabTasks }[ui.pipTab](state);
+      if (!tabs.some(([id]) => id === ui.pipTab)) ui.pipTab = 'quests';
+      const body = { quests: tabQuests, items: tabItems, map: tabMap, tasks: tabTasks }[ui.pipTab](state);
       panel.innerHTML = `<header><span class="ck-orb big"></span><div><b>Pip</b><small>PID 1 · always running · mildly judgmental</small></div><button class="ck-btn" data-ck="closepip" aria-label="Close Pip" title="Close Pip’s panel">✕</button></header>
         <nav>${tabs.map(([id, l, tip]) => `<button class="ck-tab ${id === ui.pipTab ? 'on' : ''}" data-tab="${id}" title="${tip}">${l}</button>`).join('')}</nav>
         <div class="ck-pip-body">${body}</div>`;
@@ -358,7 +268,7 @@
             done = true; h.onLearned(skillId);
             const equipped = h.getState().equipped.includes(skillId);
             const ok = document.createElement('div'); ok.className = 'ck-learned';
-            ok.innerHTML = spec ? esc(spec.done) : `✅ Skill learned: <code>${esc(s.cmd)}</code> — ${equipped ? 'it’s in your skill bar and codex.' : 'it’s in your codex, but your skill slots are full.'}`; out.appendChild(ok);
+            ok.innerHTML = spec ? esc(spec.done) : `✅ Skill learned: <code>${esc(s.cmd)}</code> — ${equipped ? 'it’s in your tool slots and codex.' : 'it’s in your codex.'}`; out.appendChild(ok);
             setTimeout(() => { box.remove(); resolve(); }, 1100);
           } else if (v.trim()) {
             const hint = document.createElement('div'); hint.className = 'ck-dim'; hint.innerHTML = `Not quite — try <code>${esc(s.example)}</code>`; out.appendChild(hint);
@@ -405,16 +315,14 @@
       if (d.ck === 'rest') return h.onRest && h.onRest();
       if (d.ck === 'log') return $('.ck-log') ? ui.closeLog() : ui.openLog();
       if (d.ck === 'closelog') return ui.closeLog();
-      if (d.ck === 'legend') { legendClosed = !legendClosed; if (!legendClosed && narrow()) ui.closeLog(); const el = $('.ck-legend'); if (el) { el.classList.toggle('closed', legendClosed); b.setAttribute('aria-expanded', String(!legendClosed)); b.querySelector('span').textContent = legendClosed ? '▸' : '▾'; } return; }
       if (d.ck === 'pip') return ui.pipOpen() ? ui.closePip() : ui.pip();
       if (d.ck === 'closepip') return ui.closePip();
       if (d.ck === 'next' && sayState) return sayState.next();
       if (d.ck === 'speak' && sayState) return sayState.speak();
       if (d.tab) return ui.pip(d.tab);
-      if (d.skill) return h.onSkill(d.skill);
-      if (d.equip) { h.onEquip(d.equip); ui.pip('items'); ui.skillBar(h.getState(), ui.mode); return; }
-      if (d.unequip) { h.onUnequip(d.unequip); ui.pip('items'); ui.skillBar(h.getState(), ui.mode); return; }
-      if (d.buy) { h.onBuy(d.buy); ui.pip('items'); ui.skillBar(h.getState(), ui.mode); ui.hud(h.getState()); }
+      if (d.equip) { h.onEquip(d.equip); ui.pip('items'); return; }
+      if (d.unequip) { h.onUnequip(d.unequip); ui.pip('items'); return; }
+      if (d.buy) { h.onBuy(d.buy); ui.pip('items'); }
     });
 
     ui.destroy = function () { document.removeEventListener('keydown', onKey); rootEl.innerHTML = ''; rootEl.classList.remove('ck-ui'); };

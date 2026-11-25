@@ -24,7 +24,6 @@
 
   CK.open = function (h) {
     CK.close();
-    if (CK.closeSlice) CK.closeSlice();
     const W = CK.World; const R = CK.Rules; const S = CK.Story;
     const player = h.player;
     const state = R.sanitize(CK.State.load(player.ck));

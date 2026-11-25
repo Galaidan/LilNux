@@ -81,13 +81,6 @@ const tests = {
     await pg.click('[data-buy=ls-a]');
     assert.equal(await pg.evaluate(() => H.state.upgrades.includes('ls-a')), true);
   },
-  async 'skill bar fires onSkill'(b) {
-    const pg = await page(b);
-    await learnAll(pg, ['echo', 'ls']);
-    await pg.evaluate(() => H.ui.skillBar(H.state, 'map'));
-    await pg.click('.ck-skill[data-skill=ls]');
-    assert.equal(await pg.evaluate(() => H.skill), 'ls');
-  },
   async 'choice resolves with the picked value'(b) {
     const pg = await page(b);
     await pg.evaluate(() => { H.ui.choice('Pick', [{ label: 'A', value: 'a' }, { label: 'Fight', value: 'fight' }]).then((v) => (H.picked = v)); });
@@ -98,7 +91,7 @@ const tests = {
   async 'tap targets are at least 44px on iPhone'(b) {
     const pg = await page(b, { ...devices['iPhone 13'] });
     await learnAll(pg, ['echo', 'ls', 'cd']);
-    await pg.evaluate(() => { H.ui.hud(H.state); H.ui.skillBar(H.state, 'map'); H.ui.pip('items'); });
+    await pg.evaluate(() => { H.ui.hud(H.state); H.ui.action(true); H.ui.pip('items'); });
     await pg.waitForTimeout(400);
     await pg.screenshot({ path: path.join(SHOTS, 'ck-pip-panel.png') });
     const small = await pg.$$eval('#ck-root button', (bs) => bs.filter((x) => { const r = x.getBoundingClientRect(); return r.width > 0 && (r.width < 44 || r.height < 44); }).map((x) => x.outerHTML.slice(0, 80)));
@@ -122,19 +115,6 @@ const tests = {
     assert.ok(await pg.evaluate(() => H.state.log.length >= 6), 'stored in the save');
     await pg.click('.ck-log [data-ck=closelog]');
     assert.equal(await pg.$('.ck-log'), null);
-  },
-  async 'legend shows the node colours'(b) {
-    const pg = await page(b);
-    await pg.evaluate(() => H.ui.legend(true));
-    const rows = await pg.$$eval('.ck-legend [data-kind]', (els) => els.map((e) => [e.dataset.kind, getComputedStyle(e.querySelector('i')).borderColor, e.textContent]));
-    const kinds = rows.map((r) => r[0]);
-    for (const k of ['character', 'problem', 'item', 'memory', 'circuit', 'boss', 'exit']) assert.ok(kinds.includes(k), k);
-    const coral = await pg.evaluate(() => CK.Art.C.coral);
-    const prob = rows.find((r) => r[0] === 'problem');
-    const hex = (rgb) => '#' + rgb.match(/\d+/g).slice(0, 3).map((n) => (+n).toString(16).padStart(2, '0')).join('');
-    assert.equal(hex(prob[1]), coral);
-    await pg.click('.ck-legend [data-ck=legend]');
-    assert.equal(await pg.$eval('.ck-legend', (e) => e.classList.contains('closed')), true, 'collapses');
   },
   async 'action HUD shows stability, heat and one chip per tool'(b) {
     const pg = await page(b);
@@ -177,7 +157,7 @@ const tests = {
   },
   async 'portrait is pixel art'(b) {
     const pg = await page(b);
-    await pg.evaluate(() => { CK.Art = undefined; H.ui.say('bios', ['Hello.']); });
+    await pg.evaluate(() => { H.ui.say('bios', ['Hello.']); });
     const lit = await pg.$eval('.ck-say canvas.ck-portrait', (c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; });
     assert.ok(lit > 200, `${lit} lit pixels`);
     assert.deepEqual(pg.errs, []);
