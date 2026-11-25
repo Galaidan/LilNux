@@ -10,7 +10,7 @@
     '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
 
   function create(o) {
-    const engine = o.engine; const input = o.input; const room = o.room; const accent = o.accent || COL.amber;
+    const engine = o.engine; const input = o.input; let room = o.room; let accent = o.accent || COL.amber;
     const TILE = CK.Rooms.TILE; const Pix = CK.Pixel; const spr = CK.Sprites.built();
     const reduced = () => !!engine.reducedMotion;
     let sim = o.sim;
@@ -18,7 +18,13 @@
     // ---- pre-rendered layers ------------------------------------------------------------------
     const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
     const Art = CK.RoomArt; const A = Art.ART;
-    const art = Art.paint(room, { accent, seed: 7 }); // plaza, cliffs, walls, creep (static) + props/cores/leds
+    let art = Art.paint(room, { accent, seed: o.seed || 7 }); // plaza, cliffs, walls, creep (static) + props/cores/leds
+    // world state for chapter rooms
+    let dark = !!o.dark; let glitched = !!o.glitched; let npcs = o.npcs || [];
+    let litT = 0; let flickerT = 0; let slideT = 0; let slideDir = null;
+    let latch = null; let near = null; let touched = new Set();
+    const tells = []; // SIGKILL telegraphs
+    let darkLayer = null;
     let deep = null; let vig = null; // per buffer size, built in resize()
     const motes = [];
     function seedMotes(w, h) {
@@ -63,6 +69,14 @@
         case 'echo': burst(P.x + P.face.x * 8, P.y - 10 + P.face.y * 8, COL.cyan, 3, 40); break;
         case 'overheat': burst(P.x, P.y - 20, COL.amber, 10, 50); break;
         case 'clear': rings.push({ x: P.x, y: P.y - 10, r0: 10, r1: 260, life: 0.8, max: 0.8, color: COL.mint }); break;
+        case 'heavy': arcs.push({ x: P.x, y: P.y - 10, dir: Math.atan2(P.face.y, P.face.x), life: 0.16, combo: 3, big: true }); hitstop = Math.max(hitstop, 0.07); shake(); break;
+        case 'charge': rings.push({ x: P.x, y: P.y - 12, r0: 16, r1: 6, life: 0.25, max: 0.25, color: COL.gold }); break;
+        case 'break': burst(ev.x, ev.y, COL.magenta, 14, 80); burst(ev.x, ev.y, COL.white, 5, 50); shake(); break;
+        case 'switch': rings.push({ x: ev.x, y: ev.y, r0: 4, r1: 20, life: 0.35, max: 0.35, color: COL.mint }); break;
+        case 'blink': case 'blink-tell': burst(ev.x, ev.y - 8, COL.violet, ev.type === 'blink' ? 10 : 4, 50); break;
+        case 'burst': rings.push({ x: ev.x, y: ev.y - 8, r0: 6, r1: 30, life: 0.3, max: 0.3, color: COL.violet }); break;
+        case 'phase': rings.push({ x: ev.x, y: ev.y - 16, r0: 10, r1: 60, life: 0.5, max: 0.5, color: COL.magenta }); burst(ev.x, ev.y - 16, COL.magenta, 20, 110); shake(); break;
+        case 'sigkill-tell': tells.push({ x: ev.x, y: ev.y, r: ev.r || 20, life: 0.8, max: 0.8 }); break;
         default: break;
       }
       if (o.onEvent) o.onEvent(ev);
@@ -71,8 +85,14 @@
 
     // ---- update -----------------------------------------------------------------------------------
     function update(dt) {
-      if (o.paused && o.paused()) return; // frozen behind the rotate screen or while the window is unfocused
+      // frozen behind the rotate screen, while unfocused, or while a dialogue / terminal / panel is open;
+      // keys pressed meanwhile (Enter on a dialogue, letters typed into the terminal) are dropped, not replayed
+      const sliding = slideT > 0; if (sliding) slideT = Math.max(0, slideT - dt); // a room slide finishes even under a dialogue
+      if (o.paused && o.paused()) { if (input) input.clear(); return; }
       t += dt;
+      litT = Math.max(0, litT - dt); flickerT = Math.max(0, flickerT - dt);
+      for (const k of tells) k.life -= dt; prune(tells);
+      if (sliding) { if (input) input.read(); return; }
       const P = sim.player;
       const inp = input ? input.read() : { mx: 0, my: 0, mouse: null, kill: false, trap: false, dash: false, tool: null };
       let ax = 0; let ay = 0;
@@ -86,10 +106,16 @@
         }
       }
       else {
+        // E / Enter / ✋ uses what's near; `kill` next to a character with no creatures awake talks instead of swinging
+        if (inp.tool === 'cd' || (pending && pending.tool === 'cd')) { inp.tool = null; if (pending) pending.tool = null; if (o.onCd) o.onCd(near); }
+        const calm = !sim.enemies.some((e) => !e.dead);
+        if (o.onUse && (inp.use || (inp.kill && near && near.kind === 'npc' && calm))) { if (near) { inp.kill = false; o.onUse(near); } }
         const press = pending || {}; pending = null;
-        sim.step(dt, { mx: inp.mx, my: inp.my, ax, ay, kill: inp.kill || !!press.kill, trap: inp.trap || !!press.trap, dash: inp.dash || !!press.dash, tool: inp.tool || press.tool || null });
+        sim.step(dt, { mx: inp.mx, my: inp.my, ax, ay, kill: inp.kill || !!press.kill, killHeld: !!inp.killHeld, trap: inp.trap || !!press.trap, dash: inp.dash || !!press.dash, tool: inp.tool || press.tool || null });
       }
       for (const ev of sim.events.splice(0)) handle(ev);
+      checkPlace(P);
+      if (sim.player !== P) return; // a door (or a reboot) swapped the room this frame
       if (P.dashT > 0) ghosts.push({ x: P.x, y: P.y, life: 0.15, flip: P.dashDir.x < 0 });
       for (const g of ghosts) g.life -= dt;
       for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; }
@@ -103,6 +129,23 @@
       if (!reduced() && deep) for (const m of motes) { m.y -= m.vy * dt; m.x += Math.sin(t * m.sway + m.ph) * 4 * dt; if (m.y < -2) { m.y = deep.img.height + 2; m.x = Math.random() * deep.img.width; } }
     }
     let pending = null;
+    // Doors (once per crossing, latched until the Colonel leaves the doorway), things to use, things to touch.
+    function checkPlace(P) {
+      if (!room.doors) return;
+      const side = CK.Rooms.doorAt(room, P.x, P.y);
+      if (!side) latch = null;
+      else if (side !== latch) {
+        latch = side; const before = room;
+        if (o.onDoor) o.onDoor(side);
+        if (room !== before) return; // we walked into another room: P belongs to the old one
+      }
+      const n = CK.Rooms.nearestProp(room, P.x, P.y, 20, ['npc', 'terminal', 'sign']);
+      if (n !== near) { near = n; if (o.onNear) o.onNear(n); }
+      for (const p of room.props) {
+        if (touched.has(p) || !['pedestal', 'crystal', 'gate'].includes(p.kind)) continue;
+        if (CK.Rooms.nearestProp(room, P.x, P.y, 6 + 7, [p.kind]) === p) { touched.add(p); if (o.onTouch) o.onTouch(p); }
+      }
+    }
     function prune(a) { for (let i = a.length - 1; i >= 0; i--) if (a[i].life <= 0) a.splice(i, 1); }
 
     // ---- draw -------------------------------------------------------------------------------------
@@ -136,8 +179,14 @@
         for (const l of deep.lights) { g.globalAlpha = 0.25 + 0.5 * pulse(l.phase, 1.3); g.fillStyle = l.color; g.fillRect(l.x, l.y, 1, 1); }
         g.globalAlpha = 1;
       }
+      // sliding in from the door we came through (a cut with reduced motion)
+      if (slideT > 0 && slideDir) {
+        const k = slideT / SLIDE; const OFF = { n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] }[slideDir];
+        sx += Math.round(OFF[0] * k * view.w); sy += Math.round(OFF[1] * k * view.h);
+      }
       g.setTransform(1, 0, 0, 1, -cam.x + sx, -cam.y + sy);
       g.drawImage(art.ground, 0, 0);
+      drawDoors(g);
 
       // danger and shots tint the plaza under them
       for (const ob of sim.orbs) light(g, ob.x, ob.y + 3, ob.from === 'player' ? COL.cyan : COL.coral, 12, 0.35);
@@ -155,8 +204,9 @@
       // y-sorted: the Colonel, mites, landmarks, capacitors, blooms, Pip
       const list = [];
       list.push({ y: P.y, draw: () => drawColonel(g, P) });
-      for (const e of sim.enemies) if (!e.dead) list.push({ y: e.y + e.r, draw: () => drawMite(g, e) });
+      for (const e of sim.enemies) if (!e.dead) list.push({ y: e.y + e.r, draw: () => (e.kind === 'glitchMite' ? drawMite(g, e) : drawFoe(g, e)) });
       for (const p of art.props) list.push({ y: p.sortY, draw: () => g.drawImage(p.img, p.x, p.y) });
+      for (const p of room.props || []) list.push({ y: (p.ty + p.h) * TILE, draw: () => drawProp(g, p) });
       list.push({ y: P.y - 2, draw: () => Pix.draw(g, spr.pip, pip.x, pip.y + (reduced() ? 0 : Math.round(Math.sin(t * 3) * 1.5)), { glow: 0.7 }) });
       list.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
 
@@ -171,9 +221,13 @@
       }
       for (const b of sim.bolts) Pix.draw(g, spr.bolt, b.x, b.y + 2, { glow: 0.9 });
       drawEffects(g);
+      drawTells(g);
 
-      // screen space: drifting motes, then the vignette
+      // screen space: darkness, glitches, drifting motes, then the vignette
       g.setTransform(1, 0, 0, 1, 0, 0);
+      if (dark) drawDark(g, view, P);
+      if (glitched) drawGlitch(g, view);
+      if (flickerT > 0 && !reduced() && Math.floor(flickerT * 12) % 3 === 0) { g.fillStyle = 'rgba(6,10,28,0.55)'; g.fillRect(0, 0, view.w, view.h); }
       for (const m of motes) {
         g.globalAlpha = 0.35 + 0.4 * pulse(m.ph, 2); g.fillStyle = m.color;
         g.fillRect(Math.round(m.x), Math.round(m.y), m.big ? 2 : 1, m.big ? 2 : 1);
@@ -187,7 +241,7 @@
       const s = colonelSprite(P);
       let alpha = 1;
       if (P.iframes > 0 && P.dashT <= 0) alpha = reduced() ? 0.6 : (Math.floor(t * 15) % 2 ? 0.25 : 1);
-      Pix.draw(g, s.b, P.x, P.y, { flip: s.flip, alpha, flash: hurtFlash > 0, glow: 0.35 });
+      Pix.draw(g, s.b, P.x, P.y, { flip: s.flip, alpha, flash: hurtFlash > 0 && !reduced(), glow: 0.35 });
       if (P.parryT > 0) { g.strokeStyle = COL.cyan; g.globalAlpha = 0.8; g.lineWidth = 1; g.beginPath(); g.arc(Math.round(P.x) + 0.5, Math.round(P.y - 12) + 0.5, 15, 0, TAU); g.stroke(); g.globalAlpha = 1; }
     }
     function drawMite(g, e) {
@@ -196,16 +250,97 @@
       const b = spr['mite_' + frame];
       const jitter = visible || reduced() ? 0 : (Math.floor(t * 20) % 3) - 1;
       // cloaked: a faint shimmer (0.22 read as faint on the old navy floor; the pale plaza needs less)
-      Pix.draw(g, b, e.x + jitter, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.6 : 0, flash: e.flash > 0 });
+      Pix.draw(g, b, e.x + jitter, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.6 : 0, flash: e.flash > 0 && !reduced() });
       if (e.state === 'tell') {
         g.fillStyle = COL.coral; g.fillRect(Math.round(e.x), Math.round(e.y - 16), 1, 4); g.fillRect(Math.round(e.x), Math.round(e.y - 11), 1, 1);
-        g.globalAlpha = 0.5; Pix.draw(g, b, e.x, e.y + e.r + 2, { flash: true }); g.globalAlpha = 1;
+        if (!reduced()) { g.globalAlpha = 0.5; Pix.draw(g, b, e.x, e.y + e.r + 2, { flash: true }); g.globalAlpha = 1; }
       }
       if (sim.time < e.stunUntil) {
         g.fillStyle = COL.gold;
         for (let i = 0; i < 3; i++) { const a = (reduced() ? 0 : t * 5) + (i * TAU) / 3; g.fillRect(Math.round(e.x + Math.cos(a) * 7), Math.round(e.y - 12 + Math.sin(a) * 2), 1, 1); }
       }
     }
+    // ---- chapter rooms: doors, props, bigger creatures, SIGKILL, darkness, glitches ----------------
+    const SLIDE = 0.25;
+    function drawDoors(g) {
+      if (!room.doors) return;
+      for (const side of Object.keys(room.doors)) {
+        const kind = room.doorKind(side);
+        for (const [tx, ty] of room.doors[side].tiles) {
+          const x = tx * TILE; const y = ty * TILE;
+          if (kind === 'sealed') { Pix.draw(g, spr.barrier, x + 8, y + 16, { alpha: reduced() ? 0.85 : 0.6 + 0.3 * pulse(tx + ty, 5) }); }
+          else if (kind === 'crack') Pix.draw(g, spr.crack, x + 8, y + 16);
+          else if (kind === 'wall') { if (side === 'n') Pix.draw(g, spr.tile_wall_front, x + 8, y + 16); else { g.fillStyle = A.void0; g.fillRect(x, y, TILE, TILE); } }
+          else {
+            const col = kind === 'loop' ? '#b6ff5c' : accent;
+            g.globalAlpha = kind === 'loop' ? 0.35 + 0.4 * pulse(tx, 3) : 0.55; g.fillStyle = col;
+            if (side === 'n' || side === 's') g.fillRect(x, side === 'n' ? y + 13 : y, TILE, 3); else g.fillRect(side === 'w' ? x + 13 : x, y, 3, TILE);
+            g.globalAlpha = 1;
+          }
+        }
+      }
+    }
+    const npcAt = (p) => (npcs.find((n) => n.tx === p.tx && n.ty === p.ty) || {}).who;
+    function drawProp(g, p) {
+      const fx = p.tx * TILE + (p.w * TILE) / 2; const fy = (p.ty + p.h) * TILE;
+      const bob = reduced() ? 0 : Math.round(Math.sin(t * 2 + p.tx) * 1);
+      switch (p.kind) {
+        case 'terminal': Pix.draw(g, p.broken ? spr.terminal_off : spr.terminal, fx, fy, { glow: p.broken ? 0 : 0.4 }); break;
+        case 'npc': { const who = npcAt(p); if (who && spr[who]) { shadow(g, fx, fy - 1, 7); Pix.draw(g, spr[who], fx, fy + bob * 0, { glow: 0.2 }); } break; }
+        case 'pedestal': Pix.draw(g, spr.pedestal, fx, fy); if (p.icon && spr[p.icon] && !p.taken) Pix.draw(g, spr[p.icon], fx, fy - 10 + bob, { glow: 0.7 }); break;
+        case 'crystal': if (!p.taken) { shadow(g, fx, fy - 1, 5); Pix.draw(g, spr.crystal, fx, fy - 2 + bob, { glow: 0.8 }); } break;
+        case 'sign': Pix.draw(g, spr.sign, fx, fy); break;
+        case 'switch': Pix.draw(g, room.tiles.some((r) => r.includes('_')) ? spr.switch_off : spr.switch_on, fx, fy, { glow: 0.5 }); break;
+        case 'block': Pix.draw(g, spr.block, fx, fy, { glow: 0.3 }); break;
+        case 'gate': Pix.draw(g, spr.gate, fx, fy, { glow: 0.6 }); break;
+        default: break;
+      }
+    }
+    const FOE_SPRITE = { loopWisp: 'wisp', bootGlitch: 'boot', kernelWraith: 'wraith' };
+    function drawFoe(g, e) {
+      const visible = !e.cloaked || sim.time < e.revealedUntil || sim.time < e.stunUntil;
+      const frame = reduced() ? 0 : (Math.floor(t * 5) + Number(e.id.slice(1))) % 2;
+      const b = spr[FOE_SPRITE[e.kind] + '_' + frame];
+      shadow(g, e.x, e.y + e.r - 1, e.r * 0.8);
+      const tell = e.state === 'tell' || e.sigTellT > 0;
+      Pix.draw(g, b, e.x, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.5 : 0, flash: !reduced() && (e.flash > 0 || (tell && Math.floor(t * 10) % 2 === 0)) });
+    }
+    function drawTells(g) {
+      for (const k of tells) {
+        const prog = 1 - k.life / k.max; const r = k.r + prog * 8;
+        g.globalAlpha = 0.5; g.strokeStyle = A.cliff3; g.lineWidth = 3; g.beginPath(); g.arc(k.x, k.y - 8, r, 0, TAU); g.stroke();
+        g.globalAlpha = 1; g.strokeStyle = COL.coral; g.lineWidth = 1; g.beginPath(); g.arc(k.x, k.y - 8, r, 0, TAU); g.stroke();
+        // the decorative "9" (signal 9, SIGKILL): Pip's line carries the meaning in text
+        const d = DIGITS[9]; g.fillStyle = COL.coral;
+        for (let i = 0; i < 15; i++) if (d[i] === '1') g.fillRect(Math.round(k.x) - 3 + (i % 3) * 2, Math.round(k.y - 8 - r - 12) + Math.floor(i / 3) * 2, 2, 2);
+      }
+      g.globalAlpha = 1;
+    }
+    function drawDark(g, view, P) {
+      const a = litT > 1 ? 0 : 0.9 * (1 - litT);
+      if (a <= 0) return;
+      if (!darkLayer || darkLayer.width !== view.w || darkLayer.height !== view.h) darkLayer = canvasOf(view.w, view.h);
+      const d = darkLayer.getContext('2d');
+      d.globalCompositeOperation = 'source-over'; d.clearRect(0, 0, view.w, view.h);
+      d.fillStyle = `rgba(4,6,20,${a.toFixed(3)})`; d.fillRect(0, 0, view.w, view.h);
+      d.globalCompositeOperation = 'destination-out';
+      for (const [x, y, r] of [[P.x - cam.x, P.y - 10 - cam.y, 44], [pip.x - cam.x, pip.y - 8 - cam.y, 28]]) {
+        const gr = d.createRadialGradient(x, y, r * 0.35, x, y, r); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        d.fillStyle = gr; d.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      d.globalCompositeOperation = 'source-over';
+      g.drawImage(darkLayer, 0, 0);
+    }
+    // NullNux damage: torn scanlines and a colour cast. Still under reduced motion.
+    function drawGlitch(g, view) {
+      const seed = reduced() ? 1 : Math.floor(t * 3); const rng = CK.rng(seed + 11);
+      for (let i = 0; i < 6; i++) {
+        const y = Math.floor(rng() * view.h); const h = 1 + Math.floor(rng() * 3); const dx = Math.round((rng() - 0.5) * 10);
+        g.drawImage(g.canvas, 0, y, view.w, h, dx, y, view.w, h);
+      }
+      g.globalAlpha = 0.08; g.fillStyle = COL.magenta; g.fillRect(0, 0, view.w, view.h); g.globalAlpha = 1;
+    }
+
     // Effects draw normally (not additive) with a dark under-stroke, so they read on the pale plaza.
     function drawEffects(g) {
       for (const a of arcs) {
@@ -236,7 +371,22 @@
     const scene = {
       update, draw, cam,
       get sim() { return sim; },
-      setSim(s) { sim = s; parts.length = rings.length = pops.length = arcs.length = ghosts.length = 0; hitstop = 0; pending = null; pip.x = s.player.x - 14; pip.y = s.player.y - 22; },
+      setSim(s) { sim = s; parts.length = rings.length = pops.length = arcs.length = ghosts.length = tells.length = 0; hitstop = 0; pending = null; pip.x = s.player.x - 14; pip.y = s.player.y - 22; },
+      // A new room (a door, fast travel, a reboot). `slide` is the side the Colonel came in by.
+      setRoom(v, slide) {
+        room = v.room; accent = v.accent || accent; dark = !!v.dark; glitched = !!v.glitched; npcs = v.npcs || [];
+        art = Art.paint(room, { accent, seed: v.seed || 7 });
+        scene.setSim(v.sim); litT = 0; latch = null; near = null; touched = new Set();
+        if (o.onNear) o.onNear(null);
+        slideT = slide && !reduced() ? SLIDE : 0; slideDir = slide || null;
+        if (CK.Rooms.doorAt(room, v.sim.player.x, v.sim.player.y)) latch = CK.Rooms.doorAt(room, v.sim.player.x, v.sim.player.y);
+      },
+      get room() { return room; },
+      light(seconds) { litT = Math.max(litT, seconds); },
+      flicker() { flickerT = 1.6; },
+      // debug: put the Colonel somewhere (the door latch resets, so the real crossing code runs)
+      place(x, y) { sim.player.x = x; sim.player.y = y; latch = null; },
+      get transitioning() { return slideT > 0; },
       resize(view) {
         if (!view || (deep && deep.img.width === view.w && deep.img.height === view.h)) return;
         deep = Art.deep(view.w, view.h, 3); vig = Art.vignette(view.w, view.h); seedMotes(view.w, view.h);

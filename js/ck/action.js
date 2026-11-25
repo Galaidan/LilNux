@@ -10,7 +10,8 @@
     KILL_DMG: 12, KILL_TIME: 0.22, KILL_CHAIN: 0.4, KILL_RANGE: 22, KILL_LUNGE: 10, KILL_COOL_HEAT: 8, KILL_ARC_DEG: 70, KNOCK: 4,
     PARRY: 0.18, PARRY_KID: 0.30, PARRY_RECOVER: 0.35, STUN: 1.2, REFLECT_MUL: 2,
     ECHO_SPEED: 260, ECHO_DMG: 10, ECHO_CD: 0.35, ECHO_HEAT: 9, OVERHEAT_LOCK: 1.5, HEAT_DECAY: 25, BOLT_R: 3, ORB_R: 3,
-    LS_CD: 3, LS_HEAT: 15, LS_REVEAL: 4,
+    LS_CD: 3, LS_HEAT: 15, LS_REVEAL: 4, LS_REVEAL_A: 7, ECHO_N_MUL: 0.75,
+    KILL9_CHARGE: 0.6, KILL9_DMG: 40, KILL9_RANGE: 26, KILL9_ARC_DEG: 100, BREAK_REACH: 30,
     MITE: { r: 6, speed: 45, shootEvery: 2.4, orbSpeed: 80, orbDmg: 8, contactDmg: 6,
       lungeEvery: 3.5, lungeTell: 0.4, lungeSpeed: 160, lungeTime: 0.3, lungeDmg: 10 },
     KID_SPEED: 0.8, KID_STABILITY: 130, AIM_CONE_DEG: 60,
@@ -25,32 +26,47 @@
     const room = opts.room; const kid = !!opts.kid; const rng = CK.rng(opts.seed || 1);
     const slow = kid ? T.KID_SPEED : 1;
     const tools = (opts.tools || []).slice();
-    const def = CK.World && CK.World.CREATURES && CK.World.CREATURES.glitchMite;
+    const upgrades = (opts.upgrades || []).slice();
+    const mods = Object.assign({ cdMul: 1, heatMul: 1, moveMul: 1, dashCdMul: 1 }, opts.mods || {});
+    const breakables = (opts.breakables || []).map((b) => ({ id: b.id, tiles: b.tiles.map((t) => t.slice()) }));
+    const spawnList = opts.spawns || room.spawns;
     const maxStability = kid ? T.KID_STABILITY : 100;
 
     const s = {
-      room, kid, tools, time: 0, outcome: null, clean: false, events: [],
+      room, kid, tools, upgrades, mods, breakables, time: 0, outcome: null, clean: false, events: [], hadFoes: spawnList.length > 0,
       player: {
         x: room.player.x, y: room.player.y, face: { x: 0, y: 1 }, stability: maxStability, maxStability,
         dashT: 0, dashCd: 0, dashDir: { x: 0, y: 1 }, iframes: 0, attackT: 0, combo: 0, chainT: 0,
-        parryT: 0, recoverT: 0, parryCaught: false, heat: 0, overheatUntil: 0, hitsTaken: 0, moving: false,
+        parryT: 0, recoverT: 0, parryCaught: false, heat: 0, overheatUntil: 0, hitsTaken: 0, moving: false, chargeT: 0, charged: false,
       },
-      enemies: room.spawns.map((sp, i) => ({
-        id: 'e' + i, kind: sp.kind, x: sp.x, y: sp.y, r: M.r, hp: def ? def.hp : 30, maxHp: def ? def.hp : 30,
-        cloaked: def ? !!def.cloaked : true, revealedUntil: 0, stunUntil: 0, state: 'drift', dead: false,
-        speed: M.speed * slow, heading: rng() * Math.PI * 2,
-        shootEvery: M.shootEvery, shootTimer: M.shootEvery * (0.5 + 0.5 * rng()),
-        lungeEvery: M.lungeEvery, lungeTimer: M.lungeEvery * (0.6 + 0.6 * rng()),
-        tellT: 0, lungeT: 0, lungeDir: { x: 0, y: 0 }, flash: 0,
-      })),
+      enemies: [],
       orbs: [], bolts: [], cooldowns: { echo: 0, ls: 0 },
       spawnOrb(o) { s.orbs.push({ x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, r: T.ORB_R, dmg: o.dmg || M.orbDmg, unparryable: !!o.unparryable, from: 'enemy', src: o.src || null }); },
       step,
     };
     const P = s.player;
-    const ev = (type, x, y) => s.events.push({ type, x: x === undefined ? P.x : x, y: y === undefined ? P.y : y });
+    const ev = (type, x, y, extra) => s.events.push(Object.assign({ type, x: x === undefined ? P.x : x, y: y === undefined ? P.y : y }, extra || {}));
     const hittable = (e) => !e.dead && (!e.cloaked || s.time < e.revealedUntil || s.time < e.stunUntil);
     const alive = () => s.enemies.filter((e) => !e.dead);
+
+    // What foes.js may see and do.
+    const foeCtx = {
+      room, rng, player: P, slow, get time() { return s.time; },
+      orb(o) { s.orbs.push({ x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, r: T.ORB_R, dmg: o.dmg || M.orbDmg, unparryable: !!o.unparryable, from: 'enemy', src: o.src || null }); },
+      ev(type, x, y, extra) { ev(type, x, y, extra); },
+      // A seeded walkable spot at least minDist from the Colonel (falls back to where the foe stands).
+      floorPoint(minDist, e) {
+        const TL = CK.Rooms.TILE;
+        for (let i = 0; i < 40; i++) {
+          const tx = 1 + Math.floor(rng() * (room.cols - 2)); const ty = 1 + Math.floor(rng() * (room.rows - 2));
+          const x = tx * TL + TL / 2; const y = ty * TL + TL / 2; const r = (e && e.r) || 8;
+          if (CK.Rooms.collides(room, x, y, r)) continue;
+          if (Math.hypot(x - P.x, y - P.y) >= minDist) return { x, y };
+        }
+        return { x: e ? e.x : P.x, y: e ? e.y : P.y };
+      },
+    };
+    s.enemies = spawnList.map((sp, i) => CK.Foes.make(sp.kind, sp, i, foeCtx));
 
     function hurt(dmg, x, y) {
       if (P.dashT > 0 || P.iframes > 0 || s.outcome) return false;
@@ -60,7 +76,7 @@
       return true;
     }
     function addHeat(n) {
-      P.heat = Math.min(100, P.heat + n);
+      P.heat = Math.min(100, P.heat + n * mods.heatMul);
       if (P.heat >= 100) { P.overheatUntil = s.time + T.OVERHEAT_LOCK; ev('overheat'); }
     }
     function damage(e, n) {
@@ -87,59 +103,63 @@
         P.heat = Math.max(0, P.heat - T.KILL_COOL_HEAT);
         if (!e.dead) { const k = d < 1e-6 ? dir : norm(dx, dy); const m = CK.Rooms.moveCircle(room, e.x, e.y, e.r, k.x * T.KNOCK, k.y * T.KNOCK); e.x = m.x; e.y = m.y; }
       }
+      if (strikeScenery(dir, T.KILL_ARC_DEG)) near = true;
       if (!hit && !near) { const m = CK.Rooms.moveCircle(room, P.x, P.y, T.PLAYER_R, dir.x * T.KILL_LUNGE, dir.y * T.KILL_LUNGE); P.x = m.x; P.y = m.y; }
+    }
+    // `kill -9`: the charged heavy strike.
+    function heavy(dir) {
+      P.attackT = T.KILL_TIME; P.chainT = 0; P.combo = 0; P.face = dir;
+      ev('heavy', P.x + dir.x * 14, P.y + dir.y * 14);
+      const arc = (T.KILL9_ARC_DEG * Math.PI) / 180;
+      for (const e of alive()) {
+        const dx = e.x - P.x; const dy = e.y - P.y; const d = len(dx, dy);
+        if (d > T.KILL9_RANGE + e.r || (d > 1e-6 && angleBetween(dir, norm(dx, dy)) > arc) || !hittable(e)) continue;
+        damage(e, T.KILL9_DMG);
+        if (!e.dead) { const k = d < 1e-6 ? dir : norm(dx, dy); const m = CK.Rooms.moveCircle(room, e.x, e.y, e.r, k.x * T.KNOCK * 2, k.y * T.KNOCK * 2); e.x = m.x; e.y = m.y; }
+      }
+      strikeScenery(dir, T.KILL9_ARC_DEG);
+    }
+    // A swing also breaks corrupt blocks / cracked walls and flips switches in reach.
+    function strikeScenery(dir, arcDeg) {
+      const arc = (arcDeg * Math.PI) / 180; const TL = CK.Rooms.TILE; let any = false;
+      const inReach = (tx, ty) => {
+        const cx = tx * TL + TL / 2; const cy = ty * TL + TL / 2; const dx = cx - P.x; const dy = cy - P.y; const d = len(dx, dy);
+        return d <= T.BREAK_REACH && (d < 1e-6 || angleBetween(dir, norm(dx, dy)) <= arc);
+      };
+      for (let i = breakables.length - 1; i >= 0; i--) {
+        const b = breakables[i];
+        if (!b.tiles.some(([tx, ty]) => inReach(tx, ty))) continue;
+        breakables.splice(i, 1); any = true;
+        b.tiles.forEach(([tx, ty]) => { if (room.tiles[ty] && room.tiles[ty][tx] === 'b') room.clearTile(tx, ty); });
+        const [tx, ty] = b.tiles[0]; ev('break', tx * TL + TL / 2, ty * TL + TL / 2, { id: b.id });
+      }
+      for (const p of room.props || []) if (p.kind === 'switch' && inReach(p.tx, p.ty)) { any = true; ev('switch', p.x, p.y, { tx: p.tx, ty: p.ty }); }
+      return any;
     }
 
     function useTool(id, aim) {
       if (!tools.includes(id) || s.cooldowns[id] > 0 || s.time < P.overheatUntil) return;
       if (id === 'ls') {
-        s.enemies.forEach((e) => { e.revealedUntil = s.time + T.LS_REVEAL; });
-        s.cooldowns.ls = T.LS_CD; ev('reveal'); addHeat(T.LS_HEAT);
+        const reveal = upgrades.includes('ls-a') ? T.LS_REVEAL_A : T.LS_REVEAL;
+        s.enemies.forEach((e) => { e.revealedUntil = s.time + reveal; });
+        s.cooldowns.ls = T.LS_CD * mods.cdMul; ev('reveal'); addHeat(T.LS_HEAT);
       } else if (id === 'echo') {
         fireEcho(aim);
       }
     }
     function fireEcho(d) {
       s.bolts.push({ x: P.x + d.x * 8, y: P.y + d.y * 8, vx: d.x * T.ECHO_SPEED, vy: d.y * T.ECHO_SPEED, r: T.BOLT_R, dmg: T.ECHO_DMG });
-      s.cooldowns.echo = T.ECHO_CD; ev('echo'); addHeat(T.ECHO_HEAT);
+      s.cooldowns.echo = T.ECHO_CD * mods.cdMul * (upgrades.includes('echo-n') ? T.ECHO_N_MUL : 1); ev('echo'); addHeat(T.ECHO_HEAT);
     }
 
     // ---- enemies ------------------------------------------------------------------------------
-    function updateEnemy(e, dt) {
-      if (e.dead) return;
-      e.flash = Math.max(0, e.flash - dt);
-      if (s.time < e.stunUntil) return;
-      if (e.state === 'drift') {
-        e.heading += (rng() - 0.5) * 2.4 * dt;
-        const vx = Math.cos(e.heading) * e.speed * dt; const vy = Math.sin(e.heading) * e.speed * dt;
-        const m = CK.Rooms.moveCircle(room, e.x, e.y, e.r, vx, vy);
-        if (m.hitX) e.heading = Math.PI - e.heading;
-        if (m.hitY) e.heading = -e.heading;
-        e.x = m.x; e.y = m.y;
-        e.shootTimer -= dt;
-        if (e.shootTimer <= 0) {
-          const d = norm(P.x - e.x, P.y - e.y); const sp = M.orbSpeed * slow;
-          s.orbs.push({ x: e.x, y: e.y, vx: d.x * sp, vy: d.y * sp, r: T.ORB_R, dmg: M.orbDmg, unparryable: false, from: 'enemy', src: e.id });
-          e.shootTimer = e.shootEvery * (0.7 + 0.6 * rng());
-        }
-        e.lungeTimer -= dt;
-        if (e.lungeTimer <= 0) { e.state = 'tell'; e.tellT = M.lungeTell; e.lungeDir = norm(P.x - e.x, P.y - e.y); }
-      } else if (e.state === 'tell') {
-        e.tellT -= dt;
-        if (e.tellT <= 0) { e.state = 'lunge'; e.lungeT = M.lungeTime; }
-      } else if (e.state === 'lunge') {
-        const sp = M.lungeSpeed * slow * dt;
-        const m = CK.Rooms.moveCircle(room, e.x, e.y, e.r, e.lungeDir.x * sp, e.lungeDir.y * sp);
-        e.x = m.x; e.y = m.y; e.lungeT -= dt;
-        if (e.lungeT <= 0) { e.state = 'drift'; e.lungeTimer = e.lungeEvery * (0.7 + 0.6 * rng()); }
-      }
-    }
+    function updateEnemy(e, dt) { CK.Foes.update(e, dt, foeCtx); }
 
     function contact(e) {
       if (e.dead || s.time < e.stunUntil) return;
       if (len(e.x - P.x, e.y - P.y) >= T.PLAYER_R + e.r) return;
       if (e.state === 'lunge' && onLungeContact(e)) return;
-      hurt(e.state === 'lunge' ? M.lungeDmg : M.contactDmg, e.x, e.y);
+      hurt(e.state === 'lunge' ? e.lungeDmg : e.contactDmg, e.x, e.y);
     }
     // `trap` catches a lunge: the mite is stunned (and hittable even if cloaked) and bounced back.
     function onLungeContact(e) {
@@ -161,7 +181,15 @@
     }
 
     // ---- projectiles ---------------------------------------------------------------------------
-    function inWall(o) { return room.solid(Math.floor(o.x / CK.Rooms.TILE), Math.floor(o.y / CK.Rooms.TILE)); }
+    // Shots fly over the void; a bolt that reaches a switch trips it.
+    function inWall(o) {
+      const tx = Math.floor(o.x / CK.Rooms.TILE); const ty = Math.floor(o.y / CK.Rooms.TILE);
+      return room.blocksShots ? room.blocksShots(tx, ty) : room.solid(tx, ty);
+    }
+    function tripSwitch(o) {
+      const tx = Math.floor(o.x / CK.Rooms.TILE); const ty = Math.floor(o.y / CK.Rooms.TILE);
+      if (room.tiles[ty] && room.tiles[ty][tx] === '!') ev('switch', o.x, o.y, { tx, ty });
+    }
     function updateOrbs(dt) {
       s.orbs = s.orbs.filter((o) => {
         o.x += o.vx * dt; o.y += o.vy * dt;
@@ -181,7 +209,7 @@
       });
       s.bolts = s.bolts.filter((b) => {
         b.x += b.vx * dt; b.y += b.vy * dt;
-        if (inWall(b)) return false;
+        if (inWall(b)) { tripSwitch(b); return false; }
         for (const e of alive()) if (hittable(e) && len(e.x - b.x, e.y - b.y) < e.r + b.r) { damage(e, b.dmg); return false; }
         return true;
       });
@@ -189,7 +217,7 @@
 
     // ---- the step ---------------------------------------------------------------------------------
     function step(dt, inp) {
-      if (s.outcome) return;
+      if (s.outcome === 'lose') return; // after a win the Colonel keeps moving; nothing is left to fight
       inp = inp || {};
       s.time += dt;
       P.iframes = Math.max(0, P.iframes - dt);
@@ -213,15 +241,25 @@
       if (inp.trap) startParry();
       if (inp.kill && free && P.dashT <= 0 && P.attackT <= 0) swing(aim);
       if (inp.tool) useTool(inp.tool, aimFor(inp.tool, aimIn));
+      // `kill -9`: keep kill held to charge, release to strike
+      if (upgrades.includes('kill-9')) {
+        if (inp.killHeld && P.dashT <= 0) {
+          P.chargeT += dt;
+          if (!P.charged && P.chargeT >= T.KILL9_CHARGE - 1e-9) { P.charged = true; ev('charge'); }
+        } else {
+          if (P.charged && !inp.killHeld && free && P.dashT <= 0) heavy(aim);
+          P.chargeT = 0; P.charged = false;
+        }
+      }
 
       if (P.dashT > 0) {
         const d = (T.DASH_DIST / T.DASH_TIME) * Math.min(dt, P.dashT);
         const m = CK.Rooms.moveCircle(room, P.x, P.y, T.PLAYER_R, P.dashDir.x * d, P.dashDir.y * d);
         P.x = m.x; P.y = m.y; P.dashT -= dt;
-        if (P.dashT <= 1e-9) { P.dashT = 0; P.dashCd = T.DASH_CD; }
+        if (P.dashT <= 1e-9) { P.dashT = 0; P.dashCd = T.DASH_CD * mods.dashCdMul; }
         P.moving = true;
       } else {
-        const sp = T.MOVE * (P.attackT > 0 ? T.ATTACK_MOVE_MUL : 1) * dt;
+        const sp = T.MOVE * mods.moveMul * (P.attackT > 0 ? T.ATTACK_MOVE_MUL : 1) * dt;
         const m = CK.Rooms.moveCircle(room, P.x, P.y, T.PLAYER_R, mv.x * sp, mv.y * sp);
         P.x = m.x; P.y = m.y;
         P.moving = len(mv.x, mv.y) > 0.1;
@@ -233,7 +271,7 @@
       updateOrbs(dt);
       for (const e of s.enemies) contact(e);
 
-      if (!s.outcome && !alive().length) { s.outcome = 'win'; s.clean = P.hitsTaken === 0; ev('clear'); }
+      if (!s.outcome && s.hadFoes && !alive().length) { s.outcome = 'win'; s.clean = P.hitsTaken === 0; ev('clear'); }
     }
     function startParry() {
       if (P.recoverT > 0 || P.parryT > 0) return;

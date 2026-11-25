@@ -5,9 +5,12 @@
 
   const KEYS = {
     w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right',
-    j: 'kill', k: 'trap', ' ': 'dash', shift: 'dash', '1': 'echo', '2': 'ls',
+    j: 'kill', k: 'trap', ' ': 'dash', shift: 'dash', '1': 'slot0', '2': 'slot1', '3': 'slot2', e: 'use', enter: 'use',
   };
   function mapKey(key) { return (key && KEYS[String(key).toLowerCase()]) || null; }
+  // Keys 1-3 fire the tools in loadout order.
+  function slotTool(list, slot) { const i = Number(String(slot).replace('slot', '')); return (list && list[i]) || null; }
+  const TOOL = { echo: 1, ls: 1, cd: 1 };
 
   // Thumb offset -> movement vector: zero inside the dead zone, rescaled so the zone's edge is 0, clamped to length 1.
   function stickVector(dx, dy, radius, dead) {
@@ -19,14 +22,16 @@
     return { x: (dx / l) * m, y: (dy / l) * m };
   }
 
-  const PRESS = { kill: 1, trap: 1, dash: 1, echo: 1, ls: 1 };
+  const PRESS = { kill: 1, trap: 1, dash: 1, echo: 1, ls: 1, cd: 1, use: 1, slot0: 1, slot1: 1, slot2: 1 };
   const STICK_R = 40;
   const BUTTONS = [
     { act: 'kill', label: '⚔', name: 'kill — strike' },
     { act: 'trap', label: '🛡', name: 'trap — parry' },
     { act: 'dash', label: '»', name: 'dash' },
     { act: 'echo', label: '📣', name: 'echo — shoot' },
-    { act: 'ls', label: '🔦', name: 'ls — reveal' },
+    { act: 'ls', label: '🔦', name: 'ls — light pulse' },
+    { act: 'cd', label: '🌀', name: 'cd — use a terminal or sign' },
+    { act: 'use', label: '✋', name: 'use' },
   ];
 
   function create(o) {
@@ -34,13 +39,15 @@
     const held = { up: false, down: false, left: false, right: false };
     const stick = { id: null, ox: 0, oy: 0, v: { x: 0, y: 0 } };
     let presses = {}; let tool = null; let mouse = null; let lastMouseMove = -1e9;
+    let tools = []; const killHold = { key: false, mouse: false, touch: false };
     const btnPointers = new Map();
 
     function press(act) {
-      if (act === 'echo' || act === 'ls') tool = act; else presses[act] = true;
+      if (/^slot\d$/.test(act)) { const t = slotTool(tools, act); if (t) tool = t; } else if (TOOL[act]) tool = act; else presses[act] = true;
     }
     function clearAll() {
       held.up = held.down = held.left = held.right = false;
+      killHold.key = killHold.mouse = killHold.touch = false;
       stick.id = null; stick.v = { x: 0, y: 0 }; presses = {}; tool = null; btnPointers.clear();
       if (stickEl) stickEl.hidden = true;
       if (pad) pad.querySelectorAll('.ck-tbtn.on').forEach((b) => b.classList.remove('on'));
@@ -50,20 +57,23 @@
     function onKey(e) {
       const a = mapKey(e.key); if (!a) return;
       if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.target && e.target.tagName === 'BUTTON' && (a === 'use' || a === 'dash')) return; // a focused button takes Enter / Space
       e.preventDefault();
       if (a in held) held[a] = true;
       else if (!e.repeat && PRESS[a]) press(a);
+      if (a === 'kill') killHold.key = true;
     }
-    function onKeyUp(e) { const a = mapKey(e.key); if (a && a in held) held[a] = false; }
+    function onKeyUp(e) { const a = mapKey(e.key); if (a && a in held) held[a] = false; if (a === 'kill') killHold.key = false; }
     function onVis() { if (document.hidden) clearAll(); }
 
     // ---- mouse on the canvas ----
     function onCanvasDown(e) {
       if (e.pointerType !== 'mouse') return;
-      if (e.button === 0) press('kill'); else if (e.button === 2) press('trap');
+      if (e.button === 0) { press('kill'); killHold.mouse = true; } else if (e.button === 2) press('trap');
       mouse = toBuffer(e.clientX, e.clientY); lastMouseMove = now();
       e.preventDefault();
     }
+    function onMouseUp(e) { if (e.pointerType === 'mouse' && e.button === 0) killHold.mouse = false; }
     function onCanvasMove(e) { if (e.pointerType === 'mouse') { mouse = toBuffer(e.clientX, e.clientY); lastMouseMove = now(); } }
     function onContext(e) { e.preventDefault(); }
 
@@ -97,8 +107,12 @@
       e.preventDefault();
       btnPointers.set(e.pointerId, b); b.classList.add('on');
       press(b.dataset.act);
+      if (b.dataset.act === 'kill') killHold.touch = true;
     }
-    function onBtnUp(e) { const b = btnPointers.get(e.pointerId); if (b) { b.classList.remove('on'); btnPointers.delete(e.pointerId); } }
+    function onBtnUp(e) {
+      const b = btnPointers.get(e.pointerId);
+      if (b) { b.classList.remove('on'); btnPointers.delete(e.pointerId); if (b.dataset.act === 'kill') killHold.touch = false; }
+    }
     function onAnyTouch(e) { if (e.pointerType === 'touch' && pad.hidden) pad.hidden = false; }
 
     const coarse = !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches);
@@ -109,8 +123,10 @@
       [canvas, 'pointerdown', onCanvasDown], [canvas, 'pointermove', onCanvasMove], [canvas, 'contextmenu', onContext],
       [zone, 'pointerdown', onZoneDown], [zone, 'pointermove', onZoneMove], [zone, 'pointerup', onZoneUp], [zone, 'pointercancel', onZoneUp],
       [pad, 'pointerdown', onBtnDown], [pad, 'pointerup', onBtnUp], [pad, 'pointercancel', onBtnUp], [pad, 'contextmenu', onContext],
-      [root, 'pointerdown', onAnyTouch],
+      [root, 'pointerdown', onAnyTouch], [root, 'pointerup', onMouseUp], [root, 'pointercancel', onMouseUp],
     ];
+    pad.querySelector('.ck-tbtn-use').hidden = true;
+    pad.querySelector('.ck-tbtn-cd').hidden = true;
     L.forEach(([t, n, f]) => t.addEventListener(n, f, n === 'keydown' ? false : { passive: false }));
 
     function now() { return root.performance && performance.now ? performance.now() : Date.now(); }
@@ -121,17 +137,27 @@
         let mx = (held.right ? 1 : 0) - (held.left ? 1 : 0); let my = (held.down ? 1 : 0) - (held.up ? 1 : 0);
         if (stick.v.x || stick.v.y) { mx = stick.v.x; my = stick.v.y; }
         const out = { mx, my, mouse: mouse && now() - lastMouseMove < 2000 ? mouse : null,
-          kill: !!presses.kill, trap: !!presses.trap, dash: !!presses.dash, tool };
+          kill: !!presses.kill, killHeld: killHold.key || killHold.mouse || killHold.touch,
+          trap: !!presses.trap, dash: !!presses.dash, use: !!presses.use, tool };
         presses = {}; tool = null;
         return out;
       },
       showTouch(on) { pad.hidden = !on; },
-      setTools(list) { pad.querySelectorAll('.ck-tbtn-echo, .ck-tbtn-ls').forEach((b) => { b.hidden = !list.includes(b.dataset.act); }); },
+      // Which tools fill the slots (keys 1-3, and which touch tool buttons show).
+      setTools(list) {
+        tools = (list || []).slice();
+        pad.querySelectorAll('.ck-tbtn-echo, .ck-tbtn-ls, .ck-tbtn-cd').forEach((b) => { b.hidden = !tools.includes(b.dataset.act); });
+      },
+      // The touch context button: shown with a label near something to talk to or use.
+      showUse(label) {
+        const b = pad.querySelector('.ck-tbtn-use'); b.hidden = !label;
+        if (label) { b.setAttribute('aria-label', label); b.title = label; }
+      },
       clear: clearAll,
       destroy() { L.forEach(([t, n, f]) => t.removeEventListener(n, f)); pad.remove(); },
     };
     return input;
   }
 
-  CK.Input = { mapKey, stickVector, create, STICK_R };
+  CK.Input = { mapKey, slotTool, stickVector, create, STICK_R };
 })(typeof window !== 'undefined' ? window : globalThis);

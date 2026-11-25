@@ -3,10 +3,44 @@
   'use strict';
   const CK = (root.CK = root.CK || {});
 
+  // `kill -l` / `trap -l` as bash prints them on Linux (first 19 of 64).
+  const SIGNALS = ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGKILL', 'SIGUSR1',
+    'SIGSEGV', 'SIGUSR2', 'SIGPIPE', 'SIGALRM', 'SIGTERM', 'SIGSTKFLT', 'SIGCHLD', 'SIGCONT', 'SIGSTOP'];
+  const sigList = () => {
+    const cells = SIGNALS.map((s, i) => `${String(i + 1).padStart(2, ' ')}) ${s}`);
+    const rows = []; for (let i = 0; i < cells.length; i += 5) rows.push(cells.slice(i, i + 5).map((c) => c.padEnd(13, ' ')).join(' ').trimEnd());
+    return `<pre>${rows.join('\n')}</pre><div class="ck-dim">…up to 64 on Linux</div>`;
+  };
+  const dim = (t) => `<div class="ck-dim">${t}</div>`;
+  function killTerm(line) {
+    if (/^kill\s+-l$/.test(line)) return { ok: true, html: sigList() };
+    const m = line.match(/^kill\s+(?:-\w+\s+)?(\d+)$/);
+    if (m) return { ok: true, html: `bash: kill: (${m[1]}) - No such process` + dim('Down here it hits Glitch Mites instead.') };
+    return { ok: false, html: 'kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]' };
+  }
+  function trapTerm(line) {
+    if (/^trap\s+-l$/.test(line)) return { ok: true, html: sigList() };
+    if (/^trap\s+(['"]).+\1\s+\w+$/.test(line)) return { ok: true, html: dim('Handler set. Down here it catches orbs and lunges.') };
+    return { ok: false, html: dim("try <code>trap 'echo caught' INT</code>") };
+  }
+
   const SKILLS = {
+    kill: {
+      id: 'kill', cmd: 'kill', name: 'Kill Strike', icon: '⚔️', teacher: 'pip', move: true, learnTest: /^kill\s+(-l|-\w+\s+\d+|\d+)$/,
+      blurb: 'Melee combo. Each hit cools your heat a little.',
+      real: '`kill` sends a signal to a process. By default it’s SIGTERM, which asks it to quit politely; `kill -9` sends SIGKILL, which the process can’t catch or ignore.',
+      example: 'kill -l', term: killTerm,
+      upgrade: { id: 'kill-9', cmd: 'kill -9', cost: 50, needs: 'cpu', blurb: 'hold to charge a heavy strike nothing can catch' },
+    },
+    trap: {
+      id: 'trap', cmd: 'trap', name: 'Signal Trap', icon: '🛡️', teacher: 'pip', move: true, learnTest: /^trap\s+(-l|(['"]).+\2\s+\w+)$/,
+      blurb: 'Parry: catch a signal and send it back. Mistimed, it leaves you open.',
+      real: 'In bash, `trap \'echo caught\' INT` runs a command when the shell gets SIGINT (Ctrl+C). Scripts use it to clean up. SIGKILL and SIGSTOP can’t be trapped.',
+      example: "trap 'echo caught' INT", term: trapTerm,
+    },
     echo: {
       id: 'echo', cmd: 'echo', name: 'Echo Bolt', icon: '📣', teacher: 'pip', learnTest: /^echo\s+\S/,
-      blurb: 'Your basic shot. Fast, cheap, reliable.',
+      blurb: 'Ranged bolt. Also trips switches across gaps.',
       real: 'echo prints whatever you give it. `echo hello` prints hello. Add > to write it into a file: `echo hi > note.txt`.',
       example: 'echo "Hello, Fedora"',
       fight: { type: 'bolt', dmg: 10, cd: 0.35, heat: 9 },
@@ -14,19 +48,18 @@
     },
     ls: {
       id: 'ls', cmd: 'ls', name: 'List Scan', icon: '🔦', teacher: 'bios', learnTest: /^ls(\s|$)/,
-      blurb: 'Reveals cloaked things and chips them. On the map, clears fog further out.',
+      blurb: 'Light pulse: lights dark rooms and reveals cloaked creatures.',
       real: 'ls lists what is inside a folder. `ls -a` also shows hidden entries — names starting with a dot.',
       example: 'ls -a ~',
       fight: { type: 'scan', reveal: 4, cd: 3, heat: 15 },
-      upgrade: { id: 'ls-a', cmd: 'ls -a', cost: 40, blurb: 'shows hidden entries: reveals hidden caches on the map, scan lasts 7s' },
+      upgrade: { id: 'ls-a', cmd: 'ls -a', cost: 40, blurb: 'also shows hidden entries: cracked walls to hidden caches, reveal lasts 7s' },
     },
     cd: {
-      id: 'cd', cmd: 'cd', name: 'Change Dash', icon: '🌀', teacher: 'grub', learnTest: /^cd(\s|$)/,
-      blurb: 'Dash along the lane to dodge. On the map, fast-travel to any cleared place.',
+      id: 'cd', cmd: 'cd', name: 'Change Directory', icon: '🌀', teacher: 'grub', learnTest: /^cd(\s|$)/,
+      blurb: 'At a terminal: fast-travel between safe rooms. At a path sign: pick the right path.',
       real: 'cd changes your current directory. `cd Documents` goes in, `cd ..` goes up, plain `cd` goes home, `cd -` jumps back.',
       example: 'cd /boot',
       fight: { type: 'dash', cd: 1.2, heat: 6 },
-      upgrade: { id: 'cd-dash', cmd: 'cd -', cost: 50, needs: 'cpu', blurb: 'jump back to where you were: double dash' },
     },
   };
 
@@ -34,32 +67,32 @@
     ram: { id: 'ram', name: 'RAM Stick', icon: '🟩', slots: 1, real: 'RAM is short-term memory: more of it means more programs open at once without slowing down. Here: +1 loadout slot.' },
     fan: { id: 'fan', name: 'Cooling Fan', icon: '🌬️', heatMul: 0.7, real: 'Hot chips slow themselves down (thermal throttling). Good cooling keeps them at full speed. Here: skills build 30% less heat.' },
     cpu: { id: 'cpu', name: 'CPU Core', icon: '🧠', cdMul: 0.85, real: 'Each CPU core runs its own stream of work, so more cores means more done in parallel. Here: skills recharge 15% faster.' },
-    ssd: { id: 'ssd', name: 'SSD', icon: '💾', travelMul: 0.5, real: 'An SSD stores data on flash chips with no moving parts — far faster than an old spinning hard drive. Here: travel twice as fast.' },
+    ssd: { id: 'ssd', name: 'SSD', icon: '💾', moveMul: 1.2, dashCdMul: 0.75, real: 'An SSD stores data on flash chips with no moving parts — far faster than an old spinning hard drive. Here: you move 20% faster and your dash recharges 25% sooner.' },
   };
 
   const CREATURES = {
     glitchMite: {
       id: 'glitchMite', name: 'Glitch Mite', hp: 30, speed: 90, pattern: 'drift', cloaked: true, count: 3, weak: 'ls',
       shoots: { every: 2.4, speed: 160, dmg: 8 },
-      weakText: '🔦 Cloaked — scan with ls to make them hittable, then echo them.',
+      weakText: '🔦 Cloaked — pulse ls to light them up, then kill.',
       real: 'Before anything boots, firmware runs POST to check each part. Faulty hardware usually shows up as beep codes or a screen that never lights.',
     },
     loopWisp: {
       id: 'loopWisp', name: 'Loop Wisp', hp: 40, speed: 150, pattern: 'blink', cloaked: false, count: 2, weak: 'cd',
       shoots: { every: 1.8, speed: 210, dmg: 10 },
-      weakText: '🌀 Teleports and fires fast — dash with cd to dodge, then hit back.',
+      weakText: '🌀 Blinks, then bursts — dash through the burst and strike.',
       real: 'A broken bootloader setup can loop back to its own menu forever. The real fix is pointing GRUB at the right kernel, often from a live USB.',
     },
     bootGlitch: {
       id: 'bootGlitch', name: 'Corrupt Boot Glitch', boss: true, hp: 220, phases: 2, speed: 120, pattern: 'sweep', cloaked: true, count: 1, weak: 'ls',
       shoots: { every: 1.4, speed: 200, dmg: 10 },
-      weakText: '🔦 Re-cloaks every phase — keep scanning with ls and keep firing.',
+      weakText: '🔦 Re-cloaks every phase — keep pulsing ls. Its red 9 ring is SIGKILL: dash, don’t trap.',
       real: 'If the boot sector or EFI partition is damaged, firmware finds nothing to start and shows "No bootable device".',
     },
     kernelWraith: {
       id: 'kernelWraith', name: 'Missing Kernel Wraith', boss: true, hp: 300, phases: 3, speed: 170, pattern: 'blink', cloaked: true, count: 1, weak: 'cd',
       shoots: { every: 1.2, speed: 230, dmg: 12 },
-      weakText: '🌀🔦 Blinks and cloaks — dash with cd, scan with ls, echo it down.',
+      weakText: '🌀🔦 Blinks and cloaks — pulse ls, dash its SIGKILL ring, kill it.',
       real: 'If GRUB cannot find the kernel file (vmlinuz) in /boot, the menu entry fails with “error: file … not found” and you drop back to the menu. Fedora keeps a few older kernels there so you can boot one of those instead.',
     },
   };
@@ -71,7 +104,7 @@
         '…boot sequence… hey. HEY. Oh good, you’re awake. I was starting to talk to myself, and honestly? Terrible company.',
         'I’m Pip. PID 1. On Linux the very first program the kernel starts gets process ID 1, and it starts and babysits everything else. So yes — I’m technically your oldest friend. You’re welcome.',
         'You don’t remember who you are? Great. Fantastic. My memory’s scrambled too, so that makes two of us. Let’s fix this machine and hope it shakes something loose.',
-        'Lesson one: echo. In a real terminal it repeats whatever you tell it — `echo hello` prints hello. Thrilling, I know. Down here it’s your basic shot. Type it in.',
+        'Lesson one: kill. In a real terminal it sends a signal to a process — SIGTERM by default, a polite “please stop”. Down here it’s your fists. Type it.',
       ],
     },
     bios: {
@@ -80,7 +113,7 @@
         'HALT. Who goes there? …Oh. A kernel-shaped thing. You look terrible.',
         'I’m BIOS. Technically UEFI these days, but nobody can pronounce that. I’m firmware: code baked into the motherboard that runs before any operating system.',
         'My job is POST — Power-On Self-Test. Check every part is alive, find something bootable, hand over control. Simple. Normally.',
-        'But Glitch Mites got in. Cloaked little pests. You can’t hit what you can’t see — so take ls. It lists what’s in a place. Type it.',
+        'But Glitch Mites got in. Cloaked little pests. You can’t hit what you can’t see — so take ls. It lists what’s in a place. Down here it’s a light pulse. Type it.',
       ],
     },
     grub: {
@@ -89,7 +122,7 @@
         'Oh hi! Welcome to the boot menu! I’m GRUB — GRand Unified Bootloader. Yes, I’m a grub. Yes, the jokes write themselves.',
         'Firmware hands control to me. I find the Linux kernel on the disk, load it into memory, give it its settings, and press GO.',
         'Except the kernel I’m supposed to load has… gone missing. And something keeps rewriting my paths into loops.',
-        'You’ll want cd — change directory. In a terminal it moves you between folders. Out here it lets you dash and fast-travel. Type it!',
+        'You’ll want cd — change directory. In a terminal it moves you between folders. Out here it works the old terminals and my path signs. Type it!',
         'Fun fact: Fedora hides my menu unless something went wrong. Hold Shift or tap Esc while the computer starts and you’ll see me.',
       ],
     },
@@ -117,18 +150,18 @@
 
   const firmware = {
     id: 'firmware', name: 'Firmware Foundry', accent: '#ffb347', start: 'f0', boss: 'f12', exit: 'f13',
-    intro: ['Firmware Foundry. This is where a computer wakes up — before Linux, before anything. Cozy. Well, no. Dark.', 'Tap a glowing node to move. Fog hides everything we haven’t explored. Scary? A bit. Don’t worry, I’ll float right next to you. Someone has to.', 'Weird… I’m picking up a faint signal deep inside the system. Small. Penguin-shaped? Let’s boot this machine and find out.'],
+    intro: ['Firmware Foundry. This is where a computer wakes up — before Linux, before anything. Cozy. Well, no. Dark.', 'Walk with WASD or your left thumb. Doors lead on; my map in Pip’s panel shows where we’ve been. Don’t worry, I’ll float right next to you. Someone has to.', 'Weird… I’m picking up a faint signal deep inside the system. Small. Penguin-shaped? Let’s boot this machine and find out.'],
     outro: ['POST complete! The firmware found a bootable disk and is handing control to the bootloader. Look at you, being useful.', '…did you feel that? A memory. Something about “Linux version 6.19”. Weird. Let’s keep moving before you get sentimental.'],
     nodes: {
-      f0: n(120, 520, 'Cold Boot', 'start'),
+      f0: n(120, 520, 'Cold Boot', 'start', undefined, { dark: true }),
       f1: n(300, 520, 'Power Rail', 'character', 'pip'),
       f2: n(300, 300, 'CMOS Cell', 'memory', '[    0.000000] Linux version 6.19.8-200.fc44.x86_64 (mockbuild@fedoraproject.org)'),
       f3: n(500, 520, 'Firmware Vault', 'character', 'bios'),
-      f4: n(480, 780, 'Boot ROM', 'memory', '[    0.000000] efi: EFI v2.9 by LilNux Firmware'),
+      f4: n(480, 780, 'Boot ROM', 'memory', '[    0.000000] efi: EFI v2.9 by LilNux Firmware', { dark: true }),
       f5: n(700, 390, 'RAM Bank', 'problem', { skill: 'ls', creature: 'glitchMite', title: 'Unchecked RAM bank', real: 'POST checks memory before boot. Looking first with ls is the same habit: inspect before you act.' }),
       f6: n(720, 170, 'DIMM Slot', 'item', 'ram'),
       f7: n(720, 690, 'PCIe Lane', 'problem', { skill: 'ls', creature: 'glitchMite', title: 'Silent PCIe lane', real: 'Graphics cards and NVMe drives sit on PCIe lanes. On real Linux, `lspci` lists every device the kernel found there.' }),
-      f8: n(900, 860, 'Option ROM', 'memory', '[    0.000000] BIOS-provided physical RAM map:'),
+      f8: n(900, 860, 'Option ROM', 'memory', '[    0.000000] BIOS-provided physical RAM map:', { dark: true }),
       f9: n(950, 520, 'Power Bus', 'circuit', { grid: grid(['S1 I1 L2 L0', 'I0 T0 I0 L1', 'L3 I1 L0 G3', 'T1 L2 I1 X0']) }),
       f10: n(1150, 320, 'ACPI Table', 'memory', '[    0.004000] ACPI: Early table checksum verification disabled'),
       f11: n(1150, 710, 'Clock Gen', 'memory', '[    0.000000] DMI: LilNux Systems Fedora Box, BIOS 1.44 11/22/2026'),
@@ -137,7 +170,8 @@
       f14: n(560, 250, 'Hidden Cache', 'item', { bits: 20 }, { hidden: true }),
       f15: n(1060, 940, 'Hidden Cache', 'item', { bits: 25 }, { hidden: true }),
     },
-    edges: [['f0', 'f1'], ['f1', 'f2'], ['f1', 'f3'], ['f3', 'f14'], ['f2', 'f14'], ['f3', 'f4'], ['f3', 'f5'], ['f3', 'f7'], ['f5', 'f6'], ['f5', 'f9'],
+    cells: { f0: [0, 1], f1: [1, 1], f2: [1, 0], f14: [2, 0], f3: [2, 1], f4: [1, 2], f5: [3, 1], f6: [3, 0], f7: [2, 2], f9: [3, 2], f10: [4, 2], f8: [2, 3], f11: [3, 3], f12: [4, 3], f13: [5, 3], f15: [2, 4] },
+    edges: [['f0', 'f1'], ['f1', 'f2'], ['f1', 'f3'], ['f3', 'f14'], ['f2', 'f14'], ['f1', 'f4'], ['f3', 'f5'], ['f3', 'f7'], ['f5', 'f6'], ['f5', 'f9'],
       ['f7', 'f8'], ['f7', 'f9'], ['f8', 'f15'], ['f9', 'f10'], ['f9', 'f11'], ['f10', 'f12'], ['f11', 'f12'], ['f12', 'f13']],
   };
 
@@ -159,18 +193,19 @@
       g10: n(1150, 250, 'Kernel Params', 'memory', '[    0.412345] Memory: 15981232K/16642560K available'),
       g11: n(1150, 820, 'Root UUID', 'memory', '[    1.204561] Run /init as init process'),
       g12: n(1330, 500, 'Kernel Handoff', 'boss', { creature: 'kernelWraith', drop: 'ssd' }),
-      g13: n(1500, 500, 'Home', 'character', 'liltux'),
+      g13: n(1500, 500, 'Home', 'character', 'liltux', { accent: '#f5a623' }),
       g14: n(480, 140, 'Hidden Cache', 'item', { bits: 30 }, { hidden: true }),
       g15: n(900, 950, 'Hidden Cache', 'item', { bits: 30 }, { hidden: true }),
     },
-    edges: [['g0', 'g1'], ['g1', 'g2'], ['g1', 'g3'], ['g1', 'g4'], ['g2', 'g14'], ['g3', 'g5'], ['g5', 'g14'], ['g3', 'g7'], ['g4', 'g6'], ['g4', 'g7'],
+    cells: { g0: [0, 1], g1: [1, 1], g2: [1, 0], g14: [2, 0], g3: [2, 1], g5: [3, 1], g4: [1, 2], g7: [2, 2], g8: [3, 2], g10: [4, 2], g6: [1, 3], g9: [2, 3], g11: [3, 3], g12: [4, 3], g13: [5, 3], g15: [1, 4] },
+    edges: [['g0', 'g1'], ['g1', 'g2'], ['g1', 'g3'], ['g1', 'g4'], ['g2', 'g14'], ['g3', 'g5'], ['g3', 'g14'], ['g3', 'g7'], ['g4', 'g6'], ['g4', 'g7'],
       ['g6', 'g15'], ['g7', 'g8'], ['g7', 'g9'], ['g8', 'g10'], ['g9', 'g11'], ['g10', 'g12'], ['g11', 'g12'], ['g12', 'g13']],
   };
 
   const TASKS = {
     'bios-check': { id: 'bios-check', giver: 'bios', text: 'Run POST on every part: clear all problems in the Foundry', goal: { type: 'clearKind', region: 'firmware', kind: 'problem' }, bits: 25 },
     'grub-memories': { id: 'grub-memories', giver: 'grub', text: 'Recover all 5 boot memories at the Gate', goal: { type: 'memories', region: 'grub', count: 5 }, bits: 25 },
-    'pip-clean': { id: 'pip-clean', giver: 'pip', text: 'Win 3 clean fixes (no fight)', goal: { type: 'clean', count: 3 }, bits: 30 },
+    'pip-clean': { id: 'pip-clean', giver: 'pip', text: 'Clear 3 problem rooms without taking a hit', goal: { type: 'clean', count: 3 }, bits: 30 },
   };
 
   CK.World = { SKILLS, MODULES, CREATURES, CHARACTERS, REGIONS: [firmware, grubRegion], TASKS, grid };

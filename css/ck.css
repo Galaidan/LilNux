@@ -1,6 +1,5 @@
 /* Full-screen host for the Colonel Kernel mode */
 #ck-root { position: fixed; inset: 0; z-index: 40; background: #060a1c; }
-#ck-root .ck-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 body.ck-open { overflow: hidden; }
 
 /* Colonel Kernel — Neon Circuit overlay styles */
@@ -44,22 +43,6 @@ body.ck-open { overflow: hidden; }
 .ck-orb { width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, var(--c-cyan) 45%, #1673d6); box-shadow: 0 0 12px var(--c-cyan); position: relative; }
 .ck-orb::after { content: "1"; position: absolute; right: -5px; top: -5px; width: 12px; height: 12px; border-radius: 50%; background: var(--c-magenta); font: 800 8px/12px var(--font); text-align: center; color: #fff; }
 .ck-orb.big { width: 30px; height: 30px; }
-
-/* Skill bar */
-.ck-bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 8px; align-items: stretch;
-  padding: 8px; border-radius: 20px; background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); max-width: calc(100vw - 24px); }
-.ck-hint { align-self: center; padding: 0 10px; color: var(--c-dim); font-size: 13px; }
-.ck-skill { --cd: 0; position: relative; min-width: 64px; min-height: 56px; padding: 6px 10px 6px 8px; border-radius: 14px; border: 1px solid rgba(56, 242, 255, .3);
-  background: rgba(10, 16, 40, .85); color: var(--c-ink); display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 6px; align-items: center; cursor: pointer; overflow: hidden; }
-.ck-skill .k { grid-row: 1; font: 800 10px var(--mono); color: var(--c-dim); }
-.ck-skill .i { grid-row: 1; font-size: 18px; }
-.ck-skill code { grid-column: 1 / 3; background: none; padding: 0; font-size: 13px; }
-.ck-skill .cd { position: absolute; inset: 0; background: rgba(3, 6, 18, .72); transform-origin: bottom; transform: scaleY(var(--cd)); pointer-events: none; }
-.ck-skill.sel { border-color: var(--c-magenta); box-shadow: 0 0 0 1px var(--c-magenta), 0 0 18px rgba(255, 79, 216, .45); }
-.ck-heat { position: relative; width: 74px; border-radius: 12px; background: rgba(10, 16, 40, .85); border: 1px solid rgba(255, 179, 71, .4); overflow: hidden; display: grid; place-items: center; }
-.ck-heat i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #ffb347, #ff5d73); opacity: .75; transition: width .1s; }
-.ck-heat span { position: relative; font: 800 11px var(--font); letter-spacing: .15em; }
-.ck-heat.hot { animation: ck-blink .3s infinite alternate; }
 @keyframes ck-blink { to { border-color: var(--c-coral); box-shadow: 0 0 16px var(--c-coral); } }
 
 /* Dialogue */
@@ -161,45 +144,11 @@ body.ck-open { overflow: hidden; }
 .ck-log li.k-you b { color: var(--c-magenta); }
 .ck-log li.k-toast { color: #d7e2ff; }
 .ck-log li.k-system { color: var(--c-dim); font-style: italic; }
-.ck-legend { position: absolute; left: max(12px, env(safe-area-inset-left)); top: calc(max(10px, env(safe-area-inset-top)) + 92px); width: 230px; border-radius: 16px; padding: 6px;
-  background: rgba(8, 12, 32, .82); border: 1px solid var(--edge); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 12.5px; z-index: 2; }
-.ck-legend > .ck-btn { width: 100%; justify-content: space-between; min-height: 44px; }
-.ck-legend.closed { width: auto; }
-.ck-legend.closed ul { display: none; }
-.ck-legend ul { list-style: none; margin: 6px 4px 4px; padding: 0; display: grid; gap: 6px; }
-.ck-legend li { display: flex; align-items: center; gap: 8px; }
-.ck-legend i { flex: 0 0 auto; width: 22px; height: 15px; border-radius: 5px; border: 2px solid; background: rgba(10, 16, 40, .9); }
-.ck-legend i.dim { border-color: rgba(127, 139, 179, .6); }
-.ck-legend i.line { height: 0; border-radius: 0; border-width: 2px 0 0; border-style: dashed; border-color: rgba(56, 242, 255, .5); background: none; }
-.ck-legend i.line.lit { border-style: solid; box-shadow: 0 0 8px currentColor; }
-.ck-leg-note { color: var(--c-dim); }
-@media (max-width: 560px) { .ck-legend { top: calc(max(10px, env(safe-area-inset-top)) + 120px); } }
 
 @media (max-width: 560px) {
   .ck-legend { top: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 84px); }
   .ck-mode { height: 30px; padding: 0 9px; font-size: 10.5px; letter-spacing: .08em; }
 }
-
-/* Hover info */
-.ck-tip { position: fixed; z-index: 9; max-width: 280px; padding: 8px 12px; border-radius: 12px; pointer-events: none;
-  background: rgba(10, 14, 38, .96); border: 1px solid var(--c-cyan); color: var(--c-ink); font-size: 13px; line-height: 1.4; box-shadow: 0 0 18px rgba(56, 242, 255, .25); }
-.ck-tip b { color: var(--c-cyan); }
-.ck-tip small { color: var(--c-dim); }
-
-/* ---------------------------------------------------------------- action slice (pixel room) */
-#ck-slice {
-  --c-cyan: #38f2ff; --c-magenta: #ff4fd8; --c-mint: #6dffb0; --c-amber: #ffb347; --c-coral: #ff5d73; --c-ink: #eef4ff; --c-dim: #a9b6da;
-  --glass: rgba(14, 20, 48, 0.82); --edge: rgba(56, 242, 255, 0.35);
-  --font: "Adwaita Sans", Cantarell, "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; --mono: "Adwaita Mono", ui-monospace, Menlo, monospace;
-  position: fixed; inset: 0; z-index: 40; background: #060a1c; color: var(--c-ink); font: 15px/1.4 var(--font);
-  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; overflow: hidden;
-}
-#ck-slice .ck-pix { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; image-rendering: pixelated; image-rendering: crisp-edges; }
-#ck-slice code { font-family: var(--mono); color: var(--c-cyan); }
-
-.ck-shud { position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top));
-  display: flex; align-items: center; gap: 10px; pointer-events: none; }
-.ck-shud > * { pointer-events: auto; }
 .ck-sbar { display: flex; flex-direction: column; gap: 3px; font: 800 10px var(--mono); letter-spacing: .1em; color: var(--c-dim); text-transform: uppercase;
   padding: 5px 8px; border-radius: 10px; background: var(--glass); border: 1px solid var(--edge); } /* glass backing: labels stay readable over the pale plaza */
 .ck-ssegs { display: flex; gap: 2px; }
@@ -209,19 +158,6 @@ body.ck-open { overflow: hidden; }
 .ck-sheat { width: 80px; height: 8px; background: #1c2448; border: 1px solid #2b3768; position: relative; }
 .ck-sheat b { position: absolute; inset: 0 auto 0 0; background: var(--c-amber); }
 .ck-sheat.hot b { background: var(--c-coral); }
-.ck-sbtn { min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--edge); background: var(--glass); color: var(--c-ink);
-  font: 700 14px var(--font); cursor: pointer; }
-.ck-sbtn:focus-visible { outline: 2px solid var(--c-cyan); outline-offset: 2px; }
-.ck-shud .ck-spacer { flex: 1; }
-.ck-pipline { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); top: calc(max(8px, env(safe-area-inset-top)) + 54px); max-width: min(560px, 80vw);
-  padding: 8px 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--edge); font-size: 14px; pointer-events: none; }
-.ck-pipline:empty { display: none; }
-.ck-pipline b { color: var(--c-cyan); }
-.ck-shint { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); padding: 6px 12px; border-radius: 10px;
-  background: var(--glass); border: 1px solid var(--edge); font-size: 13px; color: var(--c-dim); display: flex; gap: 10px; align-items: center; }
-.ck-shint b { color: var(--c-ink); }
-.ck-shint { pointer-events: none; } /* lets thumbs through to the stick; only its ✓ takes taps */
-.ck-shint button { pointer-events: auto; }
 /* Tool chips: a dark sweep shows how much cooldown is left (--cd runs 1 → 0). */
 .ck-tool { --cd: 0; position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: 10px;
   border: 1px solid var(--edge); background: var(--glass); font: 700 13px var(--mono); color: var(--c-cyan); }
@@ -232,8 +168,6 @@ body.ck-open { overflow: hidden; }
 .ck-tbtn-echo, .ck-tbtn-ls { --cd: 0; overflow: hidden; }
 .ck-tbtn-echo::after, .ck-tbtn-ls::after { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
   background: conic-gradient(rgba(6, 10, 28, .75) calc(var(--cd) * 360deg), transparent 0); }
-@media (pointer: coarse) { .ck-shud .ck-tool { display: none; } } /* phones show cooldown on the touch buttons */
-.ck-shint[hidden] { display: none; }
 
 .ck-touchpad { position: absolute; inset: 0; z-index: 2; pointer-events: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ck-touchpad[hidden] { display: none; }
@@ -257,4 +191,32 @@ body.ck-open { overflow: hidden; }
 .ck-rotate .ph { width: 54px; height: 90px; border: 3px solid var(--c-cyan); border-radius: 12px; box-shadow: 0 0 18px rgba(56, 242, 255, .4); animation: ck-turn 2.4s ease-in-out infinite; }
 @keyframes ck-turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
 @media (prefers-reduced-motion: reduce) { .ck-rotate .ph { animation: none; transform: rotate(-90deg); } }
-@media (orientation: portrait) and (pointer: coarse) { #ck-slice .ck-rotate { display: flex; } }
+
+/* ---------------------------------------------------------------- room-based Adventure */
+#ck-root .ck-pix { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; image-rendering: pixelated; image-rendering: crisp-edges; }
+#ck-root { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.ck-act { position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left)); top: calc(max(8px, env(safe-area-inset-top)) + 52px);
+  display: flex; gap: 8px; align-items: center; pointer-events: none; }
+.ck-act[hidden] { display: none; }
+.ck-prompt { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); padding: 6px 14px; border-radius: 12px;
+  background: var(--glass); border: 1px solid var(--edge); color: var(--c-ink); font: 700 14px var(--font); pointer-events: none; }
+.ck-prompt[hidden] { display: none; }
+.ck-prompt kbd { font: 800 12px var(--mono, monospace); color: var(--c-cyan); border: 1px solid #2b3768; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+@media (pointer: coarse) { .ck-prompt { display: none; } .ck-act .ck-tool { display: none; } }
+.ck-tbtn-cd { width: 44px; height: 44px; right: 80px; bottom: 124px; font-size: 18px; }
+.ck-tbtn-use { width: 56px; height: 56px; right: 0; bottom: 162px; border-color: var(--c-mint); font-size: 22px; }
+#ck-root .ck-rotate .ck-btn { min-height: 44px; }
+@media (orientation: portrait) and (pointer: coarse) { #ck-root .ck-rotate { display: flex; } }
+/* Pip's map: one square per room, lit = visited, dim = seen, blank = unknown */
+.ck-map { display: grid; gap: 4px; margin: 8px 0 12px; }
+.ck-map > div { min-width: 44px; min-height: 44px; border-radius: 6px; border: 1px solid #1c2448; background: #0b1026; display: flex; align-items: center; justify-content: center;
+  font: 700 18px var(--font); color: var(--c-dim); image-rendering: pixelated; }
+.ck-map > div.dim { background: #141c40; border-color: #2b3768; }
+.ck-map > div.lit { background: #1f3a5a; border-color: var(--c-cyan); color: var(--c-ink); }
+.ck-map > div.here { box-shadow: 0 0 0 2px var(--c-mint), 0 0 12px var(--c-mint); }
+.ck-map > div.empty { visibility: hidden; }
+.ck-mapkey { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; font-size: 13px; color: var(--c-dim); }
+.ck-mapkey b { color: var(--c-ink); display: inline-block; width: 22px; text-align: center; }.ck-pz { position: absolute; z-index: 60; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 12px; align-items: center;
+  max-width: min(640px, 92vw); padding: 8px 12px; border-radius: 14px; background: var(--glass, rgba(14,20,48,.82)); border: 1px solid var(--edge, rgba(56,242,255,.35)); color: #eef4ff; font: 14px/1.35 system-ui, sans-serif; }
+.ck-pz p { margin: 0; }
+.ck-pz .ck-dim { color: #a9b6da; }

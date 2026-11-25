@@ -29,7 +29,20 @@
 
   const tileAt = (room, tx, ty) => (tx < 0 || ty < 0 || tx >= room.cols || ty >= room.rows ? '~' : room.tiles[ty][tx]);
   const isVoid = (room, tx, ty) => tileAt(room, tx, ty) === '~';
-  const WALK = { '.': 1, ',': 1, P: 1, m: 1, '%': 1 };
+  const WALK = { '.': 1, ',': 1, P: 1, m: 1, '%': 1, w: 1, G: 1, K: 1, '>': 1 };
+  // Every legend character paint() understands (rooms.js has the meanings).
+  const TILES = '#.,DPmo~&%HT=_!tcp*sb>wGK';
+  // What paint() draws for each room tile: side doors are bridge ends, a retracted bridge is void,
+  // props (terminal, NPC spot, pedestal, crystal, sign, switch, block, gate) stand on plain plaza.
+  function artView(room) {
+    const tiles = room.tiles.map((row, ty) => row.map((c) => {
+      if (c === 'D' && ty > 0) return '=';
+      if (c === '_') return '~';
+      if ('tcp*s!b>'.includes(c)) return '.';
+      return c;
+    }));
+    return { cols: room.cols, rows: room.rows, w: room.w, h: room.h, tiles, landmarks: room.landmarks || [] };
+  }
   const isWall = (c) => c === '#' || c === 'D';
 
   // Void tiles with ground directly above them: where a plaza's cliff face hangs down.
@@ -45,6 +58,7 @@
 
   function paint(room, opts) {
     opts = opts || {};
+    room = artView(room);
     const accent = opts.accent || '#ffb347';
     const R = rngOf(opts.seed || 7);
     const ground = canvasOf(room.w, room.h); const g = ground.getContext('2d');
@@ -172,6 +186,17 @@
       const bloomAbove = tileAt(room, tx, ty - 1) === '&' || tileAt(room, tx, ty - 1) === '%';
       const nv = bloomAbove ? 3 : R() < 0.4 ? 1 : 0;
       for (let k = 0; k < nv; k++) vines(x + 1 + Math.floor(R() * 14), y, 6 + Math.floor(R() * (depth - 6)));
+    }
+
+    // ---- 6b. bridges: narrow walkways of darker board with rails, cables sagging underneath ----
+    for (let ty = 0; ty < room.rows; ty++) for (let tx = 0; tx < room.cols; tx++) {
+      if (tileAt(room, tx, ty) !== '=') continue;
+      const x = tx * TILE; const y = ty * TILE;
+      const vert = tileAt(room, tx, ty - 1) === '=' || tileAt(room, tx, ty + 1) === '=' || ty === 0 || ty === room.rows - 1;
+      box(g, x, y, TILE, TILE, ART.cliff0);
+      for (let k = 2; k < TILE; k += 4) { if (vert) box(g, x + 1, y + k, TILE - 2, 2, ART.slabLo); else box(g, x + k, y + 1, 2, TILE - 2, ART.slabLo); }
+      if (vert) { box(g, x, y, 1, TILE, ART.rim); box(g, x + 15, y, 1, TILE, ART.cliff2); }
+      else { box(g, x, y, TILE, 1, ART.rim); box(g, x, y + 15, TILE, 1, ART.cliff2); }
     }
 
     // ---- 7. corruption creep on the floor (and spilling round blooms) ----
@@ -337,5 +362,5 @@
     return img;
   }
 
-  CK.RoomArt = { ART, cliffs, paint, deep, vignette };
+  CK.RoomArt = { ART, TILES, cliffs, paint, deep, vignette };
 })(typeof window !== 'undefined' ? window : globalThis);

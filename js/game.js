@@ -155,11 +155,10 @@
     stopSpeak();
     if (where !== 'world') run = null;
     if (where !== 'kernel' && window.CK && CK.close) CK.close();
-    if (where !== 'slice' && window.CK && CK.closeSlice) CK.closeSlice();
     if (!me() && where !== 'players') where = 'players';
     window.scrollTo(0, 0);
     view = where;
-    ({ hub: renderHub, players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel, slice: openSlice })[where](arg);
+    ({ hub: renderHub, players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel })[where](arg);
     renderTop();
   }
 
@@ -193,24 +192,29 @@
             <span class="hub-kicker">🎮 Adventure mode</span>
             <h2>Colonel Kernel</h2>
             <p>A neon videogame. Explore a broken computer, learn real commands as powers, beat glitchy bosses — and save Lil Tux.</p>
-            <ul><li>Story, fog of war &amp; boss fights</li><li>Upgrades, secrets &amp; a sarcastic sidekick</li><li>Best for ages 12+</li></ul>
+            <ul><li>Room-to-room action: dash, parry &amp; boss fights</li><li>Upgrades, secrets &amp; a sarcastic sidekick</li><li>Best for ages 12+ · play sideways on a phone</li></ul>
             <span class="hub-progress">${esc(adventureStatus(p))}</span>
             <button class="primary neon" data-go="kernel">Play adventure →</button>
-            <button class="ghost" data-go="slice" title="Preview of the new action-adventure style: one training room">🧪 Try the new action room</button>
           </article>
         </div>
       </section>`;
     drawHubPreview($('.hub-preview'));
   }
+  // The Adventure card's picture: the Colonel, Pip and Lil Tux as pixel art on a slice of circuit plaza.
   function drawHubPreview(c) {
-    if (!c || !window.CK || !CK.Art) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); const w = c.clientWidth || 320; const h = c.clientHeight || 150;
-    c.width = w * dpr; c.height = h * dpr;
-    const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
-    CK.Art.background(x, { w, h, ox: 0, oy: 0 }, 2, '#8b5cff');
-    CK.Art.colonel(x, w * 0.42, h * 0.62, 1.05, 1, { reduced: true });
-    CK.Art.pip(x, w * 0.24, h * 0.36, 1.1, 1);
-    CK.Art.liltux(x, w * 0.72, h * 0.58, 0.42, 1);
+    if (!c || !window.CK || !CK.Sprites || !CK.Pixel) return;
+    const w = c.clientWidth || 320; const h = c.clientHeight || 150;
+    const k = Math.max(2, Math.round(h / 60)); const bw = Math.ceil(w / k); const bh = Math.ceil(h / k);
+    c.width = bw * k; c.height = bh * k;
+    const buf = document.createElement('canvas'); buf.width = bw; buf.height = bh; const g = buf.getContext('2d');
+    g.fillStyle = '#060a1c'; g.fillRect(0, 0, bw, bh);
+    g.fillStyle = '#a9e4d6'; g.fillRect(0, Math.round(bh * 0.55), bw, bh); g.fillStyle = '#7fbfb3'; g.fillRect(0, Math.round(bh * 0.55), bw, 1);
+    for (let x = 6; x < bw; x += 24) { g.fillStyle = '#74b3a8'; g.fillRect(x, Math.round(bh * 0.7), 12, 1); }
+    const S = CK.Sprites.built(); const feet = Math.round(bh * 0.86);
+    CK.Pixel.draw(g, S.colonel_down_0, Math.round(bw * 0.42), feet);
+    CK.Pixel.draw(g, S.pip, Math.round(bw * 0.27), Math.round(bh * 0.45));
+    CK.Pixel.draw(g, S.liltux, Math.round(bw * 0.68), feet);
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(buf, 0, 0, bw * k, bh * k);
   }
 
   // ---------------------------------------------------------------- Colonel Kernel (videogame mode)
@@ -221,13 +225,6 @@
       root: document.body, player: me(), save, addXP, giveBadge, speak,
       sound: SFX, soundOn: () => S.sound, onExit: () => go('hub'),
     });
-  }
-
-  // Preview of the new action-adventure style (one training room). Doesn't touch the Adventure save.
-  function openSlice() {
-    renderHub();
-    if (!window.CK || !CK.openSlice) { toast('The action room could not load.'); return; }
-    CK.openSlice({ root: document.body, player: me(), sound: SFX, soundOn: () => S.sound, onExit: () => go('hub') });
   }
 
   // ---------------------------------------------------------------- players screen
