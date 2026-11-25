@@ -17,11 +17,12 @@
 
   function fresh() {
     return {
-      v: 1, region: 'firmware', node: 'f0', prev: null, explored: { firmware: ['f0'] }, cleared: {},
+      v: 2, region: 'firmware', node: 'f0', prev: null, explored: { firmware: ['f0'] }, cleared: {},
       learned: [], equipped: [], upgrades: [], modules: [], bits: 0, memories: [], tasksDone: [], codex: [],
+      switches: [], signs: [],
       checkpoint: { region: 'firmware', node: 'f0' }, stats: { clean: 0, fights: 0, wins: 0 },
       chapterDone: false, seenIntro: false, log: [],
-      story: { liltuxMet: false, liltuxTaken: false, restUnlocked: false, rests: 0, lastSeen: 0, glitched: [], oddLogs: [], flicker: false, playMs: 0, lastReminderMs: 0 },
+      story: { liltuxMet: false, liltuxTaken: false, restUnlocked: false, rests: 0, lastSeen: 0, glitched: [], oddLogs: [], flicker: false, playMs: 0, lastReminderMs: 0, newMoves: false },
     };
   }
 
@@ -46,7 +47,7 @@
     s.prev = nodeOk && typeof raw.prev === 'string' ? raw.prev : null;
     s.explored = mapOfLists(raw.explored, s.explored);
     s.cleared = mapOfLists(raw.cleared, {});
-    ['learned', 'equipped', 'upgrades', 'modules', 'memories', 'tasksDone', 'codex'].forEach((k) => { s[k] = strList(raw[k], []); });
+    ['learned', 'equipped', 'upgrades', 'modules', 'memories', 'tasksDone', 'codex', 'switches', 'signs'].forEach((k) => { s[k] = strList(raw[k], []); });
     s.bits = Number.isFinite(raw.bits) && raw.bits >= 0 ? Math.floor(raw.bits) : 0;
     if (isObj(raw.stats)) for (const k of Object.keys(s.stats)) if (Number.isFinite(raw.stats[k])) s.stats[k] = raw.stats[k];
     s.chapterDone = raw.chapterDone === true;
@@ -57,9 +58,17 @@
     }
     if (isObj(raw.story)) {
       const r = raw.story; const st = s.story;
-      for (const k of ['liltuxMet', 'liltuxTaken', 'restUnlocked', 'flicker']) st[k] = r[k] === true;
+      for (const k of ['liltuxMet', 'liltuxTaken', 'restUnlocked', 'flicker', 'newMoves']) st[k] = r[k] === true;
       for (const k of ['rests', 'lastSeen', 'playMs', 'lastReminderMs']) st[k] = Number.isFinite(r[k]) && r[k] >= 0 ? r[k] : 0;
       st.glitched = strList(r.glitched, []); st.oddLogs = strList(r.oddLogs, []);
+    }
+    // v1 -> v2 (the action rebuild): anyone who met Pip gets the new moves; the removed `cd -` upgrade is refunded.
+    if (!(raw.v >= 2)) {
+      if (s.learned.includes('echo')) {
+        for (const id of ['kill', 'trap']) { if (!s.learned.includes(id)) s.learned.push(id); if (!s.codex.includes(id)) s.codex.push(id); }
+        s.story.newMoves = true;
+      }
+      if (s.upgrades.includes('cd-dash')) { s.upgrades = s.upgrades.filter((u) => u !== 'cd-dash'); s.bits += 50; }
     }
     return s;
   }

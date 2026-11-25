@@ -191,7 +191,7 @@ test('move reports first visits and clears non-blocking nodes', () => {
 
 test('sanitize repairs unknown ids from corrupt or future saves', () => {
   const s = State.load({
-    region: 'firmware', node: 'f3', checkpoint: { region: 'firmware', node: 'f99' },
+    v: 2, region: 'firmware', node: 'f3', checkpoint: { region: 'firmware', node: 'f99' },
     explored: { firmware: ['f0', 'f1', 'zzz'], mars: ['x'] }, cleared: { firmware: ['f5', 'nope'] },
     learned: ['echo', 'ls', 'cd', 'grep'], equipped: ['grep', 'echo', 'ls', 'cd'], codex: ['grep', 'echo'],
     upgrades: ['ls-a', 'bogus'], modules: ['quantum'], tasksDone: ['bios-check', 'nope'],
@@ -209,7 +209,7 @@ test('sanitize repairs unknown ids from corrupt or future saves', () => {
 });
 
 test('sanitize moves an unknown node to the checkpoint and an unknown region to the start', () => {
-  const a = State.load({ region: 'firmware', node: 'f99', checkpoint: { region: 'firmware', node: 'f3' }, explored: { firmware: ['f0', 'f1', 'f3'] }, learned: ['echo'] });
+  const a = State.load({ v: 2, region: 'firmware', node: 'f99', checkpoint: { region: 'firmware', node: 'f3' }, explored: { firmware: ['f0', 'f1', 'f3'] }, learned: ['echo'] });
   Rules.sanitize(a);
   assert.equal(a.node, 'f3'); assert.deepEqual(a.learned, ['echo'], 'progress kept');
   const b = State.load({ region: 'mars', node: 'm1', checkpoint: { region: 'mars', node: 'm1' }, bits: 50 });
