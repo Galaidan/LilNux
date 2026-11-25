@@ -17,13 +17,13 @@ test('ram adds a slot; fan and cpu stack', () => {
   Rules.installModule(s, 'ram'); assert.equal(Rules.stats(s).slots, 3);
   Rules.installModule(s, 'fan'); Rules.installModule(s, 'cpu'); Rules.installModule(s, 'ssd');
   const st = Rules.stats(s);
-  assert.equal(st.heatMul, 0.7); assert.equal(st.cdMul, 0.85); assert.equal(st.travelMul, 0.5);
+  assert.equal(st.heatMul, 0.7); assert.equal(st.cdMul, 0.85);
   assert.deepEqual(s.modules, ['ram', 'fan', 'cpu', 'ssd']);
 });
 
 test('region and neighbors', () => {
   assert.equal(Rules.region('grub').name, 'GRUB Gate');
-  assert.deepEqual(Rules.neighbors(Rules.region('firmware'), 'f1').sort(), ['f0', 'f2', 'f3']);
+  assert.deepEqual(Rules.neighbors(Rules.region('firmware'), 'f1').sort(), ['f0', 'f2', 'f3', 'f4']);
 });
 
 test('reveal adds nodes within radius and skips hidden ones', () => {
@@ -99,14 +99,14 @@ test('quickFix needs the right skill equipped', () => {
 });
 
 test('buyUpgrade checks unknown, bits, needs and owned', () => {
-  const s = fresh(); Rules.learn(s, 'cd'); Rules.learn(s, 'ls');
+  const s = fresh(); Rules.learn(s, 'kill'); Rules.learn(s, 'ls');
   assert.deepEqual(Rules.buyUpgrade(s, 'nope'), { ok: false, reason: 'unknown' });
   s.bits = 100;
-  assert.deepEqual(Rules.buyUpgrade(s, 'cd-dash'), { ok: false, reason: 'needs' });
+  assert.deepEqual(Rules.buyUpgrade(s, 'kill-9'), { ok: false, reason: 'needs' });
   Rules.installModule(s, 'cpu');
-  assert.deepEqual(Rules.buyUpgrade(s, 'cd-dash'), { ok: true });
+  assert.deepEqual(Rules.buyUpgrade(s, 'kill-9'), { ok: true });
   assert.equal(s.bits, 50);
-  assert.deepEqual(Rules.buyUpgrade(s, 'cd-dash'), { ok: false, reason: 'owned' });
+  assert.deepEqual(Rules.buyUpgrade(s, 'kill-9'), { ok: false, reason: 'owned' });
   s.bits = 10;
   assert.deepEqual(Rules.buyUpgrade(s, 'ls-a'), { ok: false, reason: 'bits' });
   assert.deepEqual(Rules.buyUpgrade(s, 'echo-n'), { ok: false, reason: 'needs' }, 'skill not learned');

@@ -24,12 +24,11 @@ test('two regions in boot order', () => {
 });
 
 test('skills match the spec values', () => {
-  assert.deepEqual(Object.keys(W.SKILLS), ['echo', 'ls', 'cd']);
+  assert.deepEqual(Object.keys(W.SKILLS), ['kill', 'trap', 'echo', 'ls', 'cd']);
   assert.deepEqual(W.SKILLS.echo.fight, { type: 'bolt', dmg: 10, cd: 0.35, heat: 9 });
   assert.deepEqual(W.SKILLS.ls.fight, { type: 'scan', reveal: 4, cd: 3, heat: 15 });
   assert.deepEqual(W.SKILLS.cd.fight, { type: 'dash', cd: 1.2, heat: 6 });
   assert.equal(W.SKILLS.ls.upgrade.id, 'ls-a');
-  assert.equal(W.SKILLS.cd.upgrade.needs, 'cpu');
   assert.equal(W.SKILLS.echo.teacher, 'pip');
   assert.ok(W.SKILLS.ls.learnTest.test('ls -a') && !W.SKILLS.ls.learnTest.test('lsblk'));
   assert.ok(W.SKILLS.cd.learnTest.test('cd /boot') && W.SKILLS.cd.learnTest.test('cd'));
@@ -39,7 +38,7 @@ test('skills match the spec values', () => {
 test('modules and creatures match the spec values', () => {
   assert.deepEqual(Object.keys(W.MODULES).sort(), ['cpu', 'fan', 'ram', 'ssd']);
   assert.equal(W.MODULES.ram.slots, 1); assert.equal(W.MODULES.fan.heatMul, 0.7);
-  assert.equal(W.MODULES.cpu.cdMul, 0.85); assert.equal(W.MODULES.ssd.travelMul, 0.5);
+  assert.equal(W.MODULES.cpu.cdMul, 0.85); assert.equal(W.MODULES.ssd.moveMul, 1.2);
   const c = W.CREATURES;
   assert.equal(c.glitchMite.hp, 30); assert.equal(c.glitchMite.cloaked, true); assert.equal(c.glitchMite.count, 3);
   assert.equal(c.loopWisp.pattern, 'blink'); assert.equal(c.bootGlitch.hp, 220); assert.equal(c.bootGlitch.phases, 2);
@@ -136,4 +135,52 @@ test('GRUB Gate ends at Home, where Lil Tux lives', () => {
   assert.ok(lt && lt.name === 'Lil Tux');
   assert.match(lt.lines.join(' '), /rest/i); assert.match(lt.lines.join(' '), /systemctl suspend/);
   assert.ok(!Object.values(W.SKILLS).some((s) => s.teacher === 'liltux'), 'resting is not a combat skill');
+});
+
+// ---- Chapter 1 in the action style ------------------------------------------------------------
+const [FW, GR] = W.REGIONS;
+test('every edge joins grid neighbours and no two rooms share a cell', () => {
+  for (const reg of W.REGIONS) {
+    assert.deepEqual(Object.keys(reg.cells).sort(), Object.keys(reg.nodes).sort());
+    const seen = new Set();
+    for (const id of Object.keys(reg.cells)) { const k = reg.cells[id].join(','); assert.ok(!seen.has(k), id); seen.add(k); }
+    for (const [a, b] of reg.edges) {
+      const [ax, ay] = reg.cells[a]; const [bx, by] = reg.cells[b];
+      assert.equal(Math.abs(ax - bx) + Math.abs(ay - by), 1, `${a}-${b}`);
+    }
+  }
+});
+test('chapter 1 grid layout', () => {
+  assert.deepEqual([FW.cells.f0, FW.cells.f1, FW.cells.f3, FW.cells.f12, FW.cells.f13], [[0, 1], [1, 1], [2, 1], [4, 3], [5, 3]]);
+  assert.deepEqual([GR.cells.g0, GR.cells.g7, GR.cells.g12, GR.cells.g13], [[0, 1], [2, 2], [4, 3], [5, 3]]);
+  const has = (reg, a, b) => reg.edges.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+  assert.ok(has(FW, 'f1', 'f4') && !has(FW, 'f3', 'f4'));
+  assert.ok(has(GR, 'g3', 'g14') && !has(GR, 'g5', 'g14'));
+  assert.equal(FW.edges.length, 18); assert.equal(GR.edges.length, 18);
+});
+test('kill and trap are always-on moves taught by Pip; cd has no dash upgrade', () => {
+  for (const id of ['kill', 'trap']) { assert.equal(W.SKILLS[id].teacher, 'pip'); assert.equal(W.SKILLS[id].move, true); }
+  assert.equal(W.SKILLS.kill.upgrade.id, 'kill-9'); assert.equal(W.SKILLS.kill.upgrade.needs, 'cpu');
+  assert.equal(W.SKILLS.trap.upgrade, undefined); assert.equal(W.SKILLS.cd.upgrade, undefined);
+});
+test('kill and trap lines are accurate', () => {
+  assert.equal(W.SKILLS.kill.real, '`kill` sends a signal to a process. By default it’s SIGTERM, which asks it to quit politely; `kill -9` sends SIGKILL, which the process can’t catch or ignore.');
+  assert.equal(W.SKILLS.trap.real, 'In bash, `trap \'echo caught\' INT` runs a command when the shell gets SIGINT (Ctrl+C). Scripts use it to clean up. SIGKILL and SIGSTOP can’t be trapped.');
+  const l = W.SKILLS.kill.term('kill -l');
+  assert.ok(l.ok); for (const s of ['2) SIGINT', '9) SIGKILL', '15) SIGTERM', '19) SIGSTOP']) assert.ok(l.html.includes(s), s);
+  assert.equal(W.SKILLS.kill.term('kill').ok, false); // bash prints usage
+  assert.match(W.SKILLS.kill.term('kill 4242').html, /\(4242\) - No such process/);
+  assert.ok(W.SKILLS.trap.term("trap 'echo caught' INT").ok);
+  for (const ok of ['kill -l', 'kill 4242', 'kill -9 4242']) assert.ok(W.SKILLS.kill.learnTest.test(ok), ok);
+  for (const ok of ["trap 'echo caught' INT", 'trap -l']) assert.ok(W.SKILLS.trap.learnTest.test(ok), ok);
+});
+test('Pip opens with kill; Grub teaches cd for terminals and path signs', () => {
+  assert.match(W.CHARACTERS.pip.lines[3], /kill/); assert.doesNotMatch(W.CHARACTERS.pip.lines[3], /echo/);
+  assert.doesNotMatch(W.CHARACTERS.grub.lines.join(' '), /dash/);
+});
+test('SSD speeds movement and dashing; dark rooms; Home accent; clean task', () => {
+  assert.deepEqual([W.MODULES.ssd.moveMul, W.MODULES.ssd.dashCdMul, W.MODULES.ssd.travelMul], [1.2, 0.75, undefined]);
+  assert.deepEqual(Object.keys(FW.nodes).filter((id) => FW.nodes[id].dark), ['f0', 'f4', 'f8']);
+  assert.equal(GR.nodes.g13.accent, '#f5a623');
+  assert.equal(W.TASKS['pip-clean'].text, 'Clear 3 problem rooms without taking a hit');
 });

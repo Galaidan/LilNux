@@ -187,7 +187,7 @@
     state.learned = state.learned.filter(known(Wd.SKILLS));
     state.codex = state.codex.filter(known(Wd.SKILLS));
     state.modules = state.modules.filter(known(Wd.MODULES));
-    const ups = Object.values(Wd.SKILLS).map((s) => s.upgrade.id);
+    const ups = Object.values(Wd.SKILLS).filter((s) => s.upgrade).map((s) => s.upgrade.id);
     state.upgrades = state.upgrades.filter((u) => ups.includes(u));
     state.tasksDone = state.tasksDone.filter(known(Wd.TASKS));
     state.equipped = state.equipped.filter((s) => state.learned.includes(s)).slice(0, stats(state).slots);

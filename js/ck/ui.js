@@ -171,7 +171,7 @@
       const inFight = ui.mode === 'fight';
       const skills = (inFight ? '<p class="ck-dim">⏸ Fight paused. Loadout changes happen on the map, not mid-fight.</p>' : '') + state.learned.map((id) => {
         const s = W.SKILLS[id]; const on = state.equipped.includes(id);
-        const u = s.upgrade; const owned = state.upgrades.includes(u.id); const cb = canBuy(state, u.id);
+        const u = s.upgrade || { id: '', cmd: s.cmd, cost: 0, blurb: '' }; const owned = !s.upgrade || state.upgrades.includes(u.id); const cb = canBuy(state, u.id);
         const why = { bits: `need ${u.cost} bits`, needs: u.needs ? `needs ${W.MODULES[u.needs] ? W.MODULES[u.needs].name : u.needs}` : 'locked' }[cb.reason] || '';
         return `<div class="ck-skillrow">
           <span class="i">${s.icon}</span><div><b>${esc(s.name)}</b> <code>${esc(owned ? u.cmd : s.cmd)}</code><small>${esc(s.blurb)}</small></div>
@@ -244,7 +244,7 @@
           const v = input.value; input.value = '';
           if (v.trim()) record('you', 'You', `<code>${esc(v)}</code>`);
           const line = document.createElement('div'); line.className = 'cmd'; line.textContent = shell.prompt() + v; out.appendChild(line);
-          const res = shell.run(v);
+          const res = s.term ? s.term(v.trim()) : shell.run(v);
           if (res.pending) shell.cancel();
           const o = document.createElement('div'); o.innerHTML = res.html || ''; out.appendChild(o);
           p.textContent = shell.prompt();
