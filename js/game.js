@@ -155,10 +155,11 @@
     stopSpeak();
     if (where !== 'world') run = null;
     if (where !== 'kernel' && window.CK && CK.close) CK.close();
+    if (where !== 'slice' && window.CK && CK.closeSlice) CK.closeSlice();
     if (!me() && where !== 'players') where = 'players';
     window.scrollTo(0, 0);
     view = where;
-    ({ hub: renderHub, players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel })[where](arg);
+    ({ hub: renderHub, players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel, slice: openSlice })[where](arg);
     renderTop();
   }
 
@@ -195,6 +196,7 @@
             <ul><li>Story, fog of war &amp; boss fights</li><li>Upgrades, secrets &amp; a sarcastic sidekick</li><li>Best for ages 12+</li></ul>
             <span class="hub-progress">${esc(adventureStatus(p))}</span>
             <button class="primary neon" data-go="kernel">Play adventure →</button>
+            <button class="ghost" data-go="slice" title="Preview of the new action-adventure style: one training room">🧪 Try the new action room</button>
           </article>
         </div>
       </section>`;
@@ -219,6 +221,13 @@
       root: document.body, player: me(), save, addXP, giveBadge, speak,
       sound: SFX, soundOn: () => S.sound, onExit: () => go('hub'),
     });
+  }
+
+  // Preview of the new action-adventure style (one training room). Doesn't touch the Adventure save.
+  function openSlice() {
+    renderHub();
+    if (!window.CK || !CK.openSlice) { toast('The action room could not load.'); return; }
+    CK.openSlice({ root: document.body, player: me(), sound: SFX, soundOn: () => S.sound, onExit: () => go('hub') });
   }
 
   // ---------------------------------------------------------------- players screen
