@@ -310,7 +310,9 @@ All work on branch `ck-action`. `main` stays live until the user says "push it".
    Mites, on keyboard and iPhone landscape. The user plays it and we tune the feel before any
    more building.
 2. **Chapter 1 rebuild.** All rooms, tools, puzzles, bosses, story hooks, migration, minimap →
-   playtest zip.
+   playtest zip. (Built on branch `ck-chapter1` from
+   `docs/superpowers/plans/2026-11-25-colonel-kernel-chapter-1-action.md`; the slice's `ck-action` was
+   already merged.)
 3. **Polish and review** → merge to `main` on "push it". Update `docs/HANDOFF.md`, including the
    changed hard rule: **Adventure is landscape on phones; Learn stays portrait.**
 
