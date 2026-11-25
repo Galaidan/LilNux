@@ -145,7 +145,7 @@
     function onKey(e) {
       if (!sayState) return;
       const tag = document.activeElement && document.activeElement.tagName;
-      if ((e.key === 'Enter' || e.key === ' ') && tag !== 'BUTTON' && tag !== 'INPUT') { e.preventDefault(); sayState.next(); }
+      if ((e.key === 'Enter' || e.key === ' ') && tag !== 'BUTTON' && tag !== 'INPUT') { e.preventDefault(); e.stopPropagation(); sayState.next(); }
     }
     document.addEventListener('keydown', onKey);
 

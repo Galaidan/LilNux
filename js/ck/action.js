@@ -217,7 +217,7 @@
 
     // ---- the step ---------------------------------------------------------------------------------
     function step(dt, inp) {
-      if (s.outcome) return;
+      if (s.outcome === 'lose') return; // after a win the Colonel keeps moving; nothing is left to fight
       inp = inp || {};
       s.time += dt;
       P.iframes = Math.max(0, P.iframes - dt);

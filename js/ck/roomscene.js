@@ -107,6 +107,7 @@
       }
       else {
         // E / Enter / ✋ uses what's near; `kill` next to a character with no creatures awake talks instead of swinging
+        if (inp.tool === 'cd' || (pending && pending.tool === 'cd')) { inp.tool = null; if (pending) pending.tool = null; if (o.onCd) o.onCd(near); }
         const calm = !sim.enemies.some((e) => !e.dead);
         if (o.onUse && (inp.use || (inp.kill && near && near.kind === 'npc' && calm))) { if (near) { inp.kill = false; o.onUse(near); } }
         const press = pending || {}; pending = null;
@@ -240,7 +241,7 @@
       const s = colonelSprite(P);
       let alpha = 1;
       if (P.iframes > 0 && P.dashT <= 0) alpha = reduced() ? 0.6 : (Math.floor(t * 15) % 2 ? 0.25 : 1);
-      Pix.draw(g, s.b, P.x, P.y, { flip: s.flip, alpha, flash: hurtFlash > 0, glow: 0.35 });
+      Pix.draw(g, s.b, P.x, P.y, { flip: s.flip, alpha, flash: hurtFlash > 0 && !reduced(), glow: 0.35 });
       if (P.parryT > 0) { g.strokeStyle = COL.cyan; g.globalAlpha = 0.8; g.lineWidth = 1; g.beginPath(); g.arc(Math.round(P.x) + 0.5, Math.round(P.y - 12) + 0.5, 15, 0, TAU); g.stroke(); g.globalAlpha = 1; }
     }
     function drawMite(g, e) {
@@ -249,10 +250,10 @@
       const b = spr['mite_' + frame];
       const jitter = visible || reduced() ? 0 : (Math.floor(t * 20) % 3) - 1;
       // cloaked: a faint shimmer (0.22 read as faint on the old navy floor; the pale plaza needs less)
-      Pix.draw(g, b, e.x + jitter, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.6 : 0, flash: e.flash > 0 });
+      Pix.draw(g, b, e.x + jitter, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.6 : 0, flash: e.flash > 0 && !reduced() });
       if (e.state === 'tell') {
         g.fillStyle = COL.coral; g.fillRect(Math.round(e.x), Math.round(e.y - 16), 1, 4); g.fillRect(Math.round(e.x), Math.round(e.y - 11), 1, 1);
-        g.globalAlpha = 0.5; Pix.draw(g, b, e.x, e.y + e.r + 2, { flash: true }); g.globalAlpha = 1;
+        if (!reduced()) { g.globalAlpha = 0.5; Pix.draw(g, b, e.x, e.y + e.r + 2, { flash: true }); g.globalAlpha = 1; }
       }
       if (sim.time < e.stunUntil) {
         g.fillStyle = COL.gold;
@@ -302,7 +303,7 @@
       const b = spr[FOE_SPRITE[e.kind] + '_' + frame];
       shadow(g, e.x, e.y + e.r - 1, e.r * 0.8);
       const tell = e.state === 'tell' || e.sigTellT > 0;
-      Pix.draw(g, b, e.x, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.5 : 0, flash: e.flash > 0 || (tell && !reduced() && Math.floor(t * 10) % 2 === 0) });
+      Pix.draw(g, b, e.x, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.5 : 0, flash: !reduced() && (e.flash > 0 || (tell && Math.floor(t * 10) % 2 === 0)) });
     }
     function drawTells(g) {
       for (const k of tells) {

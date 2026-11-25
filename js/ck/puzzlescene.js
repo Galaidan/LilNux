@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   const CK = (root.CK = root.CK || {});
-  const CELL = 24;
+  const CELL = 40; // 40 buffer px is >= 44 CSS px on phones (k / dpr >= 1.33 in landscape)
   const COL = { board: '#0d1430', cell: '#14103a', edge: '#2b3768', off: '#3c4a85', cyan: '#38f2ff', amber: '#ffb347', white: '#ffffff', ink: '#060a1c' };
   const FIXED = { source: 1, target: 1, empty: 1 };
   // direction -> [dx, dy] in screen space (0=N 1=E 2=S 3=W)
@@ -61,11 +61,11 @@
       const col = on ? accent : COL.off; const cx = x + CELL / 2; const cy = y + CELL / 2;
       for (const d of CK.Puzzle.ports(cell)) { // pixel pipes: a dark under-stroke, then the wire
         const [dx, dy] = DIR[d];
-        g.fillStyle = COL.ink; g.fillRect(Math.min(cx, cx + dx * 12) - 2, Math.min(cy, cy + dy * 12) - 2, Math.abs(dx) * 12 + 4, Math.abs(dy) * 12 + 4);
-        g.fillStyle = col; g.fillRect(Math.min(cx, cx + dx * 12) - 1, Math.min(cy, cy + dy * 12) - 1, Math.abs(dx) * 12 + 2, Math.abs(dy) * 12 + 2);
+        const L = CELL / 2; g.fillStyle = COL.ink; g.fillRect(Math.min(cx, cx + dx * L) - 3, Math.min(cy, cy + dy * L) - 3, Math.abs(dx) * L + 6, Math.abs(dy) * L + 6);
+        g.fillStyle = col; g.fillRect(Math.min(cx, cx + dx * L) - 2, Math.min(cy, cy + dy * L) - 2, Math.abs(dx) * L + 4, Math.abs(dy) * L + 4);
       }
-      if (cell.t === 'source') { g.fillStyle = COL.amber; g.fillRect(cx - 4, cy - 4, 8, 8); g.fillStyle = COL.white; g.fillRect(cx - 1, cy - 1, 2, 2); }
-      else if (cell.t === 'target') { g.fillStyle = on ? accent : COL.ink; g.fillRect(cx - 5, cy - 5, 10, 10); g.fillStyle = on ? COL.white : COL.off; g.fillRect(cx - 3, cy - 3, 6, 6); }
+      if (cell.t === 'source') { g.fillStyle = COL.amber; g.fillRect(cx - 7, cy - 7, 14, 14); g.fillStyle = COL.white; g.fillRect(cx - 2, cy - 2, 4, 4); }
+      else if (cell.t === 'target') { g.fillStyle = on ? accent : COL.ink; g.fillRect(cx - 8, cy - 8, 16, 16); g.fillStyle = on ? COL.white : COL.off; g.fillRect(cx - 5, cy - 5, 10, 10); }
       else { g.fillStyle = on ? COL.white : COL.edge; g.fillRect(cx - 1, cy - 1, 2, 2); }
     }
 

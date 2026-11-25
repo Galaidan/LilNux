@@ -117,6 +117,19 @@ const tests = {
     await pg.waitForFunction(() => H.pz.solved, null, { timeout: 2000 });
     assert.deepEqual(pg.errs, []);
   },
+  async 'puzzle tiles are at least 44 CSS px on an iPhone in landscape'(b) {
+    const pg = await page(b, { ...devices['iPhone 13 landscape'] });
+    await pg.waitForFunction(() => window.H && H.ui);
+    const css = await pg.evaluate(() => {
+      const c = document.createElement('canvas'); c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:50'; document.body.appendChild(c);
+      const solution = CK.World.REGIONS[1].nodes.g9.ref.grid; const grid = CK.Puzzle.scramble(JSON.parse(JSON.stringify(solution)), CK.rng(3));
+      const engine = CK.PixEngine.create(c); const scene = CK.PuzzleScene.create({ engine, canvas: c, host: document.body, grid, solution, onSolved() {}, onLeave() {} });
+      engine.setScene(scene); const v = engine.view; const a = scene.cellCentre(0, 0); const b2 = scene.cellCentre(0, 1);
+      const ok = a.x - 0 >= 0 && scene.cellCentre(grid.rows - 1, grid.cols - 1).y < v.h;
+      return { px: ((b2.x - a.x) * v.k) / v.dpr, fits: ok };
+    });
+    assert.ok(css.px >= 44, `${css.px} CSS px`); assert.ok(css.fits);
+  },
   async 'puzzle: step away leaves it unsolved'(b) {
     const pg = await page(b);
     await pg.waitForFunction(() => window.H && H.ui);
@@ -464,6 +477,53 @@ const tests = {
     assert.ok(busy.cd > 0.4, JSON.stringify(busy)); assert.match(busy.label, /recharging/i);
     await wait(3200);
     assert.equal(await pg.evaluate(() => parseFloat(document.querySelector('.ck-act [data-tool=ls]').style.getPropertyValue('--cd'))), 0);
+  },
+  // ---- final review fixes ----
+  async 'after a clear the Colonel walks again (real keys)'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg); await walk(pg, 'e', 'f5'); await settle(pg);
+    await clearFoes(pg, true);
+    await pg.waitForFunction(() => CK.Rules.isCleared(CK._test.main.state, 'f5'), null, { timeout: 3000 }); await settle(pg);
+    await place(pg, 14 * 16 + 8, 9 * 16 + 8); await wait(100);
+    const x0 = await pg.evaluate(() => CK._test.main.sim.player.x);
+    await pg.keyboard.down('d'); await wait(500); await pg.keyboard.up('d');
+    assert.ok((await pg.evaluate(() => CK._test.main.sim.player.x)) > x0 + 20, 'moved after the clear');
+  },
+  async 'closing a dialogue with Enter does not use what is next to you'(b) {
+    const pg = await openWith(b, Object.assign({ region: 'grub', node: 'g7', prev: 'g3', checkpoint: { region: 'grub', node: 'g1' }, explored: { grub: ['g1', 'g3', 'g4', 'g7', 'g8', 'g9'] }, cleared: { grub: ['g1', 'g3', 'g7'] } }, learnedAll));
+    await settle(pg);
+    await useProp(pg, 'sign'); await pg.waitForSelector('.ck-choice');
+    await pg.click('.ck-choice button >> text=cd /dev/null');
+    await pg.waitForSelector('.ck-say'); await pg.keyboard.press('Enter'); await wait(400);
+    assert.equal(await pg.evaluate(() => !!document.querySelector('.ck-choice')), false, 'the sign did not reopen');
+  },
+  async 'Enter presses a focused button'(b) {
+    const pg = await openWith(b, Object.assign({ region: 'grub', node: 'g7', prev: 'g3', checkpoint: { region: 'grub', node: 'g1' }, explored: { grub: ['g1', 'g3', 'g4', 'g7', 'g8', 'g9'] }, cleared: { grub: ['g1', 'g3', 'g7'] } }, learnedAll));
+    await settle(pg);
+    await useProp(pg, 'sign'); await pg.waitForSelector('.ck-choice');
+    await pg.evaluate(() => [...document.querySelectorAll('.ck-choice button')].find((x) => /Cancel/.test(x.textContent)).focus());
+    await pg.keyboard.press('Enter'); await wait(300);
+    assert.equal(await pg.evaluate(() => !!document.querySelector('.ck-choice')), false, 'Enter activated Cancel');
+  },
+  async 'the cd key next to a terminal opens fast travel'(b) {
+    const pg = await openWith(b, Object.assign({ region: 'grub', node: 'g1', prev: 'g0', checkpoint: { region: 'grub', node: 'g1' }, explored: { grub: ['g0', 'g1', 'g2', 'g3', 'g4'] }, cleared: { grub: ['g1', 'g2'] } }, learnedAll));
+    await settle(pg);
+    await pg.evaluate(() => { const m = CK._test.main; const p = m.room.props.find((x) => x.kind === 'terminal'); m.place(p.x, (p.ty + p.h) * 16 + 9); });
+    await wait(150); await pg.keyboard.press('2');
+    await pg.waitForSelector('.ck-choice', { timeout: 2000 });
+  },
+  async 'no hit flashes with reduced motion'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', checkpoint: { region: 'firmware', node: 'f3' }, switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f7'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw), null, { viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce' });
+    await settle(pg); await walk(pg, 'e', 'f5'); await settle(pg);
+    await pg.evaluate(() => {
+      window.__flash = 0; const d = CK.Pixel.draw; CK.Pixel.draw = function (c, b, x, y, o) { if (o && o.flash) window.__flash++; return d.apply(this, arguments); };
+      const s = CK._test.main.sim; s.enemies.forEach((e) => { e.revealedUntil = 99; }); s.spawnOrb({ x: s.player.x, y: s.player.y, dmg: 5 });
+      s.player.face = { x: 1, y: 0 };
+    });
+    await wait(400);
+    const r = await pg.evaluate(() => ({ st: CK._test.main.sim.player.stability, red: CK._test.main.engine.reducedMotion, paused: CK._test.main.busy() }));
+    assert.ok(r.red && r.st < 100, 'a hit landed with reduced motion on: ' + JSON.stringify(r));
+    assert.equal(await pg.evaluate(() => window.__flash), 0);
   },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);

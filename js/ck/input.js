@@ -57,6 +57,7 @@
     function onKey(e) {
       const a = mapKey(e.key); if (!a) return;
       if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.target && e.target.tagName === 'BUTTON' && (a === 'use' || a === 'dash')) return; // a focused button takes Enter / Space
       e.preventDefault();
       if (a in held) held[a] = true;
       else if (!e.repeat && PRESS[a]) press(a);

@@ -132,7 +132,7 @@
         const view = { room, sim, accent: node.accent || region.accent, dark: !!node.dark, glitched: state.story.glitched.includes(id),
           npcs: npc && who ? [{ who, tx: npc.tx, ty: npc.ty }] : [], seed: CK.RoomGen.hash(id) };
         if (!scene) {
-          scene = CK.RoomScene.create(Object.assign({ engine, input, onEvent, paused, onDoor, onNear, onTouch, onUse }, view));
+          scene = CK.RoomScene.create(Object.assign({ engine, input, onEvent, paused, onDoor, onNear, onTouch, onUse, onCd }, view));
           engine.setScene(scene); engine.start();
         } else scene.setRoom(view, fromSide && !puzzle ? fromSide : null);
         input.setTools(state.equipped); ui.action(true); onNear(null); refresh();
@@ -170,6 +170,12 @@
         if (p.kind === 'npc') { const who = sceneNpc(); if (who) busy(() => meet(who)); }
         else if (p.kind === 'terminal') { if (p.broken) startPuzzle(); else cdTerminal(); }
         else if (p.kind === 'sign') pathSign();
+      }
+      // the cd key / 🌀 button: works the terminal or path sign you're standing at
+      function onCd(p) {
+        if (lock) return;
+        if (p && (p.kind === 'terminal' || p.kind === 'sign')) onUse(p);
+        else ui.toast('🌀 <code>cd</code> works at terminals and path signs. Walk up to one.');
       }
       function onTouch(p) {
         if (p.kind === 'crystal' && !p.taken) { p.taken = true; busy(() => memory(reg().nodes[roomId])); }
@@ -456,7 +462,7 @@
       // ---- housekeeping ------------------------------------------------------------------------------
       async function busy(fn) {
         lock++; input.clear();
-        try { await fn(); } finally { lock--; if (cur) { refresh(); save(); } }
+        try { await fn(); } finally { lock--; input.clear(); if (cur) { refresh(); save(); } }
       }
       function claim() {
         for (const id of R.claimTasks(state)) { const t = W.TASKS[id]; ui.toast(`✅ Task done for <b>${W.CHARACTERS[t.giver].name}</b>: ${t.text} <b>+${t.bits} bits</b>`); sound('good'); }
