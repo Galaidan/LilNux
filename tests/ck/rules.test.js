@@ -9,7 +9,7 @@ const fresh = () => State.fresh();
 const walk = (s, ...ids) => ids.forEach((id) => { const r = Rules.move(s, id); assert.ok(r.ok, `move to ${id}: ${r.reason}`); });
 
 test('stats base values', () => {
-  assert.deepEqual(Rules.stats(fresh()), { slots: 2, cdMul: 1, heatMul: 1, travelMul: 1, sight: 1 });
+  assert.deepEqual(Rules.stats(fresh()), { slots: 2, cdMul: 1, heatMul: 1, moveMul: 1, dashCdMul: 1, sight: 1 });
 });
 
 test('ram adds a slot; fan and cpu stack', () => {
@@ -216,4 +216,67 @@ test('sanitize moves an unknown node to the checkpoint and an unknown region to 
   Rules.sanitize(b);
   assert.deepEqual([b.region, b.node, b.bits], ['firmware', 'f0', 50]);
   assert.ok(b.explored.firmware.includes('f1'));
+});
+
+// ---- rooms, tools and doors (Chapter 1 in the action style) ----------------------------------------
+const R = Rules; const CK = globalThis.CK;
+test('stats: SSD moves 20% faster and dashes recover 25% sooner', () => {
+  const s = CK.State.fresh(); s.modules = ['ssd'];
+  const st = R.stats(s); assert.equal(st.moveMul, 1.2); assert.equal(st.dashCdMul, 0.75); assert.equal(st.travelMul, undefined);
+});
+test('kill and trap are moves: learning them never takes a tool slot', () => {
+  const s = CK.State.fresh(); R.learn(s, 'kill'); R.learn(s, 'trap'); R.learn(s, 'echo');
+  assert.deepEqual(s.equipped, ['echo']); assert.equal(R.equip(s, 'kill'), false);
+  assert.deepEqual(s.learned.sort(), ['echo', 'kill', 'trap']);
+});
+test('clearRoom: no hits is a clean clear with the clean reward', () => {
+  const s = CK.State.fresh();
+  assert.deepEqual(R.clearRoom(s, 'f5', { clean: true }), { clean: true, bits: 15, xp: 15 });
+  assert.ok(R.isCleared(s, 'f5')); assert.equal(s.stats.clean, 1); assert.equal(s.bits, 15);
+});
+test('clearRoom: a clear with hits pays the fight reward', () => {
+  const s = CK.State.fresh();
+  assert.deepEqual(R.clearRoom(s, 'f7', { clean: false }), { clean: false, bits: 10, xp: 20 });
+  assert.equal(s.stats.clean, 0);
+});
+test('sideOf', () => {
+  const fw = R.region('firmware');
+  assert.deepEqual([R.sideOf(fw, 'f1', 'f3'), R.sideOf(fw, 'f1', 'f2'), R.sideOf(fw, 'f1', 'f0'), R.sideOf(fw, 'f1', 'f4'), R.sideOf(fw, 'f1', 'f9')], ['e', 'n', 'w', 's', null]);
+});
+test('doorStates: forward doors seal in an uncleared problem room; the way back stays open', () => {
+  const s = CK.State.fresh(); s.node = 'f5'; s.prev = 'f3'; s.explored.firmware = ['f3', 'f5', 'f6', 'f9'];
+  assert.deepEqual(R.doorStates(s, 'f5'), { w: { to: 'f3', kind: 'open' }, n: { to: 'f6', kind: 'sealed' }, s: { to: 'f9', kind: 'sealed' } });
+  R.clearRoom(s, 'f5', { clean: false });
+  assert.equal(R.doorStates(s, 'f5').n.kind, 'open');
+});
+test('doorStates: hidden neighbours are wall, then crack once revealed, then open once cleared', () => {
+  const s = CK.State.fresh(); s.node = 'f3'; s.explored.firmware = ['f3', 'f1'];
+  assert.equal(R.doorStates(s, 'f3').n.kind, 'wall');
+  s.explored.firmware.push('f14'); assert.equal(R.doorStates(s, 'f3').n.kind, 'crack');
+  R.clear(s, 'f14'); assert.equal(R.doorStates(s, 'f3').n.kind, 'open');
+});
+test('doorStates: g7 loop doors until the path sign is set', () => {
+  const s = CK.State.fresh(); s.region = 'grub'; s.node = 'g7'; s.explored.grub = ['g3', 'g4', 'g7', 'g8', 'g9'];
+  const d = R.doorStates(s, 'g7'); assert.deepEqual([d.e.kind, d.s.kind, d.n.kind], ['loop', 'loop', 'open']);
+  s.signs = ['g7']; assert.equal(R.doorStates(s, 'g7').e.kind, 'open');
+});
+test('doorStates: a boss fight seals every door', () => {
+  const s = CK.State.fresh(); s.node = 'f12'; s.prev = 'f10'; s.explored.firmware = ['f10', 'f11', 'f12', 'f13'];
+  assert.ok(Object.values(R.doorStates(s, 'f12', { bossFight: true })).every((d) => d.kind === 'sealed'));
+});
+test('doorStates: unexplored neighbours are sealed (fog), never walked into', () => {
+  const s = CK.State.fresh(); s.node = 'f1'; s.explored.firmware = ['f0', 'f1'];
+  assert.equal(R.doorStates(s, 'f1').e.kind, 'sealed');
+});
+test('cd fast travel only reaches visited safe rooms', () => {
+  const s = CK.State.fresh(); s.learned = ['cd']; s.node = 'f5';
+  s.explored.firmware = ['f0', 'f1', 'f2', 'f3', 'f5']; s.cleared.firmware = ['f1', 'f2', 'f3'];
+  assert.deepEqual(R.travelTargets(s).sort(), ['f0', 'f1', 'f3']);
+  s.story.glitched = ['f3']; assert.deepEqual(R.travelTargets(s).sort(), ['f0', 'f1']);
+  assert.equal(R.fastTravel(s, 'f2'), false);
+});
+test('sanitize v2: equipped holds only learned tools, trimmed to slots; kill-9 is known', () => {
+  const s = CK.State.fresh(); s.learned = ['echo', 'ls', 'cd', 'kill', 'trap']; s.equipped = ['kill', 'echo', 'ls', 'cd'];
+  s.upgrades = ['kill-9', 'cd-dash']; R.sanitize(s);
+  assert.deepEqual(s.equipped, ['echo', 'ls']); assert.deepEqual(s.upgrades, ['kill-9']);
 });

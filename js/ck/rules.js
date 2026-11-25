@@ -5,16 +5,21 @@
   const W = () => CK.World;
 
   const BLOCKING = { problem: 1, circuit: 1, boss: 1 };
+  const TOOLS = ['echo', 'ls', 'cd']; // fill loadout slots
+  const MOVES = ['kill', 'trap']; // always on, never take a slot
+  const SAFE = { start: 1, character: 1 };
+  const LOOP_DOORS = { g7: ['e', 's'] }; // GRUB boot loop: these doors loop until the path sign is set
   const REWARDS = { clean: [15, 15], fight: [10, 20], boss: [50, 60], memory: [0, 5], region: [30, 100], puzzle: [10, 10] };
 
   function stats(state) {
-    const s = { slots: 2, cdMul: 1, heatMul: 1, travelMul: 1, sight: 1 };
+    const s = { slots: 2, cdMul: 1, heatMul: 1, moveMul: 1, dashCdMul: 1, sight: 1 };
     for (const id of state.modules) {
       const m = W().MODULES[id]; if (!m) continue;
       if (m.slots) s.slots += m.slots;
       if (m.cdMul) s.cdMul *= m.cdMul;
       if (m.heatMul) s.heatMul *= m.heatMul;
-      if (m.travelMul) s.travelMul *= m.travelMul;
+      if (m.moveMul) s.moveMul *= m.moveMul;
+      if (m.dashCdMul) s.dashCdMul *= m.dashCdMul;
     }
     return s;
   }
@@ -80,10 +85,10 @@
   function learn(state, skillId) {
     if (!state.learned.includes(skillId)) state.learned.push(skillId);
     if (!state.codex.includes(skillId)) state.codex.push(skillId);
-    if (!state.equipped.includes(skillId) && state.equipped.length < stats(state).slots) state.equipped.push(skillId);
+    if (TOOLS.includes(skillId) && !state.equipped.includes(skillId) && state.equipped.length < stats(state).slots) state.equipped.push(skillId);
   }
   function equip(state, skillId) {
-    if (!state.learned.includes(skillId) || state.equipped.includes(skillId) || state.equipped.length >= stats(state).slots) return false;
+    if (!TOOLS.includes(skillId) || !state.learned.includes(skillId) || state.equipped.includes(skillId) || state.equipped.length >= stats(state).slots) return false;
     state.equipped.push(skillId); return true;
   }
   function unequip(state, skillId) {
@@ -96,6 +101,46 @@
     if (!node || node.kind !== 'problem') return 'fight';
     if (state.equipped.includes(skillId) && node.ref.skill === skillId) { clear(state, nodeId); state.stats.clean++; return 'fixed'; }
     return 'fight';
+  }
+
+  // A cleared problem room: no hits taken = clean (today's clean reward), otherwise the fight reward.
+  function clearRoom(state, nodeId, opts) {
+    const clean = !!(opts && opts.clean);
+    clear(state, nodeId);
+    if (clean) state.stats.clean++;
+    return Object.assign({ clean }, reward(state, clean ? 'clean' : 'fight'));
+  }
+
+  const SIDES = { '1,0': 'e', '-1,0': 'w', '0,1': 's', '0,-1': 'n' };
+  function sideOf(reg, a, b) {
+    if (!neighbors(reg, a).includes(b) || !reg.cells || !reg.cells[a] || !reg.cells[b]) return null;
+    const [ax, ay] = reg.cells[a]; const [bx, by] = reg.cells[b];
+    return SIDES[(bx - ax) + ',' + (by - ay)] || null;
+  }
+
+  // What each door of a room looks like now: open, sealed, wall (hidden, unknown), crack (hidden, revealed) or loop.
+  function doorStates(state, nodeId, opts) {
+    const reg = cur(state); const here = reg.nodes[nodeId]; const ex = explored(state); const out = {};
+    const blocking = BLOCKING[here.kind] && !isCleared(state, nodeId);
+    for (const nb of neighbors(reg, nodeId)) {
+      const side = sideOf(reg, nodeId, nb); if (!side) continue;
+      const hidden = !!reg.nodes[nb].hidden;
+      let kind = 'open';
+      if (opts && opts.bossFight) kind = 'sealed';
+      else if (hidden && !ex.includes(nb)) kind = 'wall';
+      else if (hidden && !isCleared(state, nb)) kind = 'crack';
+      else if (!ex.includes(nb)) kind = 'sealed';
+      else if (blocking && nb !== state.prev) kind = 'sealed';
+      else if (LOOP_DOORS[nodeId] && LOOP_DOORS[nodeId].includes(side) && !(state.signs || []).includes(nodeId)) kind = 'loop';
+      out[side] = { to: nb, kind };
+    }
+    return out;
+  }
+
+  // cd fast travel: any visited safe room (start / character) that isn't glitched.
+  function travelTargets(state) {
+    const reg = cur(state); const glitched = (state.story && state.story.glitched) || [];
+    return explored(state).filter((id) => id !== state.node && reg.nodes[id] && SAFE[reg.nodes[id].kind] && isCleared(state, id) && !glitched.includes(id));
   }
 
   function installModule(state, moduleId) { state.modules.push(moduleId); }
@@ -136,8 +181,7 @@
       return { ok: true, revealed };
     }
     if (skillId === 'cd') {
-      const travelTargets = explored(state).filter((id) => id !== state.node && isCleared(state, id));
-      return { ok: true, travelTargets };
+      return { ok: true, travelTargets: travelTargets(state) };
     }
     return { ok: true };
   }
@@ -190,7 +234,7 @@
     const ups = Object.values(Wd.SKILLS).filter((s) => s.upgrade).map((s) => s.upgrade.id);
     state.upgrades = state.upgrades.filter((u) => ups.includes(u));
     state.tasksDone = state.tasksDone.filter(known(Wd.TASKS));
-    state.equipped = state.equipped.filter((s) => state.learned.includes(s)).slice(0, stats(state).slots);
+    state.equipped = state.equipped.filter((s, i, a) => TOOLS.includes(s) && state.learned.includes(s) && a.indexOf(s) === i).slice(0, stats(state).slots);
     if (!nodeOk(state.checkpoint.region, state.checkpoint.node)) {
       const r = regOk(state.checkpoint.region) ? state.checkpoint.region : regOk(state.region) ? state.region : Wd.REGIONS[0].id;
       state.checkpoint = { region: r, node: region(r).start };
@@ -209,5 +253,6 @@
     reveal(state, reg.start);
   }
 
-  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, quickFix, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, BLOCKING };
+  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, quickFix, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, BLOCKING,
+    TOOLS, MOVES, SAFE, LOOP_DOORS, clearRoom, sideOf, doorStates, travelTargets };
 })(typeof window !== 'undefined' ? window : globalThis);
