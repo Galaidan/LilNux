@@ -99,8 +99,7 @@
         fireEcho(aim);
       }
     }
-    function fireEcho(aim) { // filled in with Task 6 rules
-      const d = aim;
+    function fireEcho(d) {
       s.bolts.push({ x: P.x + d.x * 8, y: P.y + d.y * 8, vx: d.x * T.ECHO_SPEED, vy: d.y * T.ECHO_SPEED, r: T.BOLT_R, dmg: T.ECHO_DMG });
       s.cooldowns.echo = T.ECHO_CD; ev('echo'); addHeat(T.ECHO_HEAT);
     }
@@ -142,8 +141,24 @@
       if (e.state === 'lunge' && onLungeContact(e)) return;
       hurt(e.state === 'lunge' ? M.lungeDmg : M.contactDmg, e.x, e.y);
     }
-    function onLungeContact() { return false; } // parry hook (Task 6)
-    function onOrbContact() { return false; }    // parry hook (Task 6)
+    // `trap` catches a lunge: the mite is stunned (and hittable even if cloaked) and bounced back.
+    function onLungeContact(e) {
+      if (P.parryT <= 0) return false;
+      e.stunUntil = s.time + T.STUN; e.state = 'drift'; e.lungeTimer = e.lungeEvery;
+      const k = norm(e.x - P.x, e.y - P.y); const m = CK.Rooms.moveCircle(room, e.x, e.y, e.r, k.x * 10, k.y * 10); e.x = m.x; e.y = m.y;
+      P.parryCaught = true; ev('parry', e.x, e.y);
+      return true;
+    }
+    // `trap` catches a signal (orb) and sends it back at double damage. SIGKILL orbs can't be caught.
+    function onOrbContact(o) {
+      if (P.parryT <= 0 || o.unparryable) return false;
+      const src = o.src && s.enemies.find((e) => e.id === o.src && !e.dead);
+      const sp = len(o.vx, o.vy) || T.ECHO_SPEED;
+      const d = src ? norm(src.x - o.x, src.y - o.y) : norm(-o.vx, -o.vy);
+      o.vx = d.x * sp; o.vy = d.y * sp; o.from = 'player'; o.dmg *= T.REFLECT_MUL;
+      P.parryCaught = true; ev('parry', o.x, o.y);
+      return true;
+    }
 
     // ---- projectiles ---------------------------------------------------------------------------
     function inWall(o) { return room.solid(Math.floor(o.x / CK.Rooms.TILE), Math.floor(o.y / CK.Rooms.TILE)); }
@@ -159,7 +174,8 @@
           if (onOrbContact(o)) return true;
           if (P.dashT > 0) return true; // dashes straight through
           if (P.iframes > 0) return false;
-          hurt(o.dmg, o.x, o.y); return false;
+          if (hurt(o.dmg, o.x, o.y) && o.unparryable) ev('sigkill', o.x, o.y);
+          return false;
         }
         return true;
       });
@@ -219,9 +235,33 @@
 
       if (!s.outcome && !alive().length) { s.outcome = 'win'; s.clean = P.hitsTaken === 0; ev('clear'); }
     }
-    function startParry() {}            // Task 6
-    function updateParry() {}           // Task 6
-    function aimFor(tool, aimIn) { return aimIn.x || aimIn.y ? aimIn : P.face; } // aim-assist in Task 6
+    function startParry() {
+      if (P.recoverT > 0 || P.parryT > 0) return;
+      P.parryT = kid ? T.PARRY_KID : T.PARRY; P.parryCaught = false; ev('trap');
+    }
+    // A window that closes with nothing caught leaves the Colonel open for PARRY_RECOVER.
+    function updateParry(dt) {
+      if (P.parryT <= 0) return;
+      P.parryT -= dt;
+      if (P.parryT <= 1e-9) {
+        P.parryT = 0;
+        if (!P.parryCaught) { P.recoverT = T.PARRY_RECOVER; ev('parry-miss'); }
+      }
+    }
+    // With no explicit aim, echo snaps to the nearest hittable enemy inside the facing cone.
+    function aimFor(tool, aimIn) {
+      if (aimIn.x || aimIn.y) return aimIn;
+      if (tool !== 'echo') return P.face;
+      const half = (T.AIM_CONE_DEG / 2) * (Math.PI / 180);
+      let best = null; let bestD = Infinity;
+      for (const e of alive()) {
+        if (!hittable(e)) continue;
+        const dx = e.x - P.x; const dy = e.y - P.y; const d = len(dx, dy);
+        if (d < 1e-6 || angleBetween(P.face, norm(dx, dy)) > half) continue;
+        if (d < bestD) { bestD = d; best = norm(dx, dy); }
+      }
+      return best || P.face;
+    }
 
     return s;
   }

@@ -125,3 +125,120 @@ test('deterministic with the same seed', () => {
   assert.equal(JSON.stringify(a.enemies), JSON.stringify(b.enemies));
   assert.equal(JSON.stringify(a.player), JSON.stringify(b.player));
 });
+
+// ---------------------------------------------------------------- Task 6: trap, echo, SIGKILL, aim-assist
+function orbAt(s, dy, speed, extra) { s.spawnOrb(Object.assign({ x: s.player.x, y: s.player.y - dy, vx: 0, vy: speed, dmg: 8 }, extra || {})); }
+
+test('parry reflects an orb at double damage', () => {
+  const s = mk(); freeze(s); const e = s.enemies[0];
+  e.revealedUntil = 999; e.x = s.player.x; e.y = s.player.y - 80;
+  orbAt(s, 30, 100, { src: e.id });                     // contact after ~0.2 s
+  run(s, 0.15);
+  press(s, { trap: true });
+  run(s, 0.1);
+  assert.equal(s.player.stability, 100);
+  assert.equal(s.orbs.length, 1); assert.equal(s.orbs[0].from, 'player'); assert.equal(s.orbs[0].dmg, 16);
+  assert.ok(drain(s).includes('parry'));
+  run(s, 1);
+  assert.equal(e.hp, 14);
+});
+
+test('parry window is 0.18 s (0.30 kid)', () => {
+  for (const [kid, stab] of [[false, 92], [true, 130]]) {
+    const s = mk({ kid }); freeze(s);
+    orbAt(s, 30, 100);
+    press(s, { trap: true });
+    run(s, 0.4);
+    assert.equal(s.player.stability, stab, kid ? 'kid parries' : 'adult window closed');
+  }
+});
+
+test('missed parry recovery blocks dash', () => {
+  const s = mk(); freeze(s);
+  press(s, { trap: true });
+  run(s, 0.2);
+  assert.ok(s.player.recoverT > 0); assert.ok(drain(s).includes('parry-miss'));
+  const x0 = s.player.x;
+  press(s, { mx: 1, dash: true });
+  assert.ok(s.player.x - x0 < 5, `no dash during recovery, dx=${s.player.x - x0}`);
+});
+
+test('parrying a lunge stuns', () => {
+  const s = mk(); freeze(s); const e = s.enemies[0];
+  e.x = s.player.x; e.y = s.player.y - 20; e.state = 'lunge'; e.lungeT = 0.3; e.lungeDir = { x: 0, y: 1 };
+  press(s, { trap: true });
+  run(s, 0.1);
+  assert.ok(e.stunUntil > s.time + 1.0, `stunUntil=${e.stunUntil} time=${s.time}`);
+  assert.equal(s.player.stability, 100);
+  assert.ok(drain(s).includes('parry'));
+});
+
+test('unparryable orb ignores trap; dash avoids it', () => {
+  const s = mk(); freeze(s);
+  orbAt(s, 30, 100, { unparryable: true });
+  press(s, { trap: true });
+  run(s, 0.3);
+  assert.equal(s.player.stability, 92); assert.ok(drain(s).includes('sigkill'));
+  const d = mk(); freeze(d);
+  press(d, { mx: 1, dash: true });
+  d.spawnOrb({ x: d.player.x, y: d.player.y, vx: 0, vy: 0, dmg: 8, unparryable: true });
+  run(d, 0.3);
+  assert.equal(d.player.stability, 100);
+});
+
+test('parry during dash invulnerability', () => {
+  const s = mk(); freeze(s);
+  press(s, { mx: 1, dash: true });
+  press(s, { mx: 1, trap: true });
+  s.spawnOrb({ x: s.player.x, y: s.player.y, vx: 0, vy: 0, dmg: 8 });
+  run(s, 0.3);
+  assert.equal(s.player.stability, 100);
+  assert.ok(!drain(s).includes('hurt'));
+  assert.ok(s.orbs.length <= 1);
+});
+
+test('echo heat and overheat lock', () => {
+  const s = mk(); freeze(s);
+  press(s, { tool: 'echo' });
+  assert.ok(Math.abs(s.player.heat - 9) < 0.01, `heat=${s.player.heat}`);
+  run(s, 0.2);
+  assert.ok(Math.abs(s.player.heat - 4) < 0.1, `heat=${s.player.heat}`);
+  drain(s);
+  s.player.heat = 95; s.cooldowns.echo = 0;
+  press(s, { tool: 'echo' });
+  assert.ok(drain(s).includes('overheat'));
+  assert.ok(Math.abs(s.player.overheatUntil - (s.time + 1.5)) < 0.02);
+  run(s, 0.4);
+  press(s, { tool: 'echo' });
+  assert.ok(!drain(s).includes('echo'), 'locked while overheated');
+  run(s, 1.2);
+  press(s, { tool: 'echo' });
+  assert.ok(drain(s).includes('echo'), 'works again after the lock');
+});
+
+test('bolts pass through cloaked enemies', () => {
+  const s = mk(); freeze(s); const e = s.enemies[0];
+  e.x = s.player.x; e.y = s.player.y + 30;
+  press(s, { tool: 'echo' });
+  run(s, 0.5);
+  assert.equal(e.hp, 30);
+});
+
+test('aim-assist picks the enemy inside the cone', () => {
+  const s = mk(); freeze(s);
+  press(s, { mx: 1 });                                   // face right
+  const P = s.player; const at = (deg, d) => ({ x: P.x + Math.cos((deg * Math.PI) / 180) * d, y: P.y - Math.sin((deg * Math.PI) / 180) * d });
+  Object.assign(s.enemies[0], at(25, 60), { revealedUntil: 999 });
+  Object.assign(s.enemies[1], at(50, 45), { revealedUntil: 999 });
+  Object.assign(s.enemies[2], { x: P.x - 100, y: P.y, revealedUntil: 999 });
+  press(s, { tool: 'echo' });
+  const b = s.bolts[0];
+  const deg = (Math.atan2(-b.vy, b.vx) * 180) / Math.PI;
+  assert.ok(Math.abs(deg - 25) < 1, `bolt heads ${deg} deg`);
+});
+
+test('tools not in loadout are refused', () => {
+  const s = mk({ tools: ['ls'] }); freeze(s);
+  press(s, { tool: 'echo' });
+  assert.equal(s.bolts.length, 0);
+});
