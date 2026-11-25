@@ -23,6 +23,33 @@ test('spawns and player sit at tile centres on floor', () => {
   assert.equal(room.solid(t(room.player.x), t(room.player.y)), false);
 });
 
+test('void, blooms and landmarks are solid; corruption creep is walkable', () => {
+  const r = R.parse(['~&H%T', '.....']);
+  assert.deepEqual([0, 1, 2, 3, 4].map((x) => r.solid(x, 0)), [true, true, true, false, true]);
+});
+
+test('landmark tiles group into rectangles with a kind', () => {
+  const r = R.parse(['HH.HH.T', 'HH.HH.T', '.......']);
+  assert.deepEqual(r.landmarks, [
+    { kind: 'chip', tx: 0, ty: 0, w: 2, h: 2 }, { kind: 'chip', tx: 3, ty: 0, w: 2, h: 2 }, { kind: 'heatsink', tx: 6, ty: 0, w: 1, h: 2 },
+  ]);
+});
+
+test('training room is a floating plaza with landmarks at the back', () => {
+  const flat = room.tiles.flat();
+  assert.ok(flat.filter((c) => c === '~').length >= 40, 'plenty of void around the plaza');
+  assert.ok(flat.includes('&') && flat.includes('%'), 'corruption blooms and creep');
+  assert.deepEqual(room.landmarks.map((l) => l.kind).sort(), ['chip', 'heatsink']);
+  for (const l of room.landmarks) {
+    assert.ok(l.ty + l.h <= 3, 'landmarks stay along the back wall');
+    for (const s of room.spawns) {
+      const dx = Math.max(l.tx - (s.x - 8) / 16, 0, (s.x - 8) / 16 - (l.tx + l.w - 1));
+      const dy = Math.max(l.ty - (s.y - 8) / 16, 0, (s.y - 8) / 16 - (l.ty + l.h - 1));
+      assert.ok(Math.max(dx, dy) >= 2, 'landmarks keep clear of mite spawns');
+    }
+  }
+});
+
 test('parse rejects ragged rows and unknown tiles', () => {
   assert.throws(() => R.parse(['###', '##']), /ragged/);
   assert.throws(() => R.parse(['#?#']), /unknown tile/);

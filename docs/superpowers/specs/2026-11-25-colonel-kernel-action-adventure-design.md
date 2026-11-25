@@ -86,9 +86,29 @@ performance and simplicity for a look the user didn't ask for.
 - **Rooms** are 30×17 tiles of 16 px (480×272). If the buffer is larger, the room is centred and
   the margin shows dark, softly animated fog. If smaller (for example a 1366×768 laptop, k = 3,
   455×256), the camera follows the Colonel, clamped to the room.
-- **Palette:** Neon Circuit as today. Navy and indigo floors, cyan/magenta/violet/mint glow, amber
-  warnings, coral danger, and the region accent on walls and lit circuits (Firmware amber, GRUB
-  lime, Home warm orange).
+- **Art direction: computer ruins with corrupted overgrowth** (chosen by the user after sharing
+  reference screenshots of the mood they want). The world is the inside of the machine as
+  ancient, overgrown ruins. Everything here is original computer hardware; no shapes, characters
+  or layouts are taken from any existing game.
+  - **Plazas:** walkable ground is pale mint/teal circuit-board slabs. Seams fall every 3–4
+    tiles, not on every tile. Thin copper-style traces, solder pads and vias run across slab
+    boundaries, painted procedurally from a fixed seed.
+  - **The void:** the rooms float over a dark data void. Void tiles are part of the room layout
+    (legend `~`, solid, so you can't fall in for now). Floor edges over the void show a cliff face
+    dropping into darkness, with cables hanging down it. Far below, faint silhouettes of giant
+    boards and blinking lights give depth.
+  - **Landmarks:** giant chips, capacitors and heat sinks sit along the back of a room and on the
+    pillar footprints, never in the open fight area. Each has a white glowing core that lights the
+    floor around it.
+  - **Corruption:** NullNux's damage grows like overgrowth. Magenta/violet data blooms and cable
+    vines creep over walls, cliff edges and some floor tiles. Blooms on solid tiles (legend `&`)
+    are scenery; creep on the floor (legend `%`) is walkable decoration.
+  - **Atmosphere:** drifting motes, a soft vignette, and additive glow only on dark surfaces (on
+    pale floors it would just wash out to white). Motes and pulses stand still with reduced motion.
+- **Palette:** Neon Circuit, with one deliberate change. Floors move from navy to pale mint/teal
+  tints of Neon Circuit's own mint and cyan. The void keeps the deep navy background, corruption
+  uses magenta and violet, and the HUD, glow colours, amber warnings, coral danger and region
+  accents (Firmware amber, GRUB lime, Home warm orange) stay as they are.
 - **Depth:** walls and machines are drawn with a lit top face and a darker front face. Every
   character and creature casts a soft oval shadow. Glowing things (Pip, cores, projectiles, lit
   circuits) draw an additive light pool on the floor. Glow halos are **pre-rendered** per sprite.

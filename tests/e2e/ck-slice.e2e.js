@@ -33,6 +33,13 @@ const tests = {
       return set.size;
     });
     assert.ok(colours > 3, `only ${colours} colours`);
+    const lum = await pg.evaluate(() => {
+      const s = CK._test.slice; const b = s.engine.bctx; const cam = s.scene.cam;
+      const L = (x, y) => { const d = b.getImageData(x, y, 1, 1).data; return 0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]; };
+      return { plaza: L(15 * 16 + 4 - cam.x, 8 * 16 + 4 - cam.y), corner: L(2, 2) };
+    });
+    assert.ok(lum.plaza > 150, `the plaza is pale: ${JSON.stringify(lum)}`);
+    assert.ok(lum.corner < 40, `the void corner is dark: ${JSON.stringify(lum)}`);
     const hud = await pg.$$eval('#ck-slice .ck-shud > *', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.right, r.top, r.bottom]; }));
     for (let i = 0; i < hud.length; i++) for (let j = i + 1; j < hud.length; j++) {
       const [a, c] = [hud[i], hud[j]]; const overlap = a[0] < c[1] - 1 && c[0] < a[1] - 1 && a[2] < c[3] - 1 && c[2] < a[3] - 1;
@@ -185,6 +192,7 @@ const tests = {
   const b = await chromium.launch();
   let fail = 0;
   for (const [name, fn] of Object.entries(tests)) {
+    if (process.env.ONLY && !name.includes(process.env.ONLY)) continue; // e.g. $env:ONLY='startup'
     let timer;
     const limit = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('test timed out after 45s')), 45000); });
     try { await Promise.race([fn(b), limit]); console.log('ok -', name); } catch (e) { fail++; console.log('not ok -', name, '\n   ', e.message.split('\n')[0]); }

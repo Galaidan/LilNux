@@ -17,26 +17,18 @@
 
     // ---- pre-rendered layers ------------------------------------------------------------------
     const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-    const isWall = (tx, ty) => { if (tx < 0 || ty < 0 || tx >= room.cols || ty >= room.rows) return true; return room.tiles[ty][tx] === '#'; };
-    const pillars = [];
-    const floorLayer = canvasOf(room.w, room.h); (function paintRoom() {
-      const g = floorLayer.getContext('2d');
-      for (let ty = 0; ty < room.rows; ty++) for (let tx = 0; tx < room.cols; tx++) {
-        const c = room.tiles[ty][tx]; const x = tx * TILE; const y = ty * TILE;
-        if (c === '#') {
-          if (!isWall(tx, ty + 1)) { g.drawImage(spr.tile_wall_front.img, x, y); g.fillStyle = accent; g.fillRect(x, y, TILE, 1); }
-          else g.drawImage(spr.tile_wall_top.img, x, y);
-        } else if (c === 'D') {
-          g.drawImage(spr.tile_door.img, x, y); g.fillStyle = accent; g.fillRect(x, y, TILE, 1);
-        } else {
-          g.drawImage((c === ',' ? spr.tile_floor_alt : spr.tile_floor).img, x, y);
-          if (c === 'o') pillars.push({ x: x + TILE / 2, y: y + TILE, tx, ty });
-        }
+    const Art = CK.RoomArt; const A = Art.ART;
+    const art = Art.paint(room, { accent, seed: 7 }); // plaza, cliffs, walls, creep (static) + props/cores/leds
+    let deep = null; let vig = null; // per buffer size, built in resize()
+    const motes = [];
+    function seedMotes(w, h) {
+      motes.length = 0; const rng = CK.rng(9);
+      for (let i = 0; i < 42; i++) {
+        const p = rng();
+        motes.push({ x: rng() * w, y: rng() * h, vy: 3 + rng() * 7, sway: 0.5 + rng() * 1.5, ph: rng() * 6, big: rng() < 0.15,
+          color: p < 0.5 ? A.white : p < 0.75 ? '#c8f5ea' : p < 0.9 ? A.magHi : A.mint });
       }
-      // soft contact shadow along the foot of every front-facing wall
-      g.fillStyle = 'rgba(6,10,28,0.45)';
-      for (let ty = 0; ty < room.rows; ty++) for (let tx = 0; tx < room.cols; tx++) if (isWall(tx, ty) && !isWall(tx, ty + 1)) g.fillRect(tx * TILE, (ty + 1) * TILE, TILE, 3);
-    })();
+    }
 
     const pools = {};
     function pool(color, r) {
@@ -46,11 +38,6 @@
       g.fillStyle = gr; g.fillRect(0, 0, r * 2, r * 2);
       return (pools[key] = c);
     }
-    const fog = canvasOf(64, 64); (function paintFog() {
-      const g = fog.getContext('2d'); g.fillStyle = COL.bg0; g.fillRect(0, 0, 64, 64);
-      const rng = CK.rng(42);
-      for (let i = 0; i < 90; i++) { g.fillStyle = rng() < 0.7 ? COL.bg1 : '#1c2448'; g.fillRect(Math.floor(rng() * 64), Math.floor(rng() * 64), 1 + Math.floor(rng() * 2), 1); }
-    })();
 
     // ---- effects state ------------------------------------------------------------------------
     const parts = []; const rings = []; const pops = []; const arcs = []; const ghosts = [];
@@ -113,6 +100,7 @@
       shakeT = Math.max(0, shakeT - dt); hurtFlash = Math.max(0, hurtFlash - dt);
       const k = 1 - Math.pow(0.002, dt); // smooth follow with ~0.15 s lag
       pip.x += (P.x - 14 - pip.x) * k; pip.y += (P.y - 22 - pip.y) * k;
+      if (!reduced() && deep) for (const m of motes) { m.y -= m.vy * dt; m.x += Math.sin(t * m.sway + m.ph) * 4 * dt; if (m.y < -2) { m.y = deep.img.height + 2; m.x = Math.random() * deep.img.width; } }
     }
     let pending = null;
     function prune(a) { for (let i = a.length - 1; i >= 0; i--) if (a[i].life <= 0) a.splice(i, 1); }
@@ -126,8 +114,14 @@
       const frame = P.moving ? Math.floor(t * 8) % 2 : 0;
       return { b: spr[`colonel_${dir}_${frame}`], flip };
     }
-    function shadow(g, x, y, w) { g.fillStyle = 'rgba(6,10,28,0.5)'; g.beginPath(); g.ellipse(x, y, w, w * 0.35, 0, 0, TAU); g.fill(); }
-    function light(g, x, y, color, r, a) { g.globalAlpha = a; g.drawImage(pool(color, r), Math.round(x - r), Math.round(y - r)); g.globalAlpha = 1; }
+    function shadow(g, x, y, w) { g.fillStyle = A.shadow; g.beginPath(); g.ellipse(x + 1, y, w, w * 0.35, 0, 0, TAU); g.fill(); }
+    // mode 'lighter' only over dark things (cores, the void); on the pale plaza additive light just turns white
+    function light(g, x, y, color, r, a, mode) {
+      g.globalCompositeOperation = mode || 'source-over'; g.globalAlpha = a;
+      g.drawImage(pool(color, r), Math.round(x - r), Math.round(y - r));
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    }
+    const pulse = (ph, speed) => (reduced() ? 0.7 : 0.55 + 0.45 * Math.sin(t * speed + ph));
 
     function draw(g, _t, view) {
       const P = sim.player;
@@ -136,33 +130,40 @@
       let sx = 0; let sy = 0;
       if (shakeT > 0 && !reduced()) { sx = Math.round((Math.random() - 0.5) * 4); sy = Math.round((Math.random() - 0.5) * 4); }
       g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
-      // margin fog (drifts slowly unless reduced motion)
-      const fo = reduced() ? 0 : Math.floor(t * 4) % 64;
-      for (let y = -64; y < view.h + 64; y += 64) for (let x = -64; x < view.w + 64; x += 64) g.drawImage(fog, x + fo, y);
+      // the data void far below, with distant blinking lights
+      if (deep) {
+        g.drawImage(deep.img, 0, 0);
+        for (const l of deep.lights) { g.globalAlpha = 0.25 + 0.5 * pulse(l.phase, 1.3); g.fillStyle = l.color; g.fillRect(l.x, l.y, 1, 1); }
+        g.globalAlpha = 1;
+      }
       g.setTransform(1, 0, 0, 1, -cam.x + sx, -cam.y + sy);
-      g.drawImage(floorLayer, 0, 0);
+      g.drawImage(art.ground, 0, 0);
 
-      // floor light pools
-      g.globalCompositeOperation = 'lighter';
-      light(g, P.x, P.y - 4, COL.cyan, 40, 0.28);
-      for (const p of pillars) light(g, p.x, p.y - 8, COL.mint, 56, 0.22);
-      for (const ob of sim.orbs) light(g, ob.x, ob.y, ob.from === 'player' ? COL.cyan : COL.coral, 14, 0.5);
-      for (const b of sim.bolts) light(g, b.x, b.y, COL.cyan, 12, 0.5);
-      light(g, pip.x, pip.y + 14, COL.cyan, 20, 0.2);
-      g.globalCompositeOperation = 'source-over';
+      // danger and shots tint the plaza under them
+      for (const ob of sim.orbs) light(g, ob.x, ob.y + 3, ob.from === 'player' ? COL.cyan : COL.coral, 12, 0.35);
+      for (const b of sim.bolts) light(g, b.x, b.y + 2, COL.cyan, 10, 0.3);
 
       // shadows
       shadow(g, P.x, P.y, 8);
-      for (const e of sim.enemies) if (!e.dead) shadow(g, e.x, e.y + e.r - 1, 6);
+      for (const e of sim.enemies) {
+        if (e.dead) continue;
+        const shown = !e.cloaked || sim.time < e.revealedUntil || sim.time < e.stunUntil;
+        g.globalAlpha = shown ? 1 : 0.15; shadow(g, e.x, e.y + e.r - 1, 6); g.globalAlpha = 1; // a cloaked mite barely touches the floor
+      }
       shadow(g, pip.x, P.y - 2, 4);
 
-      // y-sorted entities
+      // y-sorted: the Colonel, mites, landmarks, capacitors, blooms, Pip
       const list = [];
       list.push({ y: P.y, draw: () => drawColonel(g, P) });
       for (const e of sim.enemies) if (!e.dead) list.push({ y: e.y + e.r, draw: () => drawMite(g, e) });
-      for (const p of pillars) list.push({ y: p.y, draw: () => drawPillar(g, p) });
+      for (const p of art.props) list.push({ y: p.sortY, draw: () => g.drawImage(p.img, p.x, p.y) });
       list.push({ y: P.y - 2, draw: () => Pix.draw(g, spr.pip, pip.x, pip.y + (reduced() ? 0 : Math.round(Math.sin(t * 3) * 1.5)), { glow: 0.7 }) });
       list.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
+
+      // glowing cores and status lights bloom on top of the dark machines
+      for (let i = 0; i < art.cores.length; i++) { const k = art.cores[i]; light(g, k.x, k.y, k.color, k.r, k.a * pulse(i, 1.6), 'lighter'); }
+      for (const l of art.leds) { g.globalAlpha = pulse(l.phase, 4) > 0.6 ? 1 : 0.25; g.fillStyle = l.color; g.fillRect(l.x, l.y, 1, 1); }
+      g.globalAlpha = 1;
 
       for (const ob of sim.orbs) {
         Pix.draw(g, spr.orb, ob.x, ob.y + 3, { glow: 0.8 });
@@ -170,6 +171,15 @@
       }
       for (const b of sim.bolts) Pix.draw(g, spr.bolt, b.x, b.y + 2, { glow: 0.9 });
       drawEffects(g);
+
+      // screen space: drifting motes, then the vignette
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      for (const m of motes) {
+        g.globalAlpha = 0.35 + 0.4 * pulse(m.ph, 2); g.fillStyle = m.color;
+        g.fillRect(Math.round(m.x), Math.round(m.y), m.big ? 2 : 1, m.big ? 2 : 1);
+      }
+      g.globalAlpha = 1;
+      if (vig) g.drawImage(vig, 0, 0);
     }
 
     function drawColonel(g, P) {
@@ -185,7 +195,8 @@
       const frame = (Math.floor(t * 6) + Number(e.id.slice(1))) % 2;
       const b = spr['mite_' + frame];
       const jitter = visible || reduced() ? 0 : (Math.floor(t * 20) % 3) - 1;
-      Pix.draw(g, b, e.x + jitter, e.y + e.r + 2, { alpha: visible ? 1 : 0.22, glow: visible ? 0.6 : 0, flash: e.flash > 0 });
+      // cloaked: a faint shimmer (0.22 read as faint on the old navy floor; the pale plaza needs less)
+      Pix.draw(g, b, e.x + jitter, e.y + e.r + 2, { alpha: visible ? 1 : 0.13, glow: visible ? 0.6 : 0, flash: e.flash > 0 });
       if (e.state === 'tell') {
         g.fillStyle = COL.coral; g.fillRect(Math.round(e.x), Math.round(e.y - 16), 1, 4); g.fillRect(Math.round(e.x), Math.round(e.y - 11), 1, 1);
         g.globalAlpha = 0.5; Pix.draw(g, b, e.x, e.y + e.r + 2, { flash: true }); g.globalAlpha = 1;
@@ -195,29 +206,29 @@
         for (let i = 0; i < 3; i++) { const a = (reduced() ? 0 : t * 5) + (i * TAU) / 3; g.fillRect(Math.round(e.x + Math.cos(a) * 7), Math.round(e.y - 12 + Math.sin(a) * 2), 1, 1); }
       }
     }
-    function drawPillar(g, p) {
-      const x = p.x - TILE / 2; const y = p.y - TILE;
-      g.drawImage(spr.tile_wall_front.img, x, y);
-      g.drawImage(spr.tile_wall_top.img, 0, 0, TILE, 10, x, y - 10, TILE, 10);
-      g.fillStyle = COL.mint; g.fillRect(x + 6, y - 7, 4, 3);
-      g.globalCompositeOperation = 'lighter'; light(g, x + 8, y - 6, COL.mint, 10, 0.8); g.globalCompositeOperation = 'source-over';
-    }
+    // Effects draw normally (not additive) with a dark under-stroke, so they read on the pale plaza.
     function drawEffects(g) {
-      g.globalCompositeOperation = 'lighter';
       for (const a of arcs) {
-        g.strokeStyle = a.combo === 3 ? COL.magenta : COL.cyan; g.lineWidth = a.combo === 3 ? 3 : 2; g.globalAlpha = Math.max(0, a.life / 0.1);
+        const al = Math.max(0, a.life / 0.1); const w = a.combo === 3 ? 3 : 2;
+        g.globalAlpha = al * 0.55; g.strokeStyle = A.cliff2; g.lineWidth = w + 2;
+        g.beginPath(); g.arc(a.x, a.y, 18, a.dir - 0.9, a.dir + 0.9); g.stroke();
+        g.globalAlpha = al; g.strokeStyle = a.combo === 3 ? COL.magenta : COL.white; g.lineWidth = w;
         g.beginPath(); g.arc(a.x, a.y, 18, a.dir - 0.9, a.dir + 0.9); g.stroke();
       }
       for (const r of rings) {
-        const k = 1 - r.life / r.max; g.strokeStyle = r.color; g.lineWidth = 1; g.globalAlpha = Math.max(0, r.life / r.max);
-        g.beginPath(); g.arc(r.x, r.y, r.r0 + (r.r1 - r.r0) * k, 0, TAU); g.stroke();
+        const k = 1 - r.life / r.max; const rad = r.r0 + (r.r1 - r.r0) * k; const al = Math.max(0, r.life / r.max);
+        g.globalAlpha = al * 0.5; g.strokeStyle = A.cliff2; g.lineWidth = 3; g.beginPath(); g.arc(r.x, r.y, rad, 0, TAU); g.stroke();
+        g.globalAlpha = al; g.strokeStyle = r.color; g.lineWidth = 1; g.beginPath(); g.arc(r.x, r.y, rad, 0, TAU); g.stroke();
       }
       for (const p of parts) { g.globalAlpha = Math.max(0, p.life / p.max); g.fillStyle = p.color; g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
-      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+      g.globalAlpha = 1;
       for (const p of pops) {
-        g.globalAlpha = Math.min(1, p.life / 0.3); g.fillStyle = COL.white;
-        const s = String(p.n); let x = Math.round(p.x - (s.length * 4) / 2);
-        for (const ch of s) { const d = DIGITS[+ch]; for (let i = 0; i < 15; i++) if (d[i] === '1') g.fillRect(x + (i % 3), Math.round(p.y) + Math.floor(i / 3), 1, 1); x += 4; }
+        g.globalAlpha = Math.min(1, p.life / 0.3);
+        const s = String(p.n); const x0 = Math.round(p.x - (s.length * 4) / 2); const y0 = Math.round(p.y);
+        for (const [col, ox, oy] of [[A.cliff3, 1, 0], [A.cliff3, -1, 0], [A.cliff3, 0, 1], [A.cliff3, 0, -1], [COL.white, 0, 0]]) {
+          g.fillStyle = col; let x = x0 + ox;
+          for (const ch of s) { const d = DIGITS[+ch]; for (let i = 0; i < 15; i++) if (d[i] === '1') g.fillRect(x + (i % 3), y0 + oy + Math.floor(i / 3), 1, 1); x += 4; }
+        }
       }
       g.globalAlpha = 1;
     }
@@ -226,7 +237,10 @@
       update, draw, cam,
       get sim() { return sim; },
       setSim(s) { sim = s; parts.length = rings.length = pops.length = arcs.length = ghosts.length = 0; hitstop = 0; pending = null; pip.x = s.player.x - 14; pip.y = s.player.y - 22; },
-      resize() {},
+      resize(view) {
+        if (!view || (deep && deep.img.width === view.w && deep.img.height === view.h)) return;
+        deep = Art.deep(view.w, view.h, 3); vig = Art.vignette(view.w, view.h); seedMotes(view.w, view.h);
+      },
     };
     return scene;
   }
