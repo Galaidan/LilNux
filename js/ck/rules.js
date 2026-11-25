@@ -77,7 +77,7 @@
     reveal(state, to);
     const node = cur(state).nodes[to];
     const first = !isCleared(state, to);
-    if (!BLOCKING[node.kind]) clear(state, to);
+    if (!BLOCKING[node.kind] && node.kind !== 'item') clear(state, to); // an item room counts once its item is taken
     if (isCleared(state, to) || node.kind === 'character') state.checkpoint = { region: state.region, node: to };
     return { ok: true, arrived: node, first };
   }

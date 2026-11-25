@@ -267,4 +267,8 @@ test('sanitize v2: equipped holds only learned tools, trimmed to slots; kill-9 i
   const s = CK.State.fresh(); s.learned = ['echo', 'ls', 'cd', 'kill', 'trap']; s.equipped = ['kill', 'echo', 'ls', 'cd'];
   s.upgrades = ['kill-9', 'cd-dash']; R.sanitize(s);
   assert.deepEqual(s.equipped, ['echo', 'ls']); assert.deepEqual(s.upgrades, ['kill-9']);
+});test('item rooms stay unclaimed until the item is taken', () => {
+  const s = CK.State.fresh(); s.node = 'f5'; s.prev = 'f3'; s.explored.firmware = ['f3', 'f5', 'f6']; s.cleared.firmware = ['f3', 'f5'];
+  const r = R.move(s, 'f6'); assert.ok(r.ok); assert.equal(R.isCleared(s, 'f6'), false);
+  assert.notEqual(s.checkpoint.node, 'f6');
 });

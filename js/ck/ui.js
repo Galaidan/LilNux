@@ -10,7 +10,7 @@
     const W = CK.World; const R = CK.Rules;
     rootEl.classList.add('ck-ui');
     rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-act" hidden></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div>'
-      + '<div class="ck-prompt" hidden></div>'
+      + '<div class="ck-prompt" hidden></div><div class="ck-bossbar" hidden><b></b><div role="img"><i></i></div></div>'
       + '<div class="ck-rotate"><div class="ph"></div><p><b>Turn your phone sideways to play.</b></p><p>The Adventure is played in landscape.</p><button type="button" class="ck-btn" data-ck="exit">Back to menu</button></div>';
     const $ = (s) => rootEl.querySelector(s);
     const ui = { selected: null, combatText: '', pipTab: null, mode: 'map', unread: 0 };
@@ -58,7 +58,7 @@
         <div class="ck-hud-right">
           ${opts.canRest ? '<button class="ck-btn" data-ck="rest" aria-label="Rest (systemctl suspend)" title="Rest — systemctl suspend">💤 Rest</button>' : ''}
           <button class="ck-btn ck-logbtn" data-ck="log" aria-label="Message log" title="Message log">💬<b class="ck-unread" ${ui.unread ? '' : 'hidden'}>${ui.unread}</b></button>
-          <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip" title="Pip’s panel: quests, items, combat tips and tasks"><span class="ck-orb"></span><span>Pip</span></button>
+          <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip" title="Pip’s panel: quests, items, map and tasks"><span class="ck-orb"></span><span>Pip</span></button>
           <button class="ck-btn" data-ck="exit" aria-label="Leave the adventure" title="Back to choose a mode">✕</button>
         </div>`;
     };
@@ -75,7 +75,19 @@
         + tools.map((id, i) => `<span class="ck-tool" data-tool="${id}" role="img" aria-label="${id} ready"><kbd>${i + 1}</kbd> ${esc(id)}</span>`).join('');
       chips = tools.map((id) => ({ id, el: el.querySelector(`[data-tool="${id}"]`), last: -1 }));
     };
+    // A boss's health: its name and a bar split at each phase, in the HTML overlay.
+    let bossKey = '';
+    function bossBar(sim) {
+      const box = $('.ck-bossbar'); const e = sim && !sim.outcome && (sim.enemies || []).find((x) => x.boss && !x.dead);
+      if (!e) { box.hidden = true; bossKey = ''; return; }
+      const c = W.CREATURES[e.kind]; const hp = Math.max(0, Math.ceil(e.hp)); const key = e.kind + hp;
+      box.hidden = false; if (key === bossKey) return; bossKey = key;
+      box.querySelector('b').textContent = c.name;
+      const bar = box.querySelector('[role=img]'); bar.setAttribute('aria-label', `${c.name}: health ${hp} of ${e.maxHp}`);
+      bar.style.setProperty('--hp', (hp / e.maxHp).toFixed(3)); bar.style.setProperty('--phases', e.phases || 1);
+    }
     ui.actionTick = function (sim) {
+      bossBar(sim);
       const el = $('.ck-act'); if (!sim || el.hidden) return;
       const T = CK.Action.TUNING; const P = sim.player;
       const segs = el.querySelector('.ck-ssegs'); const on = Math.ceil((P.stability / P.maxStability) * 10);
@@ -214,7 +226,7 @@
           : `Restore <b>${esc(reg.name)}</b>: reach <b>${esc(boss.label)}</b> and defeat the <b>${esc(W.CREATURES[boss.ref.creature].name)}</b>.`}</p></div>
         <div class="ck-quest"><b>Who to talk to</b><p>${unlearned.length ? `Find <b>${esc(W.CHARACTERS[unlearned[0].ref].name)}</b> at <b>${esc(unlearned[0].label)}</b> to learn a new skill.` : 'You’ve met everyone in this chapter.'}</p></div>
         <div class="ck-quest"><b>Restored</b><p>${done.length ? done.map((r) => '✓ ' + esc(r.name)).join('<br>') : 'Nothing yet. The machine is still dark.'}</p></div>
-        <div class="ck-quest"><b>Memories</b><p>${state.memories.length ? state.memories.slice(-3).map((m) => `<code>${esc(m)}</code>`).join('<br>') : 'None recovered yet. Look for violet ✦ nodes.'}</p></div>`;
+        <div class="ck-quest"><b>Memories</b><p>${state.memories.length ? state.memories.slice(-3).map((m) => `<code>${esc(m)}</code>`).join('<br>') : 'None recovered yet. Look for violet ✦ crystals.'}</p></div>`;
     }
     function tabTasks(state) {
       return Object.values(W.TASKS).map((t) => {

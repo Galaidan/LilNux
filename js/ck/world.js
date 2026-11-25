@@ -12,28 +12,48 @@
     return `<pre>${rows.join('\n')}</pre><div class="ck-dim">…up to 64 on Linux</div>`;
   };
   const dim = (t) => `<div class="ck-dim">${t}</div>`;
+  // Signal names bash knows on Linux (1-31; case doesn't matter, SIG is optional), or a number 0-64.
+  const NAMES = SIGNALS.map((n) => n.slice(3)).concat(['TSTP', 'TTIN', 'TTOU', 'URG', 'XCPU', 'XFSZ', 'VTALRM', 'PROF', 'WINCH', 'IO', 'POLL', 'PWR', 'SYS', 'IOT', 'CLD']);
+  const TRAP_ONLY = ['EXIT', 'DEBUG', 'RETURN', 'ERR']; // pseudo-signals only `trap` understands
+  function sigOk(spec, trap) {
+    if (/^\d+$/.test(spec)) return Number(spec) <= 64;
+    const n = spec.toUpperCase().replace(/^SIG/, '');
+    return NAMES.includes(n) || (!!trap && TRAP_ONLY.includes(n));
+  }
+  const badSig = (cmd, spec) => ({ ok: false, html: `bash: ${cmd}: ${spec.replace(/[&<>]/g, '')}: invalid signal specification` });
   function killTerm(line) {
     if (/^kill\s+-l$/.test(line)) return { ok: true, html: sigList() };
-    const m = line.match(/^kill\s+(?:-\w+\s+)?(\d+)$/);
-    if (m) return { ok: true, html: `bash: kill: (${m[1]}) - No such process` + dim('Down here it hits Glitch Mites instead.') };
+    const m = line.match(/^kill\s+(?:-s\s+(\S+)\s+|-(\S+)\s+)?(\d+)$/);
+    if (m) {
+      const spec = m[1] || m[2];
+      if (spec && !sigOk(spec)) return badSig('kill', spec);
+      if (m[3] === '1') return { ok: true, html: 'bash: kill: (1) - Operation not permitted' + dim('Only root may signal PID 1. Which is me, by the way. Rude.') };
+      return { ok: true, html: `bash: kill: (${m[3]}) - No such process` + dim('Down here it hits Glitch Mites instead.') };
+    }
     return { ok: false, html: 'kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]' };
   }
   function trapTerm(line) {
     if (/^trap\s+-l$/.test(line)) return { ok: true, html: sigList() };
-    if (/^trap\s+(['"]).+\1\s+\w+$/.test(line)) return { ok: true, html: dim('Handler set. Down here it catches orbs and lunges.') };
+    const m = line.match(/^trap\s+(['"]).+\1((?:\s+\S+)+)$/);
+    if (m) {
+      const specs = m[2].trim().split(/\s+/); const bad = specs.find((x) => !sigOk(x, true));
+      if (bad) return badSig('trap', bad);
+      const uncatchable = specs.some((x) => ['KILL', 'STOP', '9', '19'].includes(x.toUpperCase().replace(/^SIG/, '')));
+      return { ok: true, html: dim(uncatchable ? 'SIGKILL and SIGSTOP can’t be caught: that handler would never run.' : 'Handler set. Down here it catches orbs and lunges.') };
+    }
     return { ok: false, html: dim("try <code>trap 'echo caught' INT</code>") };
   }
 
   const SKILLS = {
     kill: {
-      id: 'kill', cmd: 'kill', name: 'Kill Strike', icon: '⚔️', teacher: 'pip', move: true, learnTest: /^kill\s+(-l|-\w+\s+\d+|\d+)$/,
+      id: 'kill', cmd: 'kill', name: 'Kill Strike', icon: '⚔️', teacher: 'pip', move: true, learnTest: /^kill\s+(-l|(-s\s+\S+\s+|-\S+\s+)?\d+)$/,
       blurb: 'Melee combo. Each hit cools your heat a little.',
       real: '`kill` sends a signal to a process. By default it’s SIGTERM, which asks it to quit politely; `kill -9` sends SIGKILL, which the process can’t catch or ignore.',
       example: 'kill -l', term: killTerm,
       upgrade: { id: 'kill-9', cmd: 'kill -9', cost: 50, needs: 'cpu', blurb: 'hold to charge a heavy strike nothing can catch' },
     },
     trap: {
-      id: 'trap', cmd: 'trap', name: 'Signal Trap', icon: '🛡️', teacher: 'pip', move: true, learnTest: /^trap\s+(-l|(['"]).+\2\s+\w+)$/,
+      id: 'trap', cmd: 'trap', name: 'Signal Trap', icon: '🛡️', teacher: 'pip', move: true, learnTest: /^trap\s+(-l|(['"]).+\2(\s+\S+)+)$/,
       blurb: 'Parry: catch a signal and send it back. Mistimed, it leaves you open.',
       real: 'In bash, `trap \'echo caught\' INT` runs a command when the shell gets SIGINT (Ctrl+C). Scripts use it to clean up. SIGKILL and SIGSTOP can’t be trapped.',
       example: "trap 'echo caught' INT", term: trapTerm,

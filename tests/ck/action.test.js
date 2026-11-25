@@ -291,3 +291,11 @@ test('echo bolts fly over the void and trip a switch', () => {
   const s = mk({ room, spawns: [] }); press(s, { tool: 'echo', ax: 1, ay: 0 }); run(s, 0.5);
   const sw = s.events.filter((v) => v.type === 'switch'); assert.equal(sw.length, 1); assert.deepEqual([sw[0].tx, sw[0].ty], [4, 1]);
 });
+test('kill reaches 30 px: a revealed mite 33 px away (centre to centre) is hit', () => {
+  const room = Rooms.parse(Rooms.TRAINING);
+  const s = mk({ room, spawns: [{ kind: 'glitchMite', x: room.player.x + 33, y: room.player.y }] });
+  freeze(s); s.enemies[0].revealedUntil = 99;
+  press(s, { kill: true, ax: 1, ay: 0 });
+  assert.equal(s.enemies[0].hp, 30 - T.KILL_DMG);
+  assert.equal(T.KILL_RANGE, 30); assert.equal(T.KILL9_RANGE, 34);
+});

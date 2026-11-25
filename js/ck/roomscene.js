@@ -58,7 +58,7 @@
     function handle(ev) {
       const P = sim.player;
       switch (ev.type) {
-        case 'hit': burst(ev.x, ev.y, COL.magenta, 6, 60); if (ev.n) pops.push({ x: ev.x, y: ev.y - 10, n: ev.n, life: 0.6 }); hitstop = Math.max(hitstop, 0.05); break;
+        case 'hit': burst(ev.x, ev.y, COL.magenta, 6, 60); if (ev.n) pops.push({ x: ev.x, y: ev.y - 22, n: ev.n, life: 0.6 }); hitstop = Math.max(hitstop, 0.05); break;
         case 'kill': burst(ev.x, ev.y, COL.violet, 14, 90); burst(ev.x, ev.y, COL.white, 4, 40); rings.push({ x: ev.x, y: ev.y, r0: 4, r1: 22, life: 0.3, max: 0.3, color: COL.magenta }); hitstop = Math.max(hitstop, 0.06); shake(); break;
         case 'hurt': burst(P.x, P.y - 10, COL.coral, 8, 70); hurtFlash = 0.08; shake(); break;
         case 'parry': rings.push({ x: ev.x, y: ev.y, r0: 4, r1: 26, life: 0.25, max: 0.25, color: COL.cyan }); burst(ev.x, ev.y, COL.cyan, 8, 80); hitstop = Math.max(hitstop, 0.05); break;
@@ -234,6 +234,7 @@
       }
       g.globalAlpha = 1;
       if (vig) g.drawImage(vig, 0, 0);
+      drawBars(g, sx, sy); // last, so they stay readable over the vignette
     }
 
     function drawColonel(g, P) {
@@ -341,14 +342,33 @@
       g.globalAlpha = 0.08; g.fillStyle = COL.magenta; g.fillRect(0, 0, view.w, view.h); g.globalAlpha = 1;
     }
 
+    // Health bars over creatures you can see (bosses get a named bar in the HUD instead). Cloaked = no bar.
+    const FOE_H = { glitchMite: 16, loopWisp: 24 };
+    let bars = [];
+    function drawBars(g, sx, sy) {
+      bars = [];
+      for (const e of sim.enemies) {
+        if (e.dead || e.boss) continue;
+        const visible = !e.cloaked || sim.time < e.revealedUntil || sim.time < e.stunUntil;
+        if (!visible) continue;
+        const w = e.kind === 'loopWisp' ? 18 : 14; const frac = Math.max(0, Math.min(1, e.hp / e.maxHp));
+        const x = Math.round(e.x - w / 2); const y = Math.round(e.y + e.r + 2 - (FOE_H[e.kind] || 16) - 4);
+        const X = x - Math.round(cam.x) + sx; const Y = y - Math.round(cam.y) + sy;
+        g.fillStyle = A.cliff3; g.fillRect(X - 1, Y - 1, w + 2, 4);
+        g.fillStyle = '#1c2448'; g.fillRect(X, Y, w, 2);
+        g.fillStyle = frac > 0.5 ? COL.mint : frac > 0.25 ? COL.amber : COL.coral; g.fillRect(X, Y, Math.max(1, Math.round(frac * w)), 2);
+        bars.push({ id: e.id, x, y, w, frac });
+      }
+    }
+
     // Effects draw normally (not additive) with a dark under-stroke, so they read on the pale plaza.
     function drawEffects(g) {
       for (const a of arcs) {
         const al = Math.max(0, a.life / 0.1); const w = a.combo === 3 ? 3 : 2;
         g.globalAlpha = al * 0.55; g.strokeStyle = A.cliff2; g.lineWidth = w + 2;
-        g.beginPath(); g.arc(a.x, a.y, 18, a.dir - 0.9, a.dir + 0.9); g.stroke();
+        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
         g.globalAlpha = al; g.strokeStyle = a.combo === 3 ? COL.magenta : COL.white; g.lineWidth = w;
-        g.beginPath(); g.arc(a.x, a.y, 18, a.dir - 0.9, a.dir + 0.9); g.stroke();
+        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
       }
       for (const r of rings) {
         const k = 1 - r.life / r.max; const rad = r.r0 + (r.r1 - r.r0) * k; const al = Math.max(0, r.life / r.max);
@@ -387,6 +407,7 @@
       // debug: put the Colonel somewhere (the door latch resets, so the real crossing code runs)
       place(x, y) { sim.player.x = x; sim.player.y = y; latch = null; },
       get transitioning() { return slideT > 0; },
+      get bars() { return bars; },
       resize(view) {
         if (!view || (deep && deep.img.width === view.w && deep.img.height === view.h)) return;
         deep = Art.deep(view.w, view.h, 3); vig = Art.vignette(view.w, view.h); seedMotes(view.w, view.h);
