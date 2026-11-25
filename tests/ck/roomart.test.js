@@ -22,3 +22,7 @@ test('art colours stay in the Neon Circuit family', () => {
   for (const k of ['mag', 'vio', 'mint', 'cyan']) assert.ok(/^#[0-9a-f]{6}$/.test(A[k]), k);
   assert.deepEqual([A.mag, A.vio, A.mint, A.cyan], ['#ff4fd8', '#8b5cff', '#6dffb0', '#38f2ff']);
 });
+
+test('room art knows every tile in the legend', () => {
+  for (const c of '#.,DPmo~&%HT=_!tcp*sb>wGK') assert.ok(RoomArt.TILES.includes(c), c);
+});

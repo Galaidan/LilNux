@@ -32,3 +32,10 @@ test('every sprite parses with the shared palette at its required size', () => {
     'colonel_attack_down', 'colonel_attack_up', 'colonel_attack_side', 'colonel_dash', 'pip', 'mite_0', 'mite_1', 'orb', 'bolt',
     'tile_floor', 'tile_floor_alt', 'tile_wall_top', 'tile_wall_front', 'tile_door']) assert.ok(Sprites.SET[req], req);
 });
+
+test('chapter sprites exist at their sizes and use palette keys only', () => {
+  const S = globalThis.CK.Sprites; const P = globalThis.CK.Pixel;
+  const size = { bios: [24, 28], grub: [24, 24], liltux: [24, 28], wisp_0: [24, 24], boot_0: [48, 48], wraith_0: [64, 64], terminal: [16, 24], crystal: [16, 20], gate: [32, 32], switch_on: [16, 16] };
+  for (const [k, [w, h]] of Object.entries(size)) { const p = P.parse(S.SET[k].rows, S.PALETTE); assert.deepEqual([p.w, p.h], [w, h], k); }
+  for (const k of Object.keys(S.SET)) P.parse(S.SET[k].rows, S.PALETTE);
+});
