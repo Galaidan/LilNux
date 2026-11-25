@@ -283,4 +283,7 @@ body.ck-open { overflow: hidden; }
 .ck-map > div.here { box-shadow: 0 0 0 2px var(--c-mint), 0 0 12px var(--c-mint); }
 .ck-map > div.empty { visibility: hidden; }
 .ck-mapkey { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; font-size: 13px; color: var(--c-dim); }
-.ck-mapkey b { color: var(--c-ink); display: inline-block; width: 22px; text-align: center; }
+.ck-mapkey b { color: var(--c-ink); display: inline-block; width: 22px; text-align: center; }.ck-pz { position: absolute; z-index: 60; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 12px; align-items: center;
+  max-width: min(640px, 92vw); padding: 8px 12px; border-radius: 14px; background: var(--glass, rgba(14,20,48,.82)); border: 1px solid var(--edge, rgba(56,242,255,.35)); color: #eef4ff; font: 14px/1.35 system-ui, sans-serif; }
+.ck-pz p { margin: 0; }
+.ck-pz .ck-dim { color: #a9b6da; }
