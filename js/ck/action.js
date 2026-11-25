@@ -65,7 +65,7 @@
     }
     function damage(e, n) {
       if (e.dead) return;
-      e.hp -= n; e.flash = 0.08; ev('hit', e.x, e.y);
+      e.hp -= n; e.flash = 0.08; ev('hit', e.x, e.y); s.events[s.events.length - 1].n = Math.round(n);
       if (e.hp <= 0) { e.hp = 0; e.dead = true; ev('kill', e.x, e.y); }
     }
 
