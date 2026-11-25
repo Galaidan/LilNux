@@ -242,3 +242,51 @@ test('tools not in loadout are refused', () => {
   press(s, { tool: 'echo' });
   assert.equal(s.bolts.length, 0);
 });
+
+// ---- chapter rooms: mods, upgrades, kill -9, breakables, switches, empty rooms -------------------
+test('a room with no foes never ends', () => {
+  const s = mk({ spawns: [] }); for (let i = 0; i < 120; i++) s.step(1 / 60, IDLE);
+  assert.equal(s.outcome, null); assert.equal(s.hadFoes, false); assert.ok(!s.events.some((e) => e.type === 'clear'));
+});
+test('mods scale move speed, dash cooldown, tool cooldowns and heat', () => {
+  const s = mk({ spawns: [], tools: ['echo'], mods: { moveMul: 1.2, dashCdMul: 0.75, cdMul: 0.85, heatMul: 0.7 } });
+  const x0 = s.player.x; run(s, 0.5, { mx: 1 }); assert.ok(Math.abs(s.player.x - x0 - 66) < 1, `${s.player.x - x0}`);
+  press(s, { tool: 'echo', ax: 0, ay: -1 }); // cooldowns decay first, then the shot sets them
+  assert.ok(Math.abs(s.cooldowns.echo - 0.35 * 0.85) < 1e-6); assert.ok(Math.abs(s.player.heat - 9 * 0.7) < 1e-6);
+  press(s, { dash: true }); run(s, 9 / 60);
+  assert.ok(s.player.dashCd > 0 && s.player.dashCd <= 0.35 * 0.75 + 1e-6, `${s.player.dashCd}`);
+});
+test('echo -n fires 25% faster', () => {
+  const s = mk({ spawns: [], tools: ['echo'], upgrades: ['echo-n'] });
+  press(s, { tool: 'echo', ax: 0, ay: -1 }); assert.ok(s.cooldowns.echo <= 0.35 * 0.75 + 1e-6);
+});
+test('kill -9: hold 0.6 s, release, 40 damage', () => {
+  const room = Rooms.parse(Rooms.TRAINING);
+  const s = mk({ room, upgrades: ['kill-9'], spawns: [{ kind: 'glitchMite', x: room.player.x, y: room.player.y - 18 }] });
+  freeze(s); const e = s.enemies[0]; e.revealedUntil = 99; s.player.face = { x: 0, y: -1 };
+  s.step(1 / 60, Object.assign({}, IDLE, { kill: true, killHeld: true, ay: -1 }));
+  for (let i = 0; i < 40; i++) s.step(1 / 60, Object.assign({}, IDLE, { killHeld: true }));
+  assert.ok(s.events.some((v) => v.type === 'charge')); s.step(1 / 60, Object.assign({}, IDLE, { killHeld: false }));
+  assert.ok(s.events.some((v) => v.type === 'heavy')); assert.equal(e.dead, true);
+});
+test('kill -9 needs the upgrade', () => {
+  const s = mk({ spawns: [] }); for (let i = 0; i < 50; i++) s.step(1 / 60, Object.assign({}, IDLE, { killHeld: true })); s.step(1 / 60, IDLE);
+  assert.ok(!s.events.some((v) => v.type === 'heavy' || v.type === 'charge'));
+});
+test('ls -a keeps creatures revealed for 7 s', () => {
+  const s = mk({ tools: ['ls'], upgrades: ['ls-a'] }); press(s, { tool: 'ls' });
+  assert.ok(Math.abs(s.enemies[0].revealedUntil - s.time - 7) < 1e-6);
+});
+test('kill breaks a breakable in reach; echo does not', () => {
+  const room = Rooms.parse(['.....', '..b..', '..P..', '..b..', '.....']);
+  const s = mk({ room, spawns: [], breakables: [{ id: 'b1', tiles: [[2, 1]] }, { id: 'b2', tiles: [[2, 3]] }] });
+  press(s, { kill: true, ax: 0, ay: -1 });
+  const br = s.events.filter((v) => v.type === 'break'); assert.deepEqual(br.map((v) => v.id), ['b1']); assert.equal(room.tiles[1][2], '.');
+  run(s, 0.5); press(s, { tool: 'echo', ax: 0, ay: 1 }); run(s, 0.5);
+  assert.equal(s.events.filter((v) => v.type === 'break').length, 1); assert.equal(room.tiles[3][2], 'b');
+});
+test('echo bolts fly over the void and trip a switch', () => {
+  const room = Rooms.parse(['.....', 'P~~~!', '.....']);
+  const s = mk({ room, spawns: [] }); press(s, { tool: 'echo', ax: 1, ay: 0 }); run(s, 0.5);
+  const sw = s.events.filter((v) => v.type === 'switch'); assert.equal(sw.length, 1); assert.deepEqual([sw[0].tx, sw[0].ty], [4, 1]);
+});
