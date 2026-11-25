@@ -84,7 +84,7 @@ performance and simplicity for a look the user didn't ask for.
   - 1920×1080 PC: k = 4, buffer 480×270.
   - iPhone landscape 2556×1179: k = 4, buffer about 639×294.
 - **Rooms** are 30×17 tiles of 16 px (480×272). If the buffer is larger, the room is centred and
-  the margin shows dark, softly animated fog. If smaller (for example a 1366×768 laptop, k = 3,
+  the margin shows the data void (see Art direction below). If smaller (for example a 1366×768 laptop, k = 3,
   455×256), the camera follows the Colonel, clamped to the room.
 - **Art direction: computer ruins with corrupted overgrowth** (chosen by the user after sharing
   reference screenshots of the mood they want). The world is the inside of the machine as
@@ -111,7 +111,9 @@ performance and simplicity for a look the user didn't ask for.
   accents (Firmware amber, GRUB lime, Home warm orange) stay as they are.
 - **Depth:** walls and machines are drawn with a lit top face and a darker front face. Every
   character and creature casts a soft oval shadow. Glowing things (Pip, cores, projectiles, lit
-  circuits) draw an additive light pool on the floor. Glow halos are **pre-rendered** per sprite.
+  circuits) light their surroundings: additive light only over dark surfaces (machine bodies,
+  the void), and a soft normal-blend tint on the pale plaza, where additive light would wash out to
+  white. Glow halos are **pre-rendered** per sprite.
   No per-frame `shadowBlur`, which is slow on iPhone.
 - **Sprites** are authored in code as palette-indexed text grids (one character per pixel) and
   turned into offscreen canvases at startup. There are no image files to draw and everything is

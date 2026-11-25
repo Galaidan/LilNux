@@ -200,7 +200,8 @@ body.ck-open { overflow: hidden; }
 .ck-shud { position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top));
   display: flex; align-items: center; gap: 10px; pointer-events: none; }
 .ck-shud > * { pointer-events: auto; }
-.ck-sbar { display: flex; flex-direction: column; gap: 3px; font: 800 10px var(--mono); letter-spacing: .1em; color: var(--c-dim); text-transform: uppercase; }
+.ck-sbar { display: flex; flex-direction: column; gap: 3px; font: 800 10px var(--mono); letter-spacing: .1em; color: var(--c-dim); text-transform: uppercase;
+  padding: 5px 8px; border-radius: 10px; background: var(--glass); border: 1px solid var(--edge); } /* glass backing: labels stay readable over the pale plaza */
 .ck-ssegs { display: flex; gap: 2px; }
 .ck-ssegs i { width: 12px; height: 8px; background: #1c2448; border: 1px solid #2b3768; }
 .ck-ssegs i.on { background: var(--c-mint); border-color: var(--c-mint); box-shadow: 0 0 6px var(--c-mint); }
