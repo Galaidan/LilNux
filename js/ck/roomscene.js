@@ -84,6 +84,7 @@
 
     // ---- update -----------------------------------------------------------------------------------
     function update(dt) {
+      if (o.paused && o.paused()) return; // frozen behind the rotate screen or while the window is unfocused
       t += dt;
       const P = sim.player;
       const inp = input ? input.read() : { mx: 0, my: 0, mouse: null, kill: false, trap: false, dash: false, tool: null };

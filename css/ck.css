@@ -219,6 +219,19 @@ body.ck-open { overflow: hidden; }
 .ck-shint { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom)); padding: 6px 12px; border-radius: 10px;
   background: var(--glass); border: 1px solid var(--edge); font-size: 13px; color: var(--c-dim); display: flex; gap: 10px; align-items: center; }
 .ck-shint b { color: var(--c-ink); }
+.ck-shint { pointer-events: none; } /* lets thumbs through to the stick; only its ✓ takes taps */
+.ck-shint button { pointer-events: auto; }
+/* Tool chips: a dark sweep shows how much cooldown is left (--cd runs 1 → 0). */
+.ck-tool { --cd: 0; position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--edge); background: var(--glass); font: 700 13px var(--mono); color: var(--c-cyan); }
+.ck-tool kbd { font: 800 10px var(--mono); color: var(--c-dim); border: 1px solid #2b3768; border-radius: 4px; padding: 0 4px; }
+.ck-tool::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: conic-gradient(rgba(6, 10, 28, .78) calc(var(--cd) * 360deg), transparent 0); }
+.ck-tool.busy { color: var(--c-dim); }
+.ck-tbtn-echo, .ck-tbtn-ls { --cd: 0; overflow: hidden; }
+.ck-tbtn-echo::after, .ck-tbtn-ls::after { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(rgba(6, 10, 28, .75) calc(var(--cd) * 360deg), transparent 0); }
+@media (pointer: coarse) { .ck-shud .ck-tool { display: none; } } /* phones show cooldown on the touch buttons */
 .ck-shint[hidden] { display: none; }
 
 .ck-touchpad { position: absolute; inset: 0; z-index: 2; pointer-events: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

@@ -8,8 +8,10 @@ const INDEX = toURL('../../index.html') + '?ckdebug';
 const SHOTS = process.env.SHOTS || require('os').tmpdir();
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const open = [];
 async function page(b, opts, url) {
-  const ctx = await b.newContext(opts);
+  const ctx = await b.newContext(opts); open.push(ctx);
+  ctx.setDefaultTimeout(8000);
   const pg = await ctx.newPage();
   pg.errs = [];
   pg.on('pageerror', (e) => pg.errs.push(e.message));
@@ -78,6 +80,54 @@ const tests = {
     const pg = await page(b, { ...devices['iPhone 13'] });
     assert.ok(await pg.isVisible('#ck-slice .ck-rotate'));
   },
+  async 'portrait pauses the fight and the exit is reachable'(b) {
+    const pg = await page(b, { ...devices['iPhone 13'] });
+    const t0 = await pg.evaluate(() => CK._test.slice.sim.time); await wait(500);
+    const t1 = await pg.evaluate(() => CK._test.slice.sim.time);
+    assert.equal(t1, t0, 'sim must not run behind the rotate screen');
+    const hit = await pg.evaluate(() => { const b = document.querySelector('.ck-rotate [data-sl=exit]'); if (!b) return 'no exit button'; const r = b.getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return el && el.closest('[data-sl=exit]') ? 'ok' : 'covered'; });
+    assert.equal(hit, 'ok');
+    await pg.click('.ck-rotate [data-sl=exit]');
+    assert.equal(await pg.evaluate(() => !!document.querySelector('#ck-slice')), false, 'slice host removed');
+    assert.equal(await pg.evaluate(() => H.exited), true);
+  },
+  async 'desktop blur pauses, focus resumes'(b) {
+    const pg = await page(b, { viewport: { width: 1280, height: 720 } });
+    await pg.evaluate(() => window.dispatchEvent(new Event('blur'))); await wait(100);
+    const t0 = await pg.evaluate(() => CK._test.slice.sim.time); await wait(400);
+    assert.equal(await pg.evaluate(() => CK._test.slice.sim.time), t0, 'paused while the window is not focused');
+    await pg.evaluate(() => window.dispatchEvent(new Event('focus'))); await wait(300);
+    assert.ok((await pg.evaluate(() => CK._test.slice.sim.time)) > t0, 'resumes on focus');
+  },
+  async 'tool chips show cooldown'(b) {
+    const pg = await page(b, { viewport: { width: 1280, height: 720 } });
+    await freeze(pg);
+    const ready = await pg.$$eval('#ck-slice .ck-shud [data-tool]', (els) => els.map((e) => e.dataset.tool));
+    assert.deepEqual(ready.sort(), ['echo', 'ls']);
+    await pg.keyboard.press('2'); await wait(250);
+    const busy = await pg.evaluate(() => { const c = document.querySelector('.ck-shud [data-tool=ls]'); return { cd: parseFloat(c.style.getPropertyValue('--cd')), label: c.getAttribute('aria-label'), touch: parseFloat(document.querySelector('.ck-tbtn-ls').style.getPropertyValue('--cd')) }; });
+    assert.ok(busy.cd > 0.5, JSON.stringify(busy)); assert.match(busy.label, /recharging/i); assert.ok(busy.touch > 0.5, 'touch button mirrors cooldown');
+    await wait(3200);
+    const after = await pg.evaluate(() => parseFloat(document.querySelector('.ck-shud [data-tool=ls]').style.getPropertyValue('--cd')));
+    assert.equal(after, 0);
+  },
+  async 'controls hint does not block the stick'(b) {
+    const pg = await page(b, { ...devices['iPhone 13 landscape'] });
+    const r = await pg.evaluate(() => { const h = document.querySelector('.ck-shint').getBoundingClientRect(); const el = document.elementFromPoint(h.left + 20, h.top + h.height / 2); return el ? el.className : 'none'; });
+    assert.match(r, /ck-stick-zone/);
+  },
+  async 'a startup error never leaves a dead overlay'(b) {
+    const pg = await page(b, { viewport: { width: 1280, height: 800 } }, INDEX);
+    pg.on('dialog', (d) => d.accept());
+    await pg.fill('input[name=name]', 'Tester'); await pg.click('#pform button[type=submit]');
+    await pg.waitForSelector('[data-go=slice]');
+    await pg.evaluate(() => { CK.RoomScene.create = () => { throw new Error('boom'); }; });
+    await pg.click('[data-go=slice]'); await wait(300);
+    assert.equal(await pg.evaluate(() => !!document.querySelector('#ck-slice')), false, 'slice host removed');
+    assert.equal(await pg.evaluate(() => document.body.classList.contains('ck-open')), false);
+    assert.ok(await pg.isVisible('.hub'));
+    assert.equal(await pg.evaluate(() => CK._test.loops), 0);
+  },
   async 'multi-touch stick + kill'(b) {
     const pg = await page(b, { ...devices['iPhone 13 landscape'] });
     await freeze(pg);
@@ -125,7 +175,7 @@ const tests = {
     await wait(300);
     await pg.click('#ck-slice [data-sl=exit]');
     await pg.waitForSelector('.hub');
-    assert.equal(await pg.$('#ck-slice'), null);
+    assert.equal(await pg.evaluate(() => !!document.querySelector('#ck-slice')), false, 'slice host removed');
     assert.equal(await pg.evaluate(() => CK._test.loops), 0);
     assert.deepEqual(pg.errs, []);
   },
@@ -135,7 +185,11 @@ const tests = {
   const b = await chromium.launch();
   let fail = 0;
   for (const [name, fn] of Object.entries(tests)) {
-    try { await fn(b); console.log('ok -', name); } catch (e) { fail++; console.log('not ok -', name, '\n   ', e.message.split('\n')[0]); }
+    let timer;
+    const limit = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('test timed out after 45s')), 45000); });
+    try { await Promise.race([fn(b), limit]); console.log('ok -', name); } catch (e) { fail++; console.log('not ok -', name, '\n   ', e.message.split('\n')[0]); }
+    clearTimeout(timer);
+    while (open.length) await open.pop().close().catch(() => {});
   }
   await b.close();
   console.log(fail ? `FAIL ${fail}` : 'PASS');

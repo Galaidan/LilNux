@@ -27,31 +27,63 @@
       <div class="ck-shud">
         <div class="ck-sbar">Stability<div class="ck-ssegs" role="img" aria-label="Stability"></div></div>
         <div class="ck-sbar">Heat<div class="ck-sheat" role="img" aria-label="Heat"><b></b></div></div>
+        <span class="ck-tool" data-tool="echo" role="img" aria-label="echo ready"><kbd>1</kbd> echo</span>
+        <span class="ck-tool" data-tool="ls" role="img" aria-label="ls ready"><kbd>2</kbd> ls</span>
         <span class="ck-spacer"></span>
         <button type="button" class="ck-sbtn" data-sl="reset" title="Reset the room">↻</button>
         <button type="button" class="ck-sbtn" data-sl="exit" title="Back to the menu">✕</button>
       </div>
       <div class="ck-pipline" aria-live="polite"></div>
       <div class="ck-shint"><span></span><button type="button" class="ck-sbtn" data-sl="hint" aria-label="Hide controls">✓</button></div>
-      <div class="ck-rotate"><div class="ph"></div><p><b>Turn your phone sideways to play.</b></p><p>The Adventure is played in landscape.</p></div>`;
+      <div class="ck-rotate"><div class="ph"></div><p><b>Turn your phone sideways to play.</b></p><p>The Adventure is played in landscape.</p><button type="button" class="ck-sbtn" data-sl="exit">Back to menu</button></div>`;
     (h.root || document.body).appendChild(host);
     document.body.classList.add('ck-open');
 
+
+    // Anything that throws during setup tears the room down and returns to the menu, never a dead overlay.
+    const parts = { timers: [], intervals: [], offs: [] };
+    cur = { host, engine: null, input: null, cleanup() {
+      parts.timers.forEach((f) => f()); parts.intervals.forEach((id) => clearInterval(id)); parts.offs.forEach((f) => f());
+    } };
+    try { setup(h, host, player, parts); }
+    catch (err) {
+      console.error('[CK] action room failed to start', err);
+      try { CK.closeSlice(); } catch (e) { host.remove(); document.body.classList.remove('ck-open'); cur = null; }
+      if (h.onExit) h.onExit();
+    }
+  };
+
+  function setup(h, host, player, parts) {
     const canvas = host.querySelector('.ck-pix');
-    const engine = CK.PixEngine.create(canvas);
+    const engine = cur.engine = CK.PixEngine.create(canvas);
     const room = CK.Rooms.parse(CK.Rooms.TRAINING);
     let seed = (Date.now() % 100000) + 1;
     const newSim = () => CK.Action.create({ room, kid: !!player.kid, seed: seed++, tools: TOOLS });
     let sim = newSim();
-    const input = CK.Input.create({ canvas, host, toBuffer: engine.toBuffer, touch: false });
+    const input = cur.input = CK.Input.create({ canvas, host, toBuffer: engine.toBuffer, touch: false });
     input.setTools(TOOLS);
     const firsts = {}; const events = [];
-    let resetTimer = 0;
+    let resetTimer = 0; let sayTimer = 0;
+    parts.timers.push(() => { clearTimeout(resetTimer); clearTimeout(sayTimer); });
 
     const pipEl = host.querySelector('.ck-pipline');
-    let sayTimer = 0; // Pip's line clears itself so it doesn't cover the room for long on a phone
+    // Pip's line clears itself so it doesn't cover the room for long on a phone
     const say = (html) => { pipEl.innerHTML = html || ''; clearTimeout(sayTimer); if (html) sayTimer = setTimeout(() => { pipEl.innerHTML = ''; }, 9000); };
     const sound = (k) => { try { if (h.sound && h.sound[k] && (!h.soundOn || h.soundOn())) h.sound[k](); } catch (e) { /* ignore */ } };
+
+    // ---- pause: behind the rotate screen, or while the window isn't focused ----
+    const portrait = root.matchMedia ? root.matchMedia('(orientation: portrait) and (pointer: coarse)') : null;
+    let away = false; let wasPaused = false;
+    const paused = () => {
+      const p = away || !!(portrait && portrait.matches);
+      if (p && !wasPaused) input.clear();
+      wasPaused = p; return p;
+    };
+    const onBlur = () => { away = true; input.clear(); };
+    const onFocus = () => { away = false; };
+    root.addEventListener('blur', onBlur); root.addEventListener('focus', onFocus);
+    host.addEventListener('pointerdown', onFocus);
+    parts.offs.push(() => { root.removeEventListener('blur', onBlur); root.removeEventListener('focus', onFocus); });
 
     function onEvent(ev) {
       if (events.length > 200) events.splice(0, 100);
@@ -67,7 +99,7 @@
       if (ev.type === 'clear') { sound('win'); say(sim.clean ? LINES.clean : LINES.clear); }
       if (ev.type === 'lose') { sound('bad'); say(LINES.lose); clearTimeout(resetTimer); resetTimer = setTimeout(() => { if (cur) reset(); }, 1600); }
     }
-    const scene = CK.RoomScene.create({ engine, input, sim, room, accent: '#ffb347', onEvent });
+    const scene = CK.RoomScene.create({ engine, input, sim, room, accent: '#ffb347', onEvent, paused });
     engine.setScene(scene); engine.start();
 
     function reset() {
@@ -78,6 +110,8 @@
     // ---- HUD ----
     const segs = host.querySelector('.ck-ssegs'); segs.innerHTML = '<i></i>'.repeat(10);
     const heat = host.querySelector('.ck-sheat'); const heatBar = heat.querySelector('b');
+    const T = CK.Action.TUNING;
+    const chips = TOOLS.map((id) => ({ id, el: host.querySelector(`.ck-shud [data-tool=${id}]`), pad: host.querySelector(`.ck-tbtn-${id}`), full: id === 'ls' ? T.LS_CD : T.ECHO_CD, last: -1 }));
     function hud() {
       const P = sim.player; const on = Math.ceil((P.stability / P.maxStability) * 10);
       segs.querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < on));
@@ -86,14 +120,24 @@
       const hot = sim.time < P.overheatUntil;
       heatBar.style.width = Math.round(P.heat) + '%'; heat.classList.toggle('hot', hot);
       heat.setAttribute('aria-label', hot ? 'Overheated' : `Heat ${Math.round(P.heat)} percent`);
+      const lock = hot ? (P.overheatUntil - sim.time) / T.OVERHEAT_LOCK : 0;
+      for (const c of chips) {
+        const cd = Math.round(Math.min(1, Math.max(lock, (sim.cooldowns[c.id] || 0) / c.full)) * 100) / 100;
+        if (cd === c.last) continue;
+        c.last = cd;
+        c.el.style.setProperty('--cd', cd); if (c.pad) c.pad.style.setProperty('--cd', cd);
+        c.el.classList.toggle('busy', cd > 0);
+        c.el.setAttribute('aria-label', `${c.id} ${cd > 0 ? (hot ? 'locked: overheated' : 'recharging') : 'ready'}`);
+      }
     }
-    const hudTimer = setInterval(hud, 100); hud();
+    parts.intervals.push(setInterval(hud, 100)); hud();
 
     const hint = host.querySelector('.ck-shint');
     const touchy = !host.querySelector('.ck-touchpad').hidden;
     hint.querySelector('span').innerHTML = touchy ? HINT_TOUCH : HINT_KEYS;
-    root.addEventListener('pointerdown', onFirstTouch);
     function onFirstTouch(e) { if (e.pointerType === 'touch') hint.querySelector('span').innerHTML = HINT_TOUCH; }
+    root.addEventListener('pointerdown', onFirstTouch);
+    parts.offs.push(() => root.removeEventListener('pointerdown', onFirstTouch));
 
     host.addEventListener('click', (e) => {
       const b = e.target.closest('[data-sl]'); if (!b) return;
@@ -103,18 +147,21 @@
     });
 
     say(LINES.intro);
-    cur = { host, engine, input, cleanup() { clearInterval(hudTimer); clearTimeout(resetTimer); clearTimeout(sayTimer); root.removeEventListener('pointerdown', onFirstTouch); } };
     if (CK.PixEngine.debug) {
       CK._test = CK._test || {};
       CK._test.slice = { engine, input, scene, events, reset, get sim() { return sim; } };
     }
-  };
+  }
 
   CK.closeSlice = function () {
     if (!cur) return;
-    cur.cleanup(); cur.engine.destroy(); cur.input.destroy(); cur.host.remove();
-    document.body.classList.remove('ck-open');
-    cur = null;
-    if (CK._test) CK._test.slice = null;
+    const c = cur; cur = null;
+    try { c.cleanup(); } finally {
+      if (c.engine) c.engine.destroy();
+      if (c.input) c.input.destroy();
+      c.host.remove();
+      document.body.classList.remove('ck-open');
+      if (CK._test) CK._test.slice = null;
+    }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
