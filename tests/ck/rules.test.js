@@ -86,18 +86,6 @@ test('equip respects slots and learned skills', () => {
   assert.equal(Rules.equip(s, 'ls'), true);
 });
 
-test('quickFix needs the right skill equipped', () => {
-  const s = fresh(); Rules.reveal(s, 'f0'); walk(s, 'f1', 'f3', 'f5');
-  Rules.learn(s, 'echo');
-  assert.equal(Rules.quickFix(s, 'f5', 'echo'), 'fight');
-  s.learned.push('ls');
-  assert.equal(Rules.quickFix(s, 'f5', 'ls'), 'fight', 'learned but not equipped');
-  Rules.equip(s, 'ls');
-  assert.equal(Rules.quickFix(s, 'f5', 'ls'), 'fixed');
-  assert.equal(Rules.isCleared(s, 'f5'), true);
-  assert.equal(s.stats.clean, 1);
-});
-
 test('buyUpgrade checks unknown, bits, needs and owned', () => {
   const s = fresh(); Rules.learn(s, 'kill'); Rules.learn(s, 'ls');
   assert.deepEqual(Rules.buyUpgrade(s, 'nope'), { ok: false, reason: 'unknown' });

@@ -87,11 +87,12 @@
     function update(dt) {
       // frozen behind the rotate screen, while unfocused, or while a dialogue / terminal / panel is open;
       // keys pressed meanwhile (Enter on a dialogue, letters typed into the terminal) are dropped, not replayed
+      const sliding = slideT > 0; if (sliding) slideT = Math.max(0, slideT - dt); // a room slide finishes even under a dialogue
       if (o.paused && o.paused()) { if (input) input.clear(); return; }
       t += dt;
       litT = Math.max(0, litT - dt); flickerT = Math.max(0, flickerT - dt);
       for (const k of tells) k.life -= dt; prune(tells);
-      if (slideT > 0) { slideT = Math.max(0, slideT - dt); if (input) input.read(); return; }
+      if (sliding) { if (input) input.read(); return; }
       const P = sim.player;
       const inp = input ? input.read() : { mx: 0, my: 0, mouse: null, kill: false, trap: false, dash: false, tool: null };
       let ax = 0; let ay = 0;
@@ -105,11 +106,15 @@
         }
       }
       else {
+        // E / Enter / ✋ uses what's near; `kill` next to a character with no creatures awake talks instead of swinging
+        const calm = !sim.enemies.some((e) => !e.dead);
+        if (o.onUse && (inp.use || (inp.kill && near && near.kind === 'npc' && calm))) { if (near) { inp.kill = false; o.onUse(near); } }
         const press = pending || {}; pending = null;
-        sim.step(dt, { mx: inp.mx, my: inp.my, ax, ay, kill: inp.kill || !!press.kill, trap: inp.trap || !!press.trap, dash: inp.dash || !!press.dash, tool: inp.tool || press.tool || null });
+        sim.step(dt, { mx: inp.mx, my: inp.my, ax, ay, kill: inp.kill || !!press.kill, killHeld: !!inp.killHeld, trap: inp.trap || !!press.trap, dash: inp.dash || !!press.dash, tool: inp.tool || press.tool || null });
       }
       for (const ev of sim.events.splice(0)) handle(ev);
       checkPlace(P);
+      if (sim.player !== P) return; // a door (or a reboot) swapped the room this frame
       if (P.dashT > 0) ghosts.push({ x: P.x, y: P.y, life: 0.15, flip: P.dashDir.x < 0 });
       for (const g of ghosts) g.life -= dt;
       for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; }
@@ -128,7 +133,11 @@
       if (!room.doors) return;
       const side = CK.Rooms.doorAt(room, P.x, P.y);
       if (!side) latch = null;
-      else if (side !== latch) { latch = side; if (o.onDoor) o.onDoor(side); }
+      else if (side !== latch) {
+        latch = side; const before = room;
+        if (o.onDoor) o.onDoor(side);
+        if (room !== before) return; // we walked into another room: P belongs to the old one
+      }
       const n = CK.Rooms.nearestProp(room, P.x, P.y, 20, ['npc', 'terminal', 'sign']);
       if (n !== near) { near = n; if (o.onNear) o.onNear(n); }
       for (const p of room.props) {

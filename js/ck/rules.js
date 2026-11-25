@@ -96,13 +96,6 @@
     state.equipped.splice(i, 1); return true;
   }
 
-  function quickFix(state, nodeId, skillId) {
-    const node = cur(state).nodes[nodeId];
-    if (!node || node.kind !== 'problem') return 'fight';
-    if (state.equipped.includes(skillId) && node.ref.skill === skillId) { clear(state, nodeId); state.stats.clean++; return 'fixed'; }
-    return 'fight';
-  }
-
   // A cleared problem room: no hits taken = clean (today's clean reward), otherwise the fight reward.
   function clearRoom(state, nodeId, opts) {
     const clean = !!(opts && opts.clean);
@@ -253,6 +246,6 @@
     reveal(state, reg.start);
   }
 
-  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, quickFix, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, BLOCKING,
+  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, BLOCKING,
     TOOLS, MOVES, SAFE, LOOP_DOORS, clearRoom, sideOf, doorStates, travelTargets };
 })(typeof window !== 'undefined' ? window : globalThis);
