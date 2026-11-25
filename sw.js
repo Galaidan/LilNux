@@ -6,7 +6,7 @@ const FILES = [
   'css/style.css', 'js/terminal.js', 'js/content.js', 'js/game.js', 'css/ck.css',
   'js/ck/state.js', 'js/ck/world.js', 'js/ck/rules.js', 'js/ck/story.js', 'js/ck/puzzle.js', 'js/ck/combat.js',
   'js/ck/engine.js', 'js/ck/art.js', 'js/ck/scenes.js', 'js/ck/ui.js', 'js/ck/main.js',
-  'js/ck/pixengine.js', 'js/ck/pixel.js', 'js/ck/sprites.js', 'js/ck/rooms.js', 'js/ck/action.js', 'js/ck/input.js', 'js/ck/roomart.js', 'js/ck/roomscene.js', 'js/ck/slice.js',
+  'js/ck/pixengine.js', 'js/ck/pixel.js', 'js/ck/sprites.js', 'js/ck/rooms.js', 'js/ck/foes.js', 'js/ck/action.js', 'js/ck/input.js', 'js/ck/roomart.js', 'js/ck/roomscene.js', 'js/ck/slice.js',
   'assets/lilnux.svg', 'assets/apple-touch-icon.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/icon-maskable-512.png',
 ];
 

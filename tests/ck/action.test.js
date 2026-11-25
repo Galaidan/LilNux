@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 require('../../js/ck/state.js');
 require('../../js/ck/world.js');
 require('../../js/ck/rooms.js');
+require('../../js/ck/foes.js');
 require('../../js/ck/action.js');
 const { Action, Rooms } = globalThis.CK;
 const T = Action.TUNING;

@@ -30,7 +30,6 @@
     const mods = Object.assign({ cdMul: 1, heatMul: 1, moveMul: 1, dashCdMul: 1 }, opts.mods || {});
     const breakables = (opts.breakables || []).map((b) => ({ id: b.id, tiles: b.tiles.map((t) => t.slice()) }));
     const spawnList = opts.spawns || room.spawns;
-    const def = CK.World && CK.World.CREATURES && CK.World.CREATURES.glitchMite;
     const maxStability = kid ? T.KID_STABILITY : 100;
 
     const s = {
@@ -40,14 +39,7 @@
         dashT: 0, dashCd: 0, dashDir: { x: 0, y: 1 }, iframes: 0, attackT: 0, combo: 0, chainT: 0,
         parryT: 0, recoverT: 0, parryCaught: false, heat: 0, overheatUntil: 0, hitsTaken: 0, moving: false, chargeT: 0, charged: false,
       },
-      enemies: spawnList.map((sp, i) => ({
-        id: 'e' + i, kind: sp.kind, x: sp.x, y: sp.y, r: M.r, hp: def ? def.hp : 30, maxHp: def ? def.hp : 30,
-        cloaked: def ? !!def.cloaked : true, revealedUntil: 0, stunUntil: 0, state: 'drift', dead: false,
-        speed: M.speed * slow, heading: rng() * Math.PI * 2,
-        shootEvery: M.shootEvery, shootTimer: M.shootEvery * (0.5 + 0.5 * rng()),
-        lungeEvery: M.lungeEvery, lungeTimer: M.lungeEvery * (0.6 + 0.6 * rng()),
-        tellT: 0, lungeT: 0, lungeDir: { x: 0, y: 0 }, flash: 0,
-      })),
+      enemies: [],
       orbs: [], bolts: [], cooldowns: { echo: 0, ls: 0 },
       spawnOrb(o) { s.orbs.push({ x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, r: T.ORB_R, dmg: o.dmg || M.orbDmg, unparryable: !!o.unparryable, from: 'enemy', src: o.src || null }); },
       step,
@@ -56,6 +48,25 @@
     const ev = (type, x, y, extra) => s.events.push(Object.assign({ type, x: x === undefined ? P.x : x, y: y === undefined ? P.y : y }, extra || {}));
     const hittable = (e) => !e.dead && (!e.cloaked || s.time < e.revealedUntil || s.time < e.stunUntil);
     const alive = () => s.enemies.filter((e) => !e.dead);
+
+    // What foes.js may see and do.
+    const foeCtx = {
+      room, rng, player: P, slow, get time() { return s.time; },
+      orb(o) { s.orbs.push({ x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, r: T.ORB_R, dmg: o.dmg || M.orbDmg, unparryable: !!o.unparryable, from: 'enemy', src: o.src || null }); },
+      ev(type, x, y, extra) { ev(type, x, y, extra); },
+      // A seeded walkable spot at least minDist from the Colonel (falls back to where the foe stands).
+      floorPoint(minDist, e) {
+        const TL = CK.Rooms.TILE;
+        for (let i = 0; i < 40; i++) {
+          const tx = 1 + Math.floor(rng() * (room.cols - 2)); const ty = 1 + Math.floor(rng() * (room.rows - 2));
+          const x = tx * TL + TL / 2; const y = ty * TL + TL / 2; const r = (e && e.r) || 8;
+          if (CK.Rooms.collides(room, x, y, r)) continue;
+          if (Math.hypot(x - P.x, y - P.y) >= minDist) return { x, y };
+        }
+        return { x: e ? e.x : P.x, y: e ? e.y : P.y };
+      },
+    };
+    s.enemies = spawnList.map((sp, i) => CK.Foes.make(sp.kind, sp, i, foeCtx));
 
     function hurt(dmg, x, y) {
       if (P.dashT > 0 || P.iframes > 0 || s.outcome) return false;
@@ -142,41 +153,13 @@
     }
 
     // ---- enemies ------------------------------------------------------------------------------
-    function updateEnemy(e, dt) {
-      if (e.dead) return;
-      e.flash = Math.max(0, e.flash - dt);
-      if (s.time < e.stunUntil) return;
-      if (e.state === 'drift') {
-        e.heading += (rng() - 0.5) * 2.4 * dt;
-        const vx = Math.cos(e.heading) * e.speed * dt; const vy = Math.sin(e.heading) * e.speed * dt;
-        const m = CK.Rooms.moveCircle(room, e.x, e.y, e.r, vx, vy);
-        if (m.hitX) e.heading = Math.PI - e.heading;
-        if (m.hitY) e.heading = -e.heading;
-        e.x = m.x; e.y = m.y;
-        e.shootTimer -= dt;
-        if (e.shootTimer <= 0) {
-          const d = norm(P.x - e.x, P.y - e.y); const sp = M.orbSpeed * slow;
-          s.orbs.push({ x: e.x, y: e.y, vx: d.x * sp, vy: d.y * sp, r: T.ORB_R, dmg: M.orbDmg, unparryable: false, from: 'enemy', src: e.id });
-          e.shootTimer = e.shootEvery * (0.7 + 0.6 * rng());
-        }
-        e.lungeTimer -= dt;
-        if (e.lungeTimer <= 0) { e.state = 'tell'; e.tellT = M.lungeTell; e.lungeDir = norm(P.x - e.x, P.y - e.y); }
-      } else if (e.state === 'tell') {
-        e.tellT -= dt;
-        if (e.tellT <= 0) { e.state = 'lunge'; e.lungeT = M.lungeTime; }
-      } else if (e.state === 'lunge') {
-        const sp = M.lungeSpeed * slow * dt;
-        const m = CK.Rooms.moveCircle(room, e.x, e.y, e.r, e.lungeDir.x * sp, e.lungeDir.y * sp);
-        e.x = m.x; e.y = m.y; e.lungeT -= dt;
-        if (e.lungeT <= 0) { e.state = 'drift'; e.lungeTimer = e.lungeEvery * (0.7 + 0.6 * rng()); }
-      }
-    }
+    function updateEnemy(e, dt) { CK.Foes.update(e, dt, foeCtx); }
 
     function contact(e) {
       if (e.dead || s.time < e.stunUntil) return;
       if (len(e.x - P.x, e.y - P.y) >= T.PLAYER_R + e.r) return;
       if (e.state === 'lunge' && onLungeContact(e)) return;
-      hurt(e.state === 'lunge' ? M.lungeDmg : M.contactDmg, e.x, e.y);
+      hurt(e.state === 'lunge' ? e.lungeDmg : e.contactDmg, e.x, e.y);
     }
     // `trap` catches a lunge: the mite is stunned (and hittable even if cloaked) and bounced back.
     function onLungeContact(e) {
