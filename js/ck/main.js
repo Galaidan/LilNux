@@ -267,16 +267,134 @@
         state.seenIntro = true; save();
       }
 
-      // ---- Task 13 hooks (fights, puzzles, terminals, loops, rest) ---------------------------------------
-      async function problemEntry() {}
-      function onClear() {}
-      function onLose() {}
-      function onPulse() {}
-      function bossDoor() {}
-      function loopBack() {}
-      function startPuzzle() {}
-      function cdTerminal() {}
-      function pathSign() {}
+      // ---- fights -----------------------------------------------------------------------------------------
+      const teacherOf = (skill) => W.SKILLS[skill].teacher;
+      async function problemEntry() {
+        state.stats.fights++;
+        if (!state.learned.includes('trap')) { // the first problem room: Pip teaches the parry before the creatures wake
+          await say('pip', ['Creatures ahead — and they shoot signals. Lesson three: trap. In bash, `trap` runs your handler when a signal arrives.',
+            'Down here: time it right and you catch what they throw and send it back. Mistime it and you’re open for a moment. A red ! means a lunge is coming.']);
+          await learn('trap');
+        }
+      }
+      function reapplyDoors() { if (room) applyDoors(); }
+      function onClear() {
+        const node = reg().nodes[roomId]; const clean = sim.clean;
+        busy(async () => {
+          state.stats.wins++;
+          if (node.kind === 'problem') {
+            const rw = R.clearRoom(state, roomId, { clean }); xp(rw.xp); sound('win');
+            ui.toast(rw.clean ? `🧼 <b>Clean fix — no hits!</b> +${rw.bits} bits` : `⚔️ Room cleared! +${rw.bits} bits`);
+            reapplyDoors(); save();
+            const c = W.CREATURES[node.ref.creature];
+            await say(teacherOf(c.weak), ['In real Linux: ' + (rw.clean ? node.ref.real : c.real)]);
+            claim();
+          } else if (node.kind === 'boss') {
+            const c = W.CREATURES[node.ref.creature];
+            bossFight = false; R.clear(state, roomId); const rw = R.reward(state, 'boss'); xp(rw.xp);
+            R.installModule(state, node.ref.drop); const mod = W.MODULES[node.ref.drop];
+            ui.toast(`${mod.icon} <b>${mod.name}</b> installed on your motherboard! ${mod.real}`); toolsChanged();
+            const rr = R.reward(state, 'region'); xp(rr.xp);
+            h.giveBadge(...BADGES[state.region]); sound('win');
+            reapplyDoors(); save();
+            await say('pip', reg().outro);
+            await say(teacherOf(c.weak), ['In real Linux: ' + c.real]);
+            claim();
+          }
+        });
+      }
+      function onLose() {
+        lock++; sound('bad');
+        setTimeout(() => {
+          lock--; if (!cur) return;
+          bossFight = false;
+          state.region = state.checkpoint.region; state.node = state.checkpoint.node; state.prev = null; R.reveal(state, state.node);
+          save(); enterRoom(state.node, null);
+          ui.toast('💥 Stability lost — rebooting at the last checkpoint. Your loot is safe. Your dignity, less so. You’ve got this.');
+          refresh();
+        }, 1600);
+      }
+      // The boss's door asks first; "Not yet" steps back, "Fight!" seals every door until it's over.
+      function bossDoor(side, to) {
+        busy(async () => {
+          const c = W.CREATURES[reg().nodes[to].ref.creature];
+          const pick = await ui.choice('☠ ' + c.name, [{ label: 'Fight!', html: '⚔️ Fight!', value: 'fight', primary: true }, { label: 'Not yet', html: '↩ Not yet — step back', value: 'back' }],
+            `Pip: “That’s the ${c.name}. ${c.weakText}”` + (c.cloaked && !state.equipped.includes('ls') ? ' ⚠ You don’t have ls equipped — you won’t be able to see it! Step back and equip it in Pip → Items.' : ''));
+          if (pick !== 'fight') {
+            const IN = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[side];
+            scene.place(sim.player.x + IN[0] * 24, sim.player.y + IN[1] * 24); return;
+          }
+          const r = R.move(state, to); if (!r.ok) return;
+          bossFight = true; state.stats.fights++; save(); enterRoom(to, OPP[side]);
+        });
+      }
+
+      // ---- tools in rooms: ls pulses, broken circuits, terminals, path signs, loop doors ------------------
+      function onPulse() {
+        const node = reg().nodes[roomId];
+        if (node.dark && scene) scene.light(20);
+        const r = R.useOnMap(state, 'ls'); if (!r.ok) return;
+        const found = (r.revealed || []).filter((id) => reg().nodes[id].hidden && R.neighbors(reg(), roomId).includes(id));
+        if (found.length) {
+          reapplyDoors();
+          for (const id of found) {
+            const side = R.sideOf(reg(), roomId, id);
+            if (side && room.doors[side] && !sim.breakables.some((b) => b.id === 'door-' + side)) sim.breakables.push({ id: 'door-' + side, tiles: room.doors[side].tiles.map((t) => t.slice()) });
+          }
+          ui.toast('🔦 <code>ls -a</code> found a cracked wall. <code>kill</code> should open it.');
+        }
+        save();
+      }
+      function startPuzzle() {
+        const node = reg().nodes[roomId];
+        if (node.kind !== 'circuit' || R.isCleared(state, roomId) || puzzle) return;
+        ui.prompt(null); input.showUse(null); input.clear();
+        const grid = CK.Puzzle.scramble(JSON.parse(JSON.stringify(node.ref.grid)), CK.rng((Date.now() % 100000) + 3));
+        puzzle = CK.PuzzleScene.create({ engine, canvas, host: host.querySelector('.ck-ui-host'), grid, solution: node.ref.grid, accent: node.accent || reg().accent,
+          sfx: (t) => sound(t === 'win' ? 'win' : 'pop'),
+          onSolved: () => {
+            endPuzzle(); R.clear(state, roomId); const rw = R.reward(state, 'puzzle'); xp(rw.xp);
+            const t = room.props.find((p) => p.kind === 'terminal'); if (t) t.broken = false;
+            reapplyDoors(); ui.toast(`⚡ Circuit restored! +${rw.bits} bits`); claim(); save(); refresh();
+          },
+          onLeave: () => endPuzzle(),
+        });
+        ui.action(false); engine.setScene(puzzle);
+      }
+      function endPuzzle() { if (!puzzle) return; puzzle.destroy(); puzzle = null; engine.setScene(scene); ui.action(true); input.clear(); }
+      function needCd(what) {
+        if (!state.learned.includes('cd')) { ui.toast(`🌀 The ${what} blinks at you. Someone at the GRUB Gate could show you how it works.`); return true; }
+        if (!state.equipped.includes('cd')) { ui.toast(`🌀 Equip <code>cd</code> in Pip → Items to use ${what === 'sign' ? 'path signs' : 'terminals'}.`); return true; }
+        return false;
+      }
+      function cdTerminal() {
+        if (needCd('terminal')) return;
+        const targets = R.travelTargets(state);
+        if (!targets.length) { ui.toast('🌀 Nowhere to jump yet — visit more safe rooms first.'); return; }
+        busy(async () => {
+          const region = reg(); const nm = (t) => region.nodes[t].label.replace(/\s+/g, '_');
+          const pick = await ui.choice('🌀 cd — fast travel', targets.map((t) => ({ label: `cd ${nm(t)}`, html: `<code>cd ${nm(t)}</code>`, value: t })).concat([{ label: 'Cancel', value: null }]));
+          if (pick && R.fastTravel(state, pick)) { R.reveal(state, pick); state.checkpoint = { region: state.region, node: pick }; save(); enterRoom(pick, null); sound('pop'); }
+        });
+      }
+      function pathSign() {
+        if (state.signs.includes(roomId)) { ui.toast('🪧 The sign now reads <code>/boot</code>. The loop is broken.'); return; }
+        if (needCd('sign')) return;
+        busy(async () => {
+          const opt = (p, v) => ({ label: `cd ${p}`, html: `<code>cd ${p}</code>`, value: v });
+          const pick = await ui.choice('🪧 Path sign — where does the kernel live?', [opt('/loop/loop/loop', 'loop'), opt('/boot', 'boot'), opt('/dev/null', 'null'), { label: 'Cancel', value: null }],
+            'Something keeps rewriting GRUB’s paths into loops. Pick the folder that really holds the kernel.');
+          if (pick === 'boot') { state.signs.push(roomId); save(); reapplyDoors(); sound('win'); await say('grub', ['That’s it — /boot is where the kernel (vmlinuz) and initramfs live.']); }
+          else if (pick === 'null') await say('pip', ['/dev/null discards everything written to it. Including us, probably.']);
+          else if (pick === 'loop') await say('pip', ['That directory doesn’t exist. Thankfully.']);
+        });
+      }
+      function loopBack() {
+        const back = entrySide ? CK.Rooms.entryPoint(room, entrySide) : { x: room.player.x, y: room.player.y };
+        scene.place(back.x, back.y);
+        if (!firsts.loop) { firsts.loop = true; busy(() => say('pip', ['We just… came back. Boot loop. Find the path sign and cd somewhere sensible.'])); }
+        else ui.toast('🔁 …and we’re back where we started.');
+      }
 
       // ---- resting and NullNux ------------------------------------------------------------------------
       function canRest() {
