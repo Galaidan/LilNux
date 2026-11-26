@@ -66,3 +66,7 @@ No Critical issues. Fixed (each with a test that failed first, suite 33/33 start
 - #9 Older Safari might announce the title twice (glitch layer fallback text).
 
 Reviewer's verdict on my rulings: all seven are sound.
+
+## Other calls made while building
+- Worked on branch `cyberpunk-start` directly (no separate git worktree): your usual flow is branch → playtest zip → "push it".
+- Final results before the zip: 190 unit tests, 33 start-screen e2e, Learn regression, UI suite and the full Adventure playthrough all pass.
