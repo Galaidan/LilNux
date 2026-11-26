@@ -1,0 +1,480 @@
+// Start screen (Welcome + hub): FX runtime, wiring, theme, layout. Run: node tests/e2e/start-screen.e2e.js
+const { chromium } = require('playwright');
+const path = require('path');
+const assert = require('node:assert/strict');
+const URL = require('url').pathToFileURL(path.resolve(__dirname, '../../index.html')).href;
+const SHOTS = process.env.SHOTS || path.resolve(__dirname, '../../.shots');
+
+const player = (id, name, avatar) => ({ id, name, avatar: avatar || '🐧', kid: false, xp: 0, worlds: {}, quests: {}, badges: [], unlockAll: false, sandboxCount: 0 });
+const saveOf = (opts) => JSON.stringify({ players: (opts.players || [player('p1', 'Sam')]), current: opts.current === undefined ? 'p1' : opts.current, sound: opts.sound !== false });
+
+const OPEN = []; // every context a test opens, closed after the test so animated pages from earlier tests don't steal CPU from later ones
+// A page with a seeded save, an AudioContext construction counter and a requestAnimationFrame counter.
+async function open(b, opts = {}) {
+  const ctx = await b.newContext({ viewport: opts.viewport || { width: 390, height: 844 }, deviceScaleFactor: opts.dsf || 1, reducedMotion: opts.reduced ? 'reduce' : 'no-preference', colorScheme: opts.colorScheme || 'dark' });
+  await ctx.addInitScript((save) => {
+    if (save) localStorage.setItem('lilnux.save.v1', save);
+    window.__ac = 0;
+    const Real = window.AudioContext;
+    // counts only the contexts StartFX makes (the game's own click sounds keep a separate one)
+    if (Real) { window.AudioContext = function () { if (new Error().stack.includes('start-fx')) window.__ac++; return new Real(); }; window.AudioContext.prototype = Real.prototype; }
+    window.__shadow = 0; // times anything set a non-zero shadowBlur on the moving effects canvas (costly on phones)
+    const sb = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur');
+    Object.defineProperty(CanvasRenderingContext2D.prototype, 'shadowBlur', { configurable: true, get() { return sb.get.call(this); }, set(v) { if (v && this.canvas && this.canvas.id === 'start-fx') window.__shadow++; sb.set.call(this, v); } });
+    window.__raf = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (f) => { window.__raf++; return raf(f); };
+  }, opts.save === null ? null : saveOf(opts));
+  OPEN.push(ctx);
+  const pg = await ctx.newPage();
+  pg.errs = [];
+  pg.on('pageerror', (e) => pg.errs.push(e.message));
+  pg.on('console', (m) => { if (m.type() === 'error') pg.errs.push(m.text()); });
+  pg.on('dialog', (d) => d.accept());
+  await pg.goto(URL);
+  return pg;
+}
+const dbg = (pg) => pg.evaluate(() => StartFX._debug());
+const music = (pg) => pg.evaluate(() => document.body.dataset.music);
+const acCount = (pg) => pg.evaluate(() => window.__ac);
+// the shell mounts the FX by itself on entry views, so start these tests from a clean slate
+const mountFx = (pg, on) => pg.evaluate((snd) => { StartFX.unmount(); window.__snd = snd !== false; StartFX.mount({ soundOn: () => window.__snd }); }, on);
+const musicOn = (pg) => pg.waitForFunction(() => StartFX._debug().musicOn === true, null, { timeout: 3000 });
+
+const tests = [];
+const test = (name, fn) => tests.push([name, fn]);
+
+// ---------------------------------------------------------------- Task 2: the FX runtime on its own
+test('fx: mounts one canvas pair and runs', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg);
+  await pg.waitForFunction(() => StartFX._debug().runners > 0, null, { timeout: 3000 });
+  const d = await dbg(pg);
+  assert.equal(d.canvases, 2); assert.equal(d.running, true);
+  const pos = await pg.$$eval('.start-bg', (cs) => cs.map((c) => getComputedStyle(c).position));
+  assert.deepEqual(pos, ['fixed', 'fixed']);
+  return pg;
+});
+
+test('fx: mounting repeatedly is still one pair', async (b) => {
+  const pg = await open(b);
+  await pg.evaluate(() => { const o = { soundOn: () => true }; StartFX.mount(o); StartFX.mount(o); StartFX.mount(o); });
+  assert.equal((await dbg(pg)).canvases, 2);
+  await pg.evaluate(() => { StartFX.unmount(); StartFX.mount({ soundOn: () => true }); });
+  assert.equal((await dbg(pg)).canvases, 2);
+  assert.equal(await pg.evaluate(() => document.querySelectorAll('#start-grid, #start-fx').length), 2);
+  return pg;
+});
+
+test('fx: no audio before a gesture', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg);
+  await pg.waitForTimeout(500);
+  assert.equal(await acCount(pg), 0);
+  assert.equal(await music(pg), 'waiting');
+  return pg;
+});
+
+test('fx: first tap starts music once, after a short delay', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg);
+  await pg.mouse.click(10, 10);
+  await pg.waitForTimeout(100);
+  // the context is created and resumed inside the gesture itself (iOS needs that), silently; the music follows 0.3 s later
+  assert.equal(await acCount(pg), 1);
+  assert.equal((await dbg(pg)).audioState, 'running');
+  assert.equal((await dbg(pg)).musicOn, false);
+  await musicOn(pg);
+  assert.equal(await acCount(pg), 1);
+  await pg.mouse.click(12, 12); await pg.waitForTimeout(500);
+  assert.equal(await acCount(pg), 1);
+  assert.equal((await dbg(pg)).musicOn, true);
+  return pg;
+});
+
+test('fx: tapping straight through plays no music', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg);
+  await pg.mouse.click(10, 10);
+  await pg.evaluate(() => StartFX.unmount());
+  await pg.waitForTimeout(900);
+  assert.ok((await acCount(pg)) <= 1);
+  const d = await dbg(pg);
+  assert.equal(d.musicOn, false); assert.equal(d.masterGain, 0, 'never made a sound');
+  return pg;
+});
+
+test('fx: sound off never plays', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg, false);
+  assert.equal(await music(pg), 'off');
+  await pg.mouse.click(10, 10); await pg.waitForTimeout(900);
+  assert.equal(await acCount(pg), 0);
+  assert.equal(await music(pg), 'off');
+  return pg;
+});
+
+test('fx: setSound toggles the music', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg);
+  await pg.mouse.click(10, 10); await musicOn(pg);
+  await pg.evaluate(() => { window.__snd = false; StartFX.setSound(false); });
+  assert.equal(await music(pg), 'off'); assert.equal((await dbg(pg)).musicOn, false);
+  await pg.evaluate(() => { window.__snd = true; StartFX.setSound(true); });
+  assert.equal(await music(pg), 'on'); assert.equal((await dbg(pg)).musicOn, true);
+  assert.equal(await acCount(pg), 1);
+  return pg;
+});
+
+test('fx: unmount cleans everything up', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg);
+  await pg.mouse.click(10, 10); await musicOn(pg);
+  await pg.evaluate(() => StartFX.unmount());
+  const d = await dbg(pg);
+  assert.equal(d.canvases, 0); assert.equal(d.running, false); assert.equal(d.musicOn, false);
+  assert.equal(await music(pg), undefined);
+  assert.equal(await pg.evaluate(() => StartFX.isMounted()), false);
+  await pg.waitForTimeout(150);
+  const raf = await pg.evaluate(() => window.__raf);
+  await pg.waitForTimeout(400);
+  assert.equal(await pg.evaluate(() => window.__raf), raf, 'no animation frames after unmount');
+  return pg;
+});
+
+test('fx: a hidden tab pauses and resumes', async (b) => {
+  const pg = await open(b);
+  await mountFx(pg);
+  await pg.mouse.click(10, 10); await musicOn(pg);
+  const setHidden = (h) => pg.evaluate((hide) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => hide }); document.dispatchEvent(new Event('visibilitychange')); }, h);
+  await setHidden(true);
+  assert.equal((await dbg(pg)).running, false);
+  await pg.waitForFunction(() => StartFX._debug().audioState === 'suspended', null, { timeout: 3000 });
+  await setHidden(false);
+  assert.equal((await dbg(pg)).running, true);
+  await pg.waitForFunction(() => StartFX._debug().audioState === 'running', null, { timeout: 3000 });
+  return pg;
+});
+
+test('fx: reduced motion draws no runners', async (b) => {
+  const pg = await open(b, { reduced: true });
+  await mountFx(pg);
+  const d = await dbg(pg);
+  assert.equal(d.running, false); assert.equal(d.runners, 0); assert.ok(d.nodes > 0); assert.equal(d.canvases, 2);
+  return pg;
+});
+
+test('fx: if the browser refuses to unlock audio, the hint stays and the next tap tries again', async (b) => {
+  const pg = await open(b);
+  await pg.evaluate(() => {
+    const base = Object.getPrototypeOf(AudioContext.prototype); const d = Object.getOwnPropertyDescriptor(base, 'state');
+    window.__refuse = true;
+    Object.defineProperty(base, 'state', { configurable: true, get() { return window.__refuse ? 'suspended' : d.get.call(this); } });
+    const resume = AudioContext.prototype.resume;
+    AudioContext.prototype.resume = function () { return window.__refuse ? Promise.resolve() : resume.call(this); };
+  });
+  await mountFx(pg);
+  await pg.mouse.click(10, 10); await pg.waitForTimeout(600);
+  assert.equal(await music(pg), 'waiting'); assert.equal((await dbg(pg)).musicOn, false);
+  await pg.evaluate(() => { window.__refuse = false; });
+  await pg.mouse.click(10, 10); await musicOn(pg);
+  assert.equal(await music(pg), 'on');
+  return pg;
+});
+
+// ---------------------------------------------------------------- Task 3: shell wiring + always-dark theme
+const screenOf = (pg) => pg.evaluate(() => document.body.dataset.screen);
+const bodyBg = (pg) => pg.evaluate(() => { const m = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g).map(Number); return m.slice(0, 3); });
+const savedSound = (pg) => pg.evaluate(() => JSON.parse(localStorage.getItem('lilnux.save.v1')).sound);
+
+test('shell: entry views are marked and mounted, other views are not', async (b) => {
+  const pg = await open(b);
+  assert.equal(await screenOf(pg), 'entry');
+  assert.equal(await pg.evaluate(() => StartFX.isMounted()), true);
+  assert.equal((await dbg(pg)).canvases, 2);
+  await pg.click('.hub-card.learn [data-go=map]');
+  assert.equal(await screenOf(pg), undefined);
+  assert.equal(await pg.evaluate(() => StartFX.isMounted()), false);
+  assert.equal((await dbg(pg)).canvases, 0);
+  return pg;
+});
+
+test('shell: the Welcome screen (no player yet) is an entry view too', async (b) => {
+  const pg = await open(b, { save: null });
+  assert.equal(await screenOf(pg), 'entry');
+  assert.equal((await dbg(pg)).canvases, 2);
+  return pg;
+});
+
+test('shell: churn players > hub > map > hub never doubles anything', async (b) => {
+  const pg = await open(b);
+  const check = async () => { await pg.waitForTimeout(150); const c = (await dbg(pg)).canvases; assert.ok(c === 0 || c === 2, 'canvases ' + c); };
+  for (const sel of ['.player-chip', '.player-main', '.mode-switch [data-go=map]', '.brand', '.player-chip', '.player-main']) { await pg.click(sel); await check(); }
+  await pg.waitForTimeout(600);
+  assert.ok((await acCount(pg)) <= 1, 'at most one AudioContext');
+  assert.equal(await pg.evaluate(() => document.querySelectorAll('#start-grid, #start-fx').length), 2);
+  return pg;
+});
+
+test('shell: entering the Adventure stops the music', async (b) => {
+  const pg = await open(b);
+  await pg.mouse.click(5, 300); await musicOn(pg);
+  await pg.click('.mode-switch [data-go=kernel]');
+  await pg.waitForTimeout(200);
+  assert.equal(await music(pg), undefined);
+  const d = await dbg(pg);
+  assert.equal(d.musicOn, false); assert.equal(d.canvases, 0);
+  return pg;
+});
+
+test('shell: the top-bar sound switch controls the music', async (b) => {
+  const pg = await open(b);
+  await pg.click('[data-act=sound]');
+  assert.equal(await music(pg), 'off'); assert.equal(await savedSound(pg), false);
+  await pg.click('[data-act=sound]');
+  assert.equal(await savedSound(pg), true);
+  await musicOn(pg);
+  assert.equal(await music(pg), 'on');
+  return pg;
+});
+
+test('shell: a saved sound-off setting never plays', async (b) => {
+  const pg = await open(b, { sound: false });
+  assert.equal(await music(pg), 'off');
+  await pg.mouse.click(5, 300); await pg.waitForTimeout(900);
+  assert.equal(await acCount(pg), 0);
+  return pg;
+});
+
+test('shell: entry views stay dark even when the OS and theme are light', async (b) => {
+  const pg = await open(b, { colorScheme: 'light' });
+  await pg.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  assert.ok((await bodyBg(pg)).every((v) => v < 40), 'hub is dark: ' + (await bodyBg(pg)));
+  await pg.click('.hub-card.learn [data-go=map]');
+  assert.ok((await bodyBg(pg)).every((v) => v > 200), 'map is light: ' + (await bodyBg(pg)));
+  await pg.click('.brand');
+  assert.ok((await bodyBg(pg)).every((v) => v < 40), 'hub is dark again');
+  return pg;
+});
+
+test('shell: the app still works if the FX script is missing', async (b) => {
+  const pg = await open(b);
+  await pg.evaluate(() => { StartFX.unmount(); delete window.StartFX; });
+  await pg.click('.hub-card.learn [data-go=map]');
+  await pg.waitForSelector('.mode-banner.learn');
+  await pg.click('.brand');
+  await pg.waitForSelector('.hub-card.learn');
+  await pg.click('[data-act=sound]');
+  return pg;
+});
+
+test('shell: entering the Adventure silences the music at once (no overlap with its room tone)', async (b) => {
+  const pg = await open(b);
+  await pg.mouse.click(5, 300); await musicOn(pg);
+  await pg.waitForFunction(() => StartFX._debug().masterGain > 0.15, null, { timeout: 3000 });
+  await pg.click('.mode-switch [data-go=kernel]');
+  await pg.waitForTimeout(160);
+  assert.ok((await dbg(pg)).masterGain < 0.02, 'still audible: ' + (await dbg(pg)).masterGain);
+  return pg;
+});
+
+test('shell: the browser bar colour follows the entry screens', async (b) => {
+  const pg = await open(b);
+  const tc = () => pg.evaluate(() => document.querySelector('meta[name=theme-color]').content);
+  assert.equal(await tc(), '#060b18');
+  await pg.click('.hub-card.learn [data-go=map]');
+  assert.equal(await tc(), '#3c6eb4');
+  await pg.click('.brand');
+  assert.equal(await tc(), '#060b18');
+  return pg;
+});
+
+// ---------------------------------------------------------------- Task 4: the Welcome screen
+const THREE = [player('p0', 'Sam', '🐧'), player('p1', 'Mom', '🦊'), player('p2', 'Dad', '🤖')];
+const welcome = (b, o = {}) => open(b, { players: THREE, current: null, ...o });
+// the right-most edge of anything visible in the page or the top bar (body clips sideways overflow, so scrollWidth alone can hide it)
+const overflowRight = (pg) => pg.evaluate(() => Math.max(...[...document.querySelectorAll('#app *, #top *')]
+  .filter((e) => e.offsetParent !== null && !e.closest('.avatars input') && e.getClientRects().length).map((e) => e.getBoundingClientRect().right)));
+const centerOff = (pg, sel) => pg.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return Math.abs((r.left + r.right) / 2 - window.innerWidth / 2); }, sel);
+
+test('welcome: copy and structure', async (b) => {
+  const pg = await open(b, { save: null });
+  assert.equal(await pg.evaluate(() => { const c = document.querySelector('h1.entry-title').cloneNode(true); c.querySelectorAll('[aria-hidden]').forEach((e) => e.remove()); return c.textContent.trim(); }), 'LilNux');
+  assert.equal((await pg.innerText('.entry-tag')).trim(), 'Crack the machine, level up, save the day. No pressure.');
+  assert.equal(await pg.getAttribute('input[name=name]', 'placeholder'), 'What should we call you?');
+  assert.equal((await pg.textContent('#pform button[type=submit]')).trim(), 'Begin ▸');
+  assert.match(await pg.innerText('#pform h2'), /new recruit/i);
+  await pg.fill('input[name=name]', 'Sam'); await pg.click('#pform button[type=submit]');
+  await pg.waitForSelector('.hub-card.learn');
+  const pg2 = await welcome(b);
+  assert.match(await pg2.innerText('h2.kicker'), /who is awake\?/i);
+  return pg;
+});
+
+test('welcome: the section title reads as plain words to a screen reader', async (b) => {
+  const pg = await welcome(b);
+  assert.equal(await pg.getByRole('heading', { name: 'who is awake?', exact: true }).count(), 1);
+  return pg;
+});
+
+test('welcome: the top bar stays a single row on a phone (only the hub needs two)', async (b) => {
+  const pg = await welcome(b);
+  assert.ok((await pg.evaluate(() => document.getElementById('top').getBoundingClientRect().height)) < 80, 'top bar is two rows');
+  return pg;
+});
+
+test('welcome: everything is centered', async (b) => {
+  const pg = await welcome(b);
+  for (const sel of ['.entry-hero', '.players', '#pform']) assert.ok((await centerOff(pg, sel)) <= 2, sel + ' off-centre by ' + (await centerOff(pg, sel)));
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('h1.entry-title')).textAlign), 'center');
+  return pg;
+});
+
+test('welcome: the music hint shows only until the music starts', async (b) => {
+  const pg = await welcome(b);
+  assert.equal(await pg.isVisible('.music-hint'), true);
+  await pg.mouse.click(5, 300);
+  await pg.waitForSelector('.music-hint', { state: 'hidden', timeout: 3000 });
+  const off = await welcome(b, { sound: false });
+  assert.equal(await off.isVisible('.music-hint'), false);
+  return pg;
+});
+
+test('welcome: the first press does not move the page, so a first tap on Begin still submits', async (b) => {
+  const pg = await open(b, { save: null, viewport: { width: 1280, height: 900 } });
+  await pg.fill('input[name=name]', 'Sam');
+  const top = () => pg.evaluate(() => document.querySelector('#pform button[type=submit]').getBoundingClientRect().top);
+  const before = await top();
+  await pg.mouse.move(40, 400); await pg.mouse.down();
+  assert.equal(await top(), before, 'layout shifted on press');
+  await pg.mouse.up(); await pg.waitForSelector('.music-hint', { state: 'hidden', timeout: 3000 });
+  assert.equal(await top(), before, 'layout shifted when the hint hid');
+  await pg.click('#pform button[type=submit]');
+  await pg.waitForSelector('.hub-card.learn');
+  return pg;
+});
+
+test('welcome: player cards still select, edit and delete', async (b) => {
+  const pg = await welcome(b);
+  await pg.click('[data-edit="p2"]');
+  assert.equal(await pg.inputValue('input[name=name]'), 'Dad');
+  assert.equal((await pg.textContent('#pform button[type=submit]')).trim(), 'Save');
+  await pg.click('#pform button[type=submit]');
+  assert.equal(await pg.locator('.player').count(), 3);
+  await pg.click('[data-del="p2"]');
+  assert.equal(await pg.locator('.player').count(), 2);
+  await pg.click('[data-play="p1"]');
+  await pg.waitForSelector('.hub-card.learn');
+  assert.match(await pg.innerText('.hub h1'), /Mom/);
+  return pg;
+});
+
+test('welcome: every control is at least 44px', async (b) => {
+  const pg = await welcome(b);
+  const small = await pg.evaluate(() => [...document.querySelectorAll('#app button, #top button, .avatars span')]
+    .filter((e) => e.offsetParent !== null).map((e) => { const r = e.getBoundingClientRect(); return { t: (e.textContent || e.className).trim().slice(0, 14), w: Math.round(r.width), h: Math.round(r.height) }; })
+    .filter((x) => x.w < 44 || x.h < 44));
+  assert.deepEqual(small, []);
+  return pg;
+});
+
+test('welcome: 8 players with long names fit a 320px screen', async (b) => {
+  const eight = ['🐧', '🦊', '🤖', '🐙', '🦉', '👾', '🐢', '🦄'].map((a, i) => player('p' + i, 'ABCDEFGHIJKLMNOPQRST', a));
+  const pg = await open(b, { players: eight, current: null, viewport: { width: 320, height: 640 } });
+  assert.equal(await pg.locator('.player').count(), 8);
+  assert.ok((await pg.evaluate(() => document.documentElement.scrollWidth)) <= 320, 'horizontal scroll');
+  assert.ok((await overflowRight(pg)) <= 321, 'something sticks out on the right: ' + (await overflowRight(pg)));
+  return pg;
+});
+
+test('welcome: reduced motion switches the title animation off', async (b) => {
+  const normal = await welcome(b);
+  assert.notEqual(await normal.evaluate(() => getComputedStyle(document.querySelector('.entry-title')).animationName), 'none');
+  const pg = await welcome(b, { reduced: true });
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('.entry-title')).animationName), 'none');
+  return pg;
+});
+
+// ---------------------------------------------------------------- Task 5: the hub
+const hub = (b, o = {}) => open(b, { players: THREE, current: 'p0', ...o });
+
+test('hub: heading and lead', async (b) => {
+  const pg = await hub(b);
+  assert.equal((await pg.textContent('.hub h1')).trim(), 'Sam 🐧 — choose your path');
+  assert.equal((await pg.textContent('.hub .lead')).trim(), 'Two ways in. Both teach real Fedora & Linux, and both share your XP, rank and badges.');
+  return pg;
+});
+
+test('hub: everything is centered', async (b) => {
+  const pg = await hub(b);
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('.hub h1')).textAlign), 'center');
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('.hub-card.learn')).textAlign), 'center');
+  assert.ok((await centerOff(pg, '.hub-grid')) <= 2, '.hub-grid off-centre');
+  const wide = await hub(b, { viewport: { width: 1280, height: 800 } });
+  assert.ok((await centerOff(wide, '.hub-grid')) <= 2, 'wide .hub-grid off-centre');
+  return pg;
+});
+
+test('hub: the cards keep their contract and both buttons navigate', async (b) => {
+  const pg = await hub(b);
+  const learn = await pg.textContent('.hub-card.learn'); const adv = await pg.textContent('.hub-card.adventure');
+  assert.match(learn, /Learn/); assert.match(learn, /Start learning/);
+  assert.match(adv, /Colonel Kernel/); assert.match(adv, /Play adventure/);
+  const box = await pg.locator('.hub-preview').boundingBox();
+  assert.ok(box && box.width > 50 && box.height > 50, 'preview canvas has a size');
+  await pg.click('.hub-card.learn [data-go=map]');
+  await pg.waitForSelector('.mode-banner.learn');
+  await pg.click('.brand');
+  await pg.click('.hub-card.adventure [data-go=kernel]');
+  await pg.waitForSelector('#ck-root', { timeout: 5000 });
+  return pg;
+});
+
+test('hub: every control is at least 44px', async (b) => {
+  const pg = await hub(b);
+  const small = await pg.evaluate(() => [...document.querySelectorAll('#app button, #top button')]
+    .filter((e) => e.offsetParent !== null).map((e) => { const r = e.getBoundingClientRect(); return { t: (e.textContent || e.className).trim().slice(0, 14), w: Math.round(r.width), h: Math.round(r.height) }; })
+    .filter((x) => x.w < 44 || x.h < 44));
+  assert.deepEqual(small, []);
+  return pg;
+});
+
+test('hub: nothing sticks out on a 320px screen', async (b) => {
+  const pg = await hub(b, { viewport: { width: 320, height: 640 } });
+  assert.ok((await pg.evaluate(() => document.documentElement.scrollWidth)) <= 320, 'horizontal scroll');
+  assert.ok((await overflowRight(pg)) <= 321, 'something sticks out on the right: ' + (await overflowRight(pg)));
+  return pg;
+});
+
+// ---------------------------------------------------------------- review follow-ups (#6 #7 #8 #9)
+test('perf: the animated layer is cheap (no shadow blur, about 30 fps, capped at 1.5x pixels)', async (b) => {
+  const pg = await open(b, { dsf: 3 });
+  await mountFx(pg);
+  await pg.waitForTimeout(600);
+  const f0 = (await dbg(pg)).frames; await pg.waitForTimeout(1000); const f1 = (await dbg(pg)).frames;
+  assert.ok(f1 - f0 <= 36, 'drew ' + (f1 - f0) + ' frames in a second');
+  assert.ok(f1 - f0 >= 15, 'drew only ' + (f1 - f0) + ' frames in a second');
+  assert.equal(await pg.evaluate(() => window.__shadow), 0, 'shadowBlur is used on the moving layer');
+  const w = await pg.evaluate(() => document.getElementById('start-fx').width);
+  assert.ok(w <= Math.round(390 * 1.5) + 1, 'effects canvas is ' + w + ' px wide');
+  return pg;
+});
+
+// ---------------------------------------------------------------- runner
+(async () => {
+  const only = process.env.ONLY;
+  const b = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  let failed = 0; const errs = [];
+  for (const [name, fn] of tests) {
+    if (only && !name.includes(only)) continue;
+    let pg = null;
+    try { pg = await fn(b); console.log('PASS', name); }
+    catch (e) { failed++; console.log('FAIL', name, '\n   ', String(e.message).split('\n').slice(0, 4).join('\n    ')); }
+    if (pg && pg.errs) errs.push(...pg.errs);
+    while (OPEN.length) await OPEN.pop().close().catch(() => {});
+  }
+  console.log('ERRORS', JSON.stringify(errs));
+  console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
+  await b.close();
+  process.exit(failed || errs.length ? 1 : 0);
+})();
