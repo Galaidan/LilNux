@@ -21,16 +21,39 @@ in the top bar). Both share players, XP, ranks, badges and the sound switch (`lo
 ## Repository state (2026-11-26)
 
 - GitHub `Galaidan/LilNux`. **`main` = the live site** (GitHub Pages): https://galaidan.github.io/LilNux/
-- `main` is at `968015b`, cache **`lilnux-v13`**, and is live. Everything below is merged and pushed; nothing is
-  waiting on a branch.
+- `main` is at `5e19534`, cache **`lilnux-v14`**, and is live (checked 2026-11-26: `sw.js` serves v14, `js/start-fx.js`
+  and `css/entry.css` return 200). Everything below is merged and pushed; nothing is waiting on a branch.
 - Local feature branches `ck-action`, `ck-chapter1`, `ck-polish`, `ck-hud-buttons`, `ck-craft-floors`,
-  `ck-colonel-look` are all merged into `main` (safe to delete). Old remote branches `colonel-kernel-design`,
+  `ck-colonel-look`, `cyberpunk-start`, `handoff-2026-11-26` are all merged into `main` (safe to delete). Old remote branches `colonel-kernel-design`,
   `ck-story-update`, `ck-ux-tweaks` are merged too (delete on github.com if wanted).
 - Playtest zips from each round sit in `C:\ClaudeBro\` (`LilNux-*.zip`); they're throwaway.
 - `C:\ClaudeBro\HANDOFF.md` is an old copy of this file and `C:\ClaudeBro\LilNux-Colonel-Kernel\` a stale unzip:
   ignore both. Work only in `C:\ClaudeBro\LilNux`.
 - Commit identity (repo-local): `Galaidan <Galaidan@users.noreply.github.com>`. Never put personal details in
   commits.
+
+## Entry screens: Welcome + hub (the "Circuit Void" look, shipped 2026-11-26)
+
+- The pick-a-player **Welcome screen** and the **hub** are always dark (whatever the OS/`data-theme` says), centered, with
+  embossed buttons, neon lightbars, a live Tron circuit field (glowing traces, light-runners with tracers, blinking
+  data-nodes) and a synthesized synthwave loop. Tagline: "Crack the machine, level up, save the day. No pressure."
+  Every other view keeps the normal light/dark look.
+- **Rule:** the `players` and `hub` views set `body[data-screen="entry"]` in `go()` (`js/game.js`), which mounts
+  `StartFX`; every other view unmounts it. The dark theme is a token override in `css/entry.css`, so components restyle
+  on their own.
+- **Sound:** the top-bar 🔊 (`S.sound`) is the only music switch. Audio is created and resumed *inside* the first finished
+  tap or key press (iOS needs that), silently; the music starts 0.3 s later. `body[data-music]` is `waiting | on | off`
+  (the "tap anywhere" hint shows only on `waiting`, and hides once audio is really running). Music stops for Learn
+  and, with a ~30 ms cut, for the Adventure so it never overlaps the room tone. The page has two AudioContexts by
+  design (StartFX's and the game's click sounds).
+- **Performance:** the animated layer draws at ~30 fps, uses pre-rendered glow sprites (no `shadowBlur`), and its canvas
+  is capped at 1.5x pixels. Reduced motion draws a still field. Not yet measured on a real phone.
+- **Gotchas:** never hide something with `display:none` on the first press of an entry screen (the layout shifts and the
+  tap is lost; use `visibility`). `.primary.primary` in `entry.css` is deliberate (beats the dark-mode rule in
+  `style.css`). `scrollWidth` can pass while the page overflows, so overflow tests also check element edges.
+- Design, plan and build notes: `docs/superpowers/specs/2026-11-26-cyberpunk-start-screen-design.md`,
+  `docs/superpowers/plans/2026-11-26-cyberpunk-start-screen.md`, and the build-notes README next to it (every decision
+  and the review's findings). The approved mockup is `docs/superpowers/specs/2026-11-26-cyberpunk-start-screen-mockup.html`.
 
 ## Design documents (the source of truth)
 
@@ -103,6 +126,8 @@ in the top bar). Both share players, XP, ranks, badges and the sound switch (`lo
 - **Adventure is landscape on phones; Learn stays portrait.** (Portrait shows a "turn your phone sideways"
   screen and pauses the game; `manifest.webmanifest` has no `orientation`, because Learn shares it.)
 - Text stays in the HTML overlay, never drawn into the pixel canvas. Original art only.
+- **The Welcome screen and hub stay always dark and own the synthwave music** (see "Entry screens"); music never plays
+  anywhere else and never starts before a tap or when the sound switch is off.
 - Privacy: keep family details (names, ages) out of the repo — it's public. (Older commits still contain the
   kids' ages in the first design doc; only a history rewrite + force-push would remove them, and only if the user
   asks.)
@@ -127,9 +152,16 @@ in the top bar). Both share players, XP, ranks, badges and the sound switch (`lo
 | `js/ck/ui.js` | HUD, action bar, boss bar, use prompt, rotate screen, Pip panel (Quests/Items/Map/Tasks), dialogue, learning terminal, log |
 | `js/ck/main.js` | room-based chapter flow, pause menu, sounds, rest/wake, bridge to `game.js` (`CK.open` / `CK.close`) |
 
+Entry screens (outside `js/ck/`):
+
+| File | Role |
+|---|---|
+| `js/start-fx.js` | `window.StartFX`: pure synthwave score + Tron field simulation (unit-tested), then the canvas/Web Audio runtime: `mount / unmount({fast}) / setSound / isMounted / _debug` |
+| `css/entry.css` | the always-dark tokens (`body[data-screen="entry"]`), lightbars, embossed buttons, Welcome and hub styling |
+
 When adding files: add them to `index.html`, `tests/e2e/ck-harness.html` if tests need them, and the `FILES`
 list in `sw.js` (`tests/ck/wiring.test.js` checks this). **Bump `VERSION` in `sw.js` whenever shipped files
-change** (currently `lilnux-v13`; the wiring test asserts the number, so update it there too).
+change** (currently `lilnux-v14`; the wiring test asserts the number, so update it there too).
 
 ## How we work (this PC)
 
@@ -154,7 +186,8 @@ change** (currently `lilnux-v13`; the wiring test asserts the number, so update 
 
 ```bash
 export NODE_PATH='C:\ClaudeBro\.pw\node_modules'   # Playwright + Chromium live outside the repo
-node --test tests/ck/                              # 173 unit tests
+node --test tests/ck/                              # 193 unit tests
+node tests/e2e/start-screen.e2e.js                 # 37 tests: StartFX runtime, shell wiring, Welcome screen, hub; ONLY='name' runs some
 node tests/e2e/ck-ui.e2e.js                        # 21 overlay tests
 node tests/e2e/ck-adventure.e2e.js                 # 49 tests incl. a full Chapter 1 playthrough; ONLY='name' runs one
 node tests/e2e/lilnux-regression.e2e.js            # Learn mode; prints ERRORS [] when clean
@@ -183,6 +216,10 @@ Gotchas when writing e2e tests:
 
 - Nothing deferred from earlier rounds.
 - Small, known: on an iPhone SE in landscape the top HUD wraps to two rows (nothing overlaps; the bars sit below).
+- **To check on a real iPhone** (not testable in Chromium here): the synthwave loop starts after the first tap; battery and
+  heat with the hub left open (if it is warm or janky, drop the effects layer to fewer runners or an even lower frame
+  rate). On iPhone the silent switch mutes Web Audio by design (the animation still shows).
+- Known: on phones <= 440 px the hub top bar wraps to two rows (44 px buttons no longer fit one row).
 - Next big thing, when the user asks: **Chapter 2**.
 
 ## Working with this user
