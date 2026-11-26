@@ -50,3 +50,19 @@ Plan: `2026-11-26-cyberpunk-start-screen.md` · Spec: `../specs/2026-11-26-cyber
 - **Gotchas:** never hide something with `display:none` on the first press of an entry screen (it shifts the layout and swallows the tap; use `visibility`). `.primary.primary` in `entry.css` is deliberate (beats the dark-mode rule in `style.css`). `scrollWidth` can pass while the page overflows, so overflow tests also check element edges.
 - **Tests:** `node --test tests/ck/` (190 unit), `node tests/e2e/start-screen.e2e.js` (30 e2e: FX runtime, shell wiring, Welcome, hub). Run `lilnux-regression.e2e.js` too (it caught the first-tap bug).
 - **Known:** on iPhone, Web Audio is muted by the silent switch (animation still shows). The hub top bar wraps to two rows on phones ≤ 440 px.
+
+## Final review (fresh reviewer, Opus) — result
+No Critical issues. Fixed (each with a test that failed first, suite 33/33 start-screen + 190 unit):
+- **#1 Music might never start on iPhone.** Audio is now created and resumed *inside* the finished tap/key press (silently); the music follows 0.3 s later. The hint only hides once the browser has really unlocked audio, and if it refuses the next tap tries again. Needs a real iPhone check (I could not test Safari here).
+- **#5 App depended on StartFX loading.** `go()` and the sound handler are guarded, so a missing script just means no circuits/music.
+- **#4 Music overlapped the Adventure's room tone for 0.4 s.** Going to the Adventure now cuts the music in ~30 ms. (Re-graded Important because the plan says "never overlap".)
+
+**Deferred minors (your call, each is small):**
+- #2 After a main-thread stall (e.g. rotating the phone) the scheduler can play missed steps as one audible clump. Fix: one line in `schedule()`.
+- #3 Coming back to the tab can give a brief doubled note. Fix: keep the audio clock (`nextTime = Math.max(nextTime, currentTime + 0.02)`).
+- #6 Phone CPU/battery: 60 fps canvas with glow (`shadowBlur`) on every runner. Cheap mitigations: draw glow without `shadowBlur`, cap the effects canvas at 1.5× DPR, or run at 30 fps. Best decided after you playtest on a phone (heat, jank).
+- #7 Screen readers read `// who is awake?` as "slash slash…". Fix: wrap the `// ` in `aria-hidden`.
+- #8 The phone's browser bar stays Fedora-blue (`theme-color`) above the dark screens.
+- #9 Older Safari might announce the title twice (glitch layer fallback text).
+
+Reviewer's verdict on my rulings: all seven are sound.

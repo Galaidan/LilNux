@@ -191,8 +191,9 @@
     if (where !== 'kernel' && window.CK && CK.close) CK.close();
     if (!me() && where !== 'players') where = 'players';
     // The Welcome screen and the hub are the always-dark "Circuit Void" entry screens: animated circuits + synthwave music.
-    if (ENTRY_VIEWS.includes(where)) { document.body.dataset.screen = 'entry'; StartFX.mount({ soundOn: () => S.sound }); }
-    else { delete document.body.dataset.screen; StartFX.unmount(); }
+    // (guarded: if start-fx.js ever failed to load, the app must still work, just without the circuits and music)
+    if (ENTRY_VIEWS.includes(where)) { document.body.dataset.screen = 'entry'; if (window.StartFX) StartFX.mount({ soundOn: () => S.sound }); }
+    else { delete document.body.dataset.screen; if (window.StartFX) StartFX.unmount({ fast: where === 'kernel' }); }
     window.scrollTo(0, 0);
     view = where;
     ({ hub: renderHub, players: renderPlayers, map: renderMap, sandbox: renderSandbox, cheats: renderCheats, badges: renderBadges, world: startWorld, certificate: renderCertificate, kernel: openKernel })[where](arg);
@@ -800,7 +801,7 @@
     if (act === 'speak' && run) return speak(run.speakText || '');
     if (act === 'thint' && run && run.thint) return run.thint();
     if (act === 'skip-m' && run && run.skipMission) return run.skipMission();
-    if (act === 'sound') { S.sound = !S.sound; save(); renderTop(); StartFX.setSound(S.sound); if (S.sound) SFX.pop(); return; }
+    if (act === 'sound') { S.sound = !S.sound; save(); renderTop(); if (window.StartFX) StartFX.setSound(S.sound); if (S.sound) SFX.pop(); return; }
     if (act === 'print') return window.print();
     if (act === 'unlock') { if (confirm('Unlock every world for this player? (Good for grown‑ups who want to skip ahead.)')) { me().unlockAll = true; save(); renderMap(); } }
   });

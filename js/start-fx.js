@@ -138,13 +138,13 @@
   let gridC = null, fxC = null, gc = null, fc = null, W = 0, H = 0, DPR = 1;
   let runners = [], nodes = [], rng = null, raf = 0, last = 0, running = false, reduce = false, resizeTimer = 0;
   let AC = null, master = null, delay = null, noiseBuf = null, schedTimer = 0, stopTimer = 0, startTimer = 0;
-  let step = 0, nextTime = 0, wantMusic = false, musicPlaying = false, gestured = false;
+  let step = 0, nextTime = 0, wantMusic = false, musicPlaying = false, unlocked = false, unlocking = false;
 
   const soundOn = () => !!(opts && opts.soundOn && opts.soundOn());
 
   function setMusicAttr() {
     if (!mounted) { delete document.body.dataset.music; return; }
-    document.body.dataset.music = !soundOn() ? 'off' : ((musicPlaying || gestured) ? 'on' : 'waiting');
+    document.body.dataset.music = !soundOn() ? 'off' : ((musicPlaying || unlocked) ? 'on' : 'waiting');
   }
 
   // ---- drawing
@@ -273,7 +273,7 @@
     master.gain.cancelScheduledValues(now); master.gain.setValueAtTime(master.gain.value, now); master.gain.linearRampToValueAtTime(to, now + secs);
   }
   function startMusic() {
-    if (!mounted || !gestured || !soundOn() || !ensureAudio()) return;
+    if (!mounted || !unlocked || !soundOn() || !ensureAudio()) return;
     clearTimeout(stopTimer); stopTimer = 0;
     wantMusic = true; musicPlaying = true;
     try { const p = AC.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ }
@@ -281,13 +281,14 @@
     ramp(MASTER_GAIN, FADE_IN_S);
     setMusicAttr();
   }
-  function stopMusic() {
+  function stopMusic(fade) {
+    const secs = fade === undefined ? FADE_OUT_S : fade;
     wantMusic = false; musicPlaying = false;
     clearTimeout(startTimer); startTimer = 0;
     if (!AC) return;
-    ramp(0.0001, FADE_OUT_S);
+    ramp(0.0001, secs);
     clearTimeout(stopTimer);
-    stopTimer = setTimeout(() => { stopTimer = 0; clearTimeout(schedTimer); schedTimer = 0; if (AC && AC.state === 'running') AC.suspend(); }, FADE_OUT_S * 1000 + 100);
+    stopTimer = setTimeout(() => { stopTimer = 0; clearTimeout(schedTimer); schedTimer = 0; if (AC && AC.state === 'running') AC.suspend(); }, secs * 1000 + 100);
   }
   function pauseAudio() { clearTimeout(schedTimer); schedTimer = 0; if (AC && AC.state === 'running') AC.suspend(); }
   function resumeAudio() {
@@ -297,12 +298,31 @@
   }
 
   // ---- events
-  function onGesture() {
-    document.removeEventListener('pointerdown', onGesture); document.removeEventListener('keydown', onGesture);
-    gestured = true; setMusicAttr();
-    // a short delay, so tapping straight through to a mode never plays a blip of music
-    startTimer = setTimeout(() => { startTimer = 0; if (mounted && soundOn()) startMusic(); }, START_DELAY_MS);
+  // Safari/iOS only unlock audio inside a real gesture (a finished tap or key press, not a touch start), so the context is
+  // created and resumed right inside the handler, silently (master gain is 0). The music itself starts START_DELAY_MS later,
+  // so tapping straight through to a mode never plays a blip. The hint only goes away once the context is really running;
+  // if the browser refuses, the listeners stay armed and the next tap tries again.
+  const GESTURES = ['pointerup', 'click', 'touchend', 'keydown'];
+  const armGesture = () => { for (const t of GESTURES) document.addEventListener(t, onGesture, true); };
+  const disarmGesture = () => { for (const t of GESTURES) document.removeEventListener(t, onGesture, true); };
+  function scheduleStart(ms) {
+    clearTimeout(startTimer);
+    startTimer = setTimeout(() => { startTimer = 0; if (mounted && soundOn()) startMusic(); }, ms);
   }
+  function tryUnlock(startAfterMs) {
+    if (unlocked) { scheduleStart(startAfterMs); return; }
+    if (unlocking || !ensureAudio()) return;
+    unlocking = true;
+    let p = null;
+    try { p = AC.resume(); } catch (e) { /* ignore */ }
+    Promise.resolve(p).catch(() => {}).then(() => {
+      unlocking = false;
+      if (!AC || AC.state !== 'running') return;
+      unlocked = true; disarmGesture();
+      if (mounted) { setMusicAttr(); scheduleStart(startAfterMs); }
+    });
+  }
+  function onGesture() { if (soundOn()) tryUnlock(START_DELAY_MS); }
   function onVisibility() {
     if (!mounted) return;
     if (document.hidden) { stopLoop(); pauseAudio(); } else { startLoop(); resumeAudio(); }
@@ -326,30 +346,31 @@
     }
     window.addEventListener('resize', onResize);
     document.addEventListener('visibilitychange', onVisibility);
-    if (gestured) { startTimer = setTimeout(() => { startTimer = 0; if (mounted && soundOn()) startMusic(); }, START_DELAY_MS); }
-    else { document.addEventListener('pointerdown', onGesture); document.addEventListener('keydown', onGesture); }
+    if (unlocked) scheduleStart(START_DELAY_MS); else armGesture();
     setMusicAttr();
   }
-  function unmount() {
+  /** `fast: true` cuts the music in ~30 ms instead of fading, for screens with their own sound (the Adventure). */
+  function unmount(o) {
     if (!mounted) return;
     mounted = false;
-    stopLoop(); stopMusic();
+    stopLoop(); stopMusic(o && o.fast ? 0.03 : undefined);
     clearTimeout(resizeTimer); clearTimeout(startTimer); startTimer = 0;
     window.removeEventListener('resize', onResize); document.removeEventListener('visibilitychange', onVisibility);
-    document.removeEventListener('pointerdown', onGesture); document.removeEventListener('keydown', onGesture);
+    disarmGesture();
     for (const c of [gridC, fxC]) if (c && c.parentNode) c.parentNode.removeChild(c);
     gridC = fxC = gc = fc = null; runners = []; nodes = [];
     delete document.body.dataset.music;
   }
   function setSound(on) {
     if (!mounted) return;
-    if (on) { if (gestured) startMusic(); } else stopMusic();
+    if (on) { if (unlocked) startMusic(); else tryUnlock(0); } else stopMusic();
     setMusicAttr();
   }
   const isMounted = () => mounted;
   function _debug() {
     return { running, contexts: AC ? 1 : 0, musicOn: musicPlaying, runners: runners.length, nodes: nodes.length,
-      canvases: document.querySelectorAll('#start-grid, #start-fx').length, audioState: AC ? AC.state : null };
+      canvases: document.querySelectorAll('#start-grid, #start-fx').length, audioState: AC ? AC.state : null,
+      masterGain: master ? Math.round(master.gain.value * 1000) / 1000 : 0 };
   }
 
   root.StartFX = { music, field, mount, unmount, setSound, isMounted, _debug };

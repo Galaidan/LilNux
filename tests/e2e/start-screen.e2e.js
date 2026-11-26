@@ -75,7 +75,10 @@ test('fx: first tap starts music once, after a short delay', async (b) => {
   await mountFx(pg);
   await pg.mouse.click(10, 10);
   await pg.waitForTimeout(100);
-  assert.equal(await acCount(pg), 0);
+  // the context is created and resumed inside the gesture itself (iOS needs that), silently; the music follows 0.3 s later
+  assert.equal(await acCount(pg), 1);
+  assert.equal((await dbg(pg)).audioState, 'running');
+  assert.equal((await dbg(pg)).musicOn, false);
   await musicOn(pg);
   assert.equal(await acCount(pg), 1);
   await pg.mouse.click(12, 12); await pg.waitForTimeout(500);
@@ -90,7 +93,9 @@ test('fx: tapping straight through plays no music', async (b) => {
   await pg.mouse.click(10, 10);
   await pg.evaluate(() => StartFX.unmount());
   await pg.waitForTimeout(900);
-  assert.equal(await acCount(pg), 0);
+  assert.ok((await acCount(pg)) <= 1);
+  const d = await dbg(pg);
+  assert.equal(d.musicOn, false); assert.equal(d.masterGain, 0, 'never made a sound');
   return pg;
 });
 
@@ -151,6 +156,24 @@ test('fx: reduced motion draws no runners', async (b) => {
   await mountFx(pg);
   const d = await dbg(pg);
   assert.equal(d.running, false); assert.equal(d.runners, 0); assert.ok(d.nodes > 0); assert.equal(d.canvases, 2);
+  return pg;
+});
+
+test('fx: if the browser refuses to unlock audio, the hint stays and the next tap tries again', async (b) => {
+  const pg = await open(b);
+  await pg.evaluate(() => {
+    const base = Object.getPrototypeOf(AudioContext.prototype); const d = Object.getOwnPropertyDescriptor(base, 'state');
+    window.__refuse = true;
+    Object.defineProperty(base, 'state', { configurable: true, get() { return window.__refuse ? 'suspended' : d.get.call(this); } });
+    const resume = AudioContext.prototype.resume;
+    AudioContext.prototype.resume = function () { return window.__refuse ? Promise.resolve() : resume.call(this); };
+  });
+  await mountFx(pg);
+  await pg.mouse.click(10, 10); await pg.waitForTimeout(600);
+  assert.equal(await music(pg), 'waiting'); assert.equal((await dbg(pg)).musicOn, false);
+  await pg.evaluate(() => { window.__refuse = false; });
+  await pg.mouse.click(10, 10); await musicOn(pg);
+  assert.equal(await music(pg), 'on');
   return pg;
 });
 
@@ -229,6 +252,27 @@ test('shell: entry views stay dark even when the OS and theme are light', async 
   return pg;
 });
 
+test('shell: the app still works if the FX script is missing', async (b) => {
+  const pg = await open(b);
+  await pg.evaluate(() => { StartFX.unmount(); delete window.StartFX; });
+  await pg.click('.hub-card.learn [data-go=map]');
+  await pg.waitForSelector('.mode-banner.learn');
+  await pg.click('.brand');
+  await pg.waitForSelector('.hub-card.learn');
+  await pg.click('[data-act=sound]');
+  return pg;
+});
+
+test('shell: entering the Adventure silences the music at once (no overlap with its room tone)', async (b) => {
+  const pg = await open(b);
+  await pg.mouse.click(5, 300); await musicOn(pg);
+  await pg.waitForFunction(() => StartFX._debug().masterGain > 0.15, null, { timeout: 3000 });
+  await pg.click('.mode-switch [data-go=kernel]');
+  await pg.waitForTimeout(160);
+  assert.ok((await dbg(pg)).masterGain < 0.02, 'still audible: ' + (await dbg(pg)).masterGain);
+  return pg;
+});
+
 // ---------------------------------------------------------------- Task 4: the Welcome screen
 const THREE = [player('p0', 'Sam', '🐧'), player('p1', 'Mom', '🦊'), player('p2', 'Dad', '🤖')];
 const welcome = (b, o = {}) => open(b, { players: THREE, current: null, ...o });
@@ -262,7 +306,7 @@ test('welcome: the music hint shows only until the music starts', async (b) => {
   const pg = await welcome(b);
   assert.equal(await pg.isVisible('.music-hint'), true);
   await pg.mouse.click(5, 300);
-  assert.equal(await pg.isVisible('.music-hint'), false);
+  await pg.waitForSelector('.music-hint', { state: 'hidden', timeout: 3000 });
   const off = await welcome(b, { sound: false });
   assert.equal(await off.isVisible('.music-hint'), false);
   return pg;
@@ -274,8 +318,9 @@ test('welcome: the first press does not move the page, so a first tap on Begin s
   const top = () => pg.evaluate(() => document.querySelector('#pform button[type=submit]').getBoundingClientRect().top);
   const before = await top();
   await pg.mouse.move(40, 400); await pg.mouse.down();
+  assert.equal(await top(), before, 'layout shifted on press');
+  await pg.mouse.up(); await pg.waitForSelector('.music-hint', { state: 'hidden', timeout: 3000 });
   assert.equal(await top(), before, 'layout shifted when the hint hid');
-  await pg.mouse.up();
   await pg.click('#pform button[type=submit]');
   await pg.waitForSelector('.hub-card.learn');
   return pg;
