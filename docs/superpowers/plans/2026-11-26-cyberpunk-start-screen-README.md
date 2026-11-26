@@ -38,3 +38,15 @@ Plan: `2026-11-26-cyberpunk-start-screen.md` · Spec: `../specs/2026-11-26-cyber
 - **Call:** hub heading/lead copy changed to match the Welcome tone (plan-specified strings).
 - **Call:** on phones ≤ 440 px the top bar wraps to two rows (brand + Learn/Adventure on top, the other buttons below), because 44 px buttons no longer fit one row. Wider screens stay one row.
 - **Found by the stronger check:** the old `scrollWidth` test passes even when the page overflows (body clips it), so the 320 px tests now also check the right-most edge of every visible element; the hub top bar failed that until the wrap rule was added.
+
+## Task 6 — handoff addendum (paste into `docs/HANDOFF.md` after the `handoff-2026-11-26` branch is merged)
+**Why here and not in HANDOFF.md:** `main` still has the old 2026-11-22 handoff; the rewritten one is only on the unmerged `handoff-2026-11-26` branch, so editing it on this branch would conflict.
+
+- **Repo state:** branch `cyberpunk-start` (off `main` at `968015b`), cache **`lilnux-v14`**, not pushed. Design: `docs/superpowers/specs/2026-11-26-cyberpunk-start-screen-design.md`; plan: `docs/superpowers/plans/2026-11-26-cyberpunk-start-screen.md`; approved mockup: `docs/superpowers/specs/2026-11-26-cyberpunk-start-screen-mockup.html`.
+- **What changed:** the Welcome (pick-a-player) screen and the hub are "Circuit Void" entry screens: always dark, centered, embossed buttons, neon lightbars, a live Tron circuit field and a synthesized synthwave loop. Tagline: "Crack the machine, level up, save the day. No pressure."
+- **Rule:** the `players` and `hub` views are always dark (`body[data-screen="entry"]`, set in `go()`); every other view keeps the normal light/dark look. The music plays only on those two views and stops for Learn and the Adventure.
+- **Code map:** `js/start-fx.js` (pure score + field simulation, then the canvas/Web Audio runtime: `StartFX.mount/unmount/setSound/isMounted/_debug`); `css/entry.css` (the dark tokens and all entry-screen styling). `go()` and the 🔊 handler in `js/game.js` drive it.
+- **Sound:** the top-bar 🔊 (`S.sound`) is the only music switch. Nothing plays before the first tap; music starts 0.3 s after it. `body[data-music]` is `waiting | on | off` (the hint shows only on `waiting`). The page has two AudioContexts by design (StartFX's and the game's click sounds).
+- **Gotchas:** never hide something with `display:none` on the first press of an entry screen (it shifts the layout and swallows the tap; use `visibility`). `.primary.primary` in `entry.css` is deliberate (beats the dark-mode rule in `style.css`). `scrollWidth` can pass while the page overflows, so overflow tests also check element edges.
+- **Tests:** `node --test tests/ck/` (190 unit), `node tests/e2e/start-screen.e2e.js` (30 e2e: FX runtime, shell wiring, Welcome, hub). Run `lilnux-regression.e2e.js` too (it caught the first-tap bug).
+- **Known:** on iPhone, Web Audio is muted by the silent switch (animation still shows). The hub top bar wraps to two rows on phones ≤ 440 px.
