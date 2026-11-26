@@ -4,3 +4,19 @@
 .start-bg { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #start-grid { z-index: 0; }
 #start-fx { z-index: 1; }
+
+/* Always dark, whatever the OS or the saved theme says: the tokens are overridden here, so the top bar,
+   player chip, cards and buttons all restyle on their own. Other screens keep the normal light/dark look. */
+body[data-screen="entry"] {
+  --bg: #060b18; --bg2: #0a1326; --panel: #0e1a30; --ink: #e8fbff; --muted: #7e9bbe; --line: #1c3454;
+  --brand: #39d7c4; --brand-dark: #8ff6d6; --accent: #b44dff; --shadow: 0 10px 28px rgba(0, 0, 0, .6);
+  --good: #57e389; --good-bg: #17332a; --bad: #ff7b84; --bad-bg: #3a1e24;
+  color-scheme: dark;
+  background:
+    radial-gradient(800px 480px at 50% -5%, rgba(57, 215, 196, .12), transparent 60%),
+    radial-gradient(700px 500px at 80% 40%, rgba(180, 77, 255, .14), transparent 55%),
+    radial-gradient(700px 500px at 15% 70%, rgba(180, 77, 255, .10), transparent 55%),
+    var(--bg);
+}
+/* content sits above the canvases (the sticky top bar already has z-index 20) */
+body[data-screen="entry"] #app { position: relative; z-index: 2; }

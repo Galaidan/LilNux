@@ -15,7 +15,8 @@ async function open(b, opts = {}) {
     if (save) localStorage.setItem('lilnux.save.v1', save);
     window.__ac = 0;
     const Real = window.AudioContext;
-    if (Real) { window.AudioContext = function () { window.__ac++; return new Real(); }; window.AudioContext.prototype = Real.prototype; }
+    // counts only the contexts StartFX makes (the game's own click sounds keep a separate one)
+    if (Real) { window.AudioContext = function () { if (new Error().stack.includes('start-fx')) window.__ac++; return new Real(); }; window.AudioContext.prototype = Real.prototype; }
     window.__raf = 0;
     const raf = window.requestAnimationFrame.bind(window);
     window.requestAnimationFrame = (f) => { window.__raf++; return raf(f); };
@@ -31,7 +32,8 @@ async function open(b, opts = {}) {
 const dbg = (pg) => pg.evaluate(() => StartFX._debug());
 const music = (pg) => pg.evaluate(() => document.body.dataset.music);
 const acCount = (pg) => pg.evaluate(() => window.__ac);
-const mountFx = (pg, on) => pg.evaluate((snd) => { window.__snd = snd !== false; StartFX.mount({ soundOn: () => window.__snd }); }, on);
+// the shell mounts the FX by itself on entry views, so start these tests from a clean slate
+const mountFx = (pg, on) => pg.evaluate((snd) => { StartFX.unmount(); window.__snd = snd !== false; StartFX.mount({ soundOn: () => window.__snd }); }, on);
 const musicOn = (pg) => pg.waitForFunction(() => StartFX._debug().musicOn === true, null, { timeout: 3000 });
 
 const tests = [];
@@ -149,6 +151,81 @@ test('fx: reduced motion draws no runners', async (b) => {
   await mountFx(pg);
   const d = await dbg(pg);
   assert.equal(d.running, false); assert.equal(d.runners, 0); assert.ok(d.nodes > 0); assert.equal(d.canvases, 2);
+  return pg;
+});
+
+// ---------------------------------------------------------------- Task 3: shell wiring + always-dark theme
+const screenOf = (pg) => pg.evaluate(() => document.body.dataset.screen);
+const bodyBg = (pg) => pg.evaluate(() => { const m = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g).map(Number); return m.slice(0, 3); });
+const savedSound = (pg) => pg.evaluate(() => JSON.parse(localStorage.getItem('lilnux.save.v1')).sound);
+
+test('shell: entry views are marked and mounted, other views are not', async (b) => {
+  const pg = await open(b);
+  assert.equal(await screenOf(pg), 'entry');
+  assert.equal(await pg.evaluate(() => StartFX.isMounted()), true);
+  assert.equal((await dbg(pg)).canvases, 2);
+  await pg.click('.hub-card.learn [data-go=map]');
+  assert.equal(await screenOf(pg), undefined);
+  assert.equal(await pg.evaluate(() => StartFX.isMounted()), false);
+  assert.equal((await dbg(pg)).canvases, 0);
+  return pg;
+});
+
+test('shell: the Welcome screen (no player yet) is an entry view too', async (b) => {
+  const pg = await open(b, { save: null });
+  assert.equal(await screenOf(pg), 'entry');
+  assert.equal((await dbg(pg)).canvases, 2);
+  return pg;
+});
+
+test('shell: churn players > hub > map > hub never doubles anything', async (b) => {
+  const pg = await open(b);
+  const check = async () => { await pg.waitForTimeout(150); const c = (await dbg(pg)).canvases; assert.ok(c === 0 || c === 2, 'canvases ' + c); };
+  for (const sel of ['.player-chip', '.player-main', '.mode-switch [data-go=map]', '.brand', '.player-chip', '.player-main']) { await pg.click(sel); await check(); }
+  await pg.waitForTimeout(600);
+  assert.ok((await acCount(pg)) <= 1, 'at most one AudioContext');
+  assert.equal(await pg.evaluate(() => document.querySelectorAll('#start-grid, #start-fx').length), 2);
+  return pg;
+});
+
+test('shell: entering the Adventure stops the music', async (b) => {
+  const pg = await open(b);
+  await pg.mouse.click(5, 300); await musicOn(pg);
+  await pg.click('.mode-switch [data-go=kernel]');
+  await pg.waitForTimeout(200);
+  assert.equal(await music(pg), undefined);
+  const d = await dbg(pg);
+  assert.equal(d.musicOn, false); assert.equal(d.canvases, 0);
+  return pg;
+});
+
+test('shell: the top-bar sound switch controls the music', async (b) => {
+  const pg = await open(b);
+  await pg.click('[data-act=sound]');
+  assert.equal(await music(pg), 'off'); assert.equal(await savedSound(pg), false);
+  await pg.click('[data-act=sound]');
+  assert.equal(await savedSound(pg), true);
+  await musicOn(pg);
+  assert.equal(await music(pg), 'on');
+  return pg;
+});
+
+test('shell: a saved sound-off setting never plays', async (b) => {
+  const pg = await open(b, { sound: false });
+  assert.equal(await music(pg), 'off');
+  await pg.mouse.click(5, 300); await pg.waitForTimeout(900);
+  assert.equal(await acCount(pg), 0);
+  return pg;
+});
+
+test('shell: entry views stay dark even when the OS and theme are light', async (b) => {
+  const pg = await open(b, { colorScheme: 'light' });
+  await pg.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  assert.ok((await bodyBg(pg)).every((v) => v < 40), 'hub is dark: ' + (await bodyBg(pg)));
+  await pg.click('.hub-card.learn [data-go=map]');
+  assert.ok((await bodyBg(pg)).every((v) => v > 200), 'map is light: ' + (await bodyBg(pg)));
+  await pg.click('.brand');
+  assert.ok((await bodyBg(pg)).every((v) => v < 40), 'hub is dark again');
   return pg;
 });
 

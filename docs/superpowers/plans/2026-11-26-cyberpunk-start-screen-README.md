@@ -15,3 +15,10 @@ Plan: `2026-11-26-cyberpunk-start-screen.md` · Spec: `../specs/2026-11-26-cyber
 - **Call:** `body[data-music]` flips to `on` at the first tap (so the hint hides immediately); the music itself starts 0.3 s later. If the browser can't make audio, the hint stays hidden rather than nagging.
 - **Call:** once the page has had a first tap, later mounts (e.g. coming back from Learn mode) resume music on their own after 0.3 s.
 - Hat noise buffer is cached instead of rebuilt per hit (small perf gain over the mockup).
+
+## Task 3 — shell wiring + always-dark theme
+- `go()` now sets `body[data-screen="entry"]` and mounts/unmounts the FX for the `players` and `hub` views; the top-bar 🔊 calls `StartFX.setSound`. The dark theme is a token override block in `css/entry.css`, so the top bar, chips and cards go dark with no per-component work.
+- 7 new shell e2e tests + the 10 FX tests pass (17); Learn regression still prints `ERRORS []`.
+- **Call:** the game's own click sounds (`SFX`) keep their separate AudioContext, so the page has two in total. The "one AudioContext" test counts only StartFX's.
+- **Call:** FX tests now `unmount()` first, because the shell mounts the FX on its own.
+- **Seen by eye (to tune in Tasks 4–5):** bright trace lines run behind headline text in places; the old Welcome/hub layouts are still left-aligned until restyled.
