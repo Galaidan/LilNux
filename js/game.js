@@ -185,6 +185,10 @@
   let view = 'players';
   const LEARN_VIEWS = ['map', 'world', 'sandbox', 'cheats', 'certificate'];
   const ENTRY_VIEWS = ['players', 'hub'];
+  // the phone's browser bar follows the screen: dark over the entry screens, the page's own colour elsewhere
+  const themeMeta = document.querySelector('meta[name=theme-color]');
+  const themeDefault = themeMeta ? themeMeta.content : '';
+  function setThemeColor(color) { if (themeMeta) themeMeta.content = color || themeDefault; }
   function go(where, arg) {
     stopSpeak();
     if (where !== 'world') run = null;
@@ -192,6 +196,7 @@
     if (!me() && where !== 'players') where = 'players';
     // The Welcome screen and the hub are the always-dark "Circuit Void" entry screens: animated circuits + synthwave music.
     // (guarded: if start-fx.js ever failed to load, the app must still work, just without the circuits and music)
+    setThemeColor(ENTRY_VIEWS.includes(where) ? '#060b18' : null);
     if (ENTRY_VIEWS.includes(where)) { document.body.dataset.screen = 'entry'; if (window.StartFX) StartFX.mount({ soundOn: () => S.sound }); }
     else { delete document.body.dataset.screen; if (window.StartFX) StartFX.unmount({ fast: where === 'kernel' }); }
     window.scrollTo(0, 0);
@@ -276,7 +281,7 @@
         <p class="entry-tag">Crack the machine, level up, save the day. <b>No pressure.</b></p>
         <p class="music-hint">🔊 tap anywhere to start the music</p>
       </section>
-      ${list.length ? `<h2 class="sec kicker">// who is awake?</h2>
+      ${list.length ? `<h2 class="sec kicker"><span aria-hidden="true">// </span>who is awake?</h2>
       <div class="players">${list.map((p, i) => `
         <div class="player ${p.id === S.current ? 'current' : ''}">
           <button class="player-main" data-play="${p.id}">

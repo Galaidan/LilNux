@@ -47,6 +47,16 @@ test('music: midiToHz maps A4 and A3', () => {
   assert.equal(music.midiToHz(57), 220);
 });
 
+test('music: a late scheduler catches up instead of replaying missed steps in a clump', () => {
+  assert.ok(Math.abs(music.catchUp(5, 5.2) - 5.23) < 1e-9, 'behind: jump to just after now');
+  assert.equal(music.catchUp(5.3, 5.2), 5.3);
+});
+
+test('music: resuming keeps the audio clock so queued notes are not doubled', () => {
+  assert.equal(music.resumeTime(5.12, 5.0), 5.12);
+  assert.ok(Math.abs(music.resumeTime(0, 5.0) - 5.02) < 1e-9, 'fresh start: just after now');
+});
+
 test('field: counts are clamped', () => {
   assert.equal(field.counts(390, 844).runners, 6);
   assert.equal(field.counts(3000, 2000).runners, 14);

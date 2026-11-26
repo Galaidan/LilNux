@@ -70,3 +70,14 @@ Reviewer's verdict on my rulings: all seven are sound.
 ## Other calls made while building
 - Worked on branch `cyberpunk-start` directly (no separate git worktree): your usual flow is branch → playtest zip → "push it".
 - Final results before the zip: 190 unit tests, 33 start-screen e2e, Learn regression, UI suite and the full Adventure playthrough all pass.
+
+## Review minors: all six finished (each test-first)
+- **#2 scheduler clump:** `music.catchUp(next, now)`; a late scheduler jumps to just after "now" instead of replaying missed steps (unit-tested).
+- **#3 doubled note on tab return:** `music.resumeTime(next, now)` keeps queued notes instead of resetting the clock (unit-tested).
+- **#6 phone CPU/battery:** no `shadowBlur` on the animated layer (pre-rendered glow sprites instead), the effects canvas is capped at 1.5x pixels, and it draws at about 30 fps (`StartFX._debug().frames`). Measured: a steady 30 fps at 1x, 2x and 3x. The static circuit canvas still uses glow, but it is drawn once per resize.
+- **#7** the decorative `// ` before the section title is `aria-hidden` (a screen reader says "who is awake?").
+- **#8** the phone's browser bar (`theme-color`) is `#060b18` on the Welcome screen and hub and goes back to `#3c6eb4` elsewhere.
+- **#9** the glitch copy of the title only uses the empty-alt-text `content` form, so older Safari shows no copy rather than reading the title twice (it loses the glitch flicker).
+- **Found while looking at it:** my hub top-bar wrap rule also stacked the logo above the sound button on the Welcome screen at phone width. It now applies only where the Learn/Adventure switch exists (`:has(.mode-switch)`); new test `top bar stays a single row`.
+- **Test-suite fix:** the e2e runner now closes every page after each test (leftover animated pages starved later tests of CPU and made the fps test fail).
+- **Two sessions edited this branch at once** (both got "finish the 6"). The other session stood down; I merged its `perf` test (30 fps, 1.5x cap) and kept my versions of the duplicate a11y, theme-color and clock tests.

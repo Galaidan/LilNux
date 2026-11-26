@@ -18,3 +18,11 @@ test('the start-screen FX script and entry stylesheet are loaded and cached', ()
   assert.ok(html.indexOf('js/start-fx.js') < html.indexOf('js/game.js'), 'start-fx loads before game.js');
   for (const f of ['js/start-fx.js', 'css/entry.css']) { assert.ok(fs.existsSync(path.join(ROOT, f)), f); assert.ok(sw.includes(`'${f}'`), `sw caches ${f}`); }
 });
+
+test('the decorative glitch copy of the title never falls back to readable text', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css/entry.css'), 'utf8');
+  const rule = css.match(/\.entry-title::after\s*\{[^}]*\}/);
+  assert.ok(rule, 'rule exists');
+  assert.ok(/content:\s*"LilNux"\s*\/\s*""/.test(rule[0]), 'uses the empty alt-text form');
+  assert.ok(!/content:\s*"LilNux"\s*;/.test(rule[0]), 'no plain-text fallback (older Safari would announce the title twice)');
+});

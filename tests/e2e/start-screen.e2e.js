@@ -8,19 +8,24 @@ const SHOTS = process.env.SHOTS || path.resolve(__dirname, '../../.shots');
 const player = (id, name, avatar) => ({ id, name, avatar: avatar || '🐧', kid: false, xp: 0, worlds: {}, quests: {}, badges: [], unlockAll: false, sandboxCount: 0 });
 const saveOf = (opts) => JSON.stringify({ players: (opts.players || [player('p1', 'Sam')]), current: opts.current === undefined ? 'p1' : opts.current, sound: opts.sound !== false });
 
+const OPEN = []; // every context a test opens, closed after the test so animated pages from earlier tests don't steal CPU from later ones
 // A page with a seeded save, an AudioContext construction counter and a requestAnimationFrame counter.
 async function open(b, opts = {}) {
-  const ctx = await b.newContext({ viewport: opts.viewport || { width: 390, height: 844 }, reducedMotion: opts.reduced ? 'reduce' : 'no-preference', colorScheme: opts.colorScheme || 'dark' });
+  const ctx = await b.newContext({ viewport: opts.viewport || { width: 390, height: 844 }, deviceScaleFactor: opts.dsf || 1, reducedMotion: opts.reduced ? 'reduce' : 'no-preference', colorScheme: opts.colorScheme || 'dark' });
   await ctx.addInitScript((save) => {
     if (save) localStorage.setItem('lilnux.save.v1', save);
     window.__ac = 0;
     const Real = window.AudioContext;
     // counts only the contexts StartFX makes (the game's own click sounds keep a separate one)
     if (Real) { window.AudioContext = function () { if (new Error().stack.includes('start-fx')) window.__ac++; return new Real(); }; window.AudioContext.prototype = Real.prototype; }
+    window.__shadow = 0; // times anything set a non-zero shadowBlur on the moving effects canvas (costly on phones)
+    const sb = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur');
+    Object.defineProperty(CanvasRenderingContext2D.prototype, 'shadowBlur', { configurable: true, get() { return sb.get.call(this); }, set(v) { if (v && this.canvas && this.canvas.id === 'start-fx') window.__shadow++; sb.set.call(this, v); } });
     window.__raf = 0;
     const raf = window.requestAnimationFrame.bind(window);
     window.requestAnimationFrame = (f) => { window.__raf++; return raf(f); };
   }, opts.save === null ? null : saveOf(opts));
+  OPEN.push(ctx);
   const pg = await ctx.newPage();
   pg.errs = [];
   pg.on('pageerror', (e) => pg.errs.push(e.message));
@@ -273,6 +278,17 @@ test('shell: entering the Adventure silences the music at once (no overlap with 
   return pg;
 });
 
+test('shell: the browser bar colour follows the entry screens', async (b) => {
+  const pg = await open(b);
+  const tc = () => pg.evaluate(() => document.querySelector('meta[name=theme-color]').content);
+  assert.equal(await tc(), '#060b18');
+  await pg.click('.hub-card.learn [data-go=map]');
+  assert.equal(await tc(), '#3c6eb4');
+  await pg.click('.brand');
+  assert.equal(await tc(), '#060b18');
+  return pg;
+});
+
 // ---------------------------------------------------------------- Task 4: the Welcome screen
 const THREE = [player('p0', 'Sam', '🐧'), player('p1', 'Mom', '🦊'), player('p2', 'Dad', '🤖')];
 const welcome = (b, o = {}) => open(b, { players: THREE, current: null, ...o });
@@ -283,7 +299,7 @@ const centerOff = (pg, sel) => pg.evaluate((s) => { const r = document.querySele
 
 test('welcome: copy and structure', async (b) => {
   const pg = await open(b, { save: null });
-  assert.equal((await pg.textContent('h1.entry-title')).trim(), 'LilNux');
+  assert.equal(await pg.evaluate(() => { const c = document.querySelector('h1.entry-title').cloneNode(true); c.querySelectorAll('[aria-hidden]').forEach((e) => e.remove()); return c.textContent.trim(); }), 'LilNux');
   assert.equal((await pg.innerText('.entry-tag')).trim(), 'Crack the machine, level up, save the day. No pressure.');
   assert.equal(await pg.getAttribute('input[name=name]', 'placeholder'), 'What should we call you?');
   assert.equal((await pg.textContent('#pform button[type=submit]')).trim(), 'Begin ▸');
@@ -292,6 +308,18 @@ test('welcome: copy and structure', async (b) => {
   await pg.waitForSelector('.hub-card.learn');
   const pg2 = await welcome(b);
   assert.match(await pg2.innerText('h2.kicker'), /who is awake\?/i);
+  return pg;
+});
+
+test('welcome: the section title reads as plain words to a screen reader', async (b) => {
+  const pg = await welcome(b);
+  assert.equal(await pg.getByRole('heading', { name: 'who is awake?', exact: true }).count(), 1);
+  return pg;
+});
+
+test('welcome: the top bar stays a single row on a phone (only the hub needs two)', async (b) => {
+  const pg = await welcome(b);
+  assert.ok((await pg.evaluate(() => document.getElementById('top').getBoundingClientRect().height)) < 80, 'top bar is two rows');
   return pg;
 });
 
@@ -418,6 +446,20 @@ test('hub: nothing sticks out on a 320px screen', async (b) => {
   return pg;
 });
 
+// ---------------------------------------------------------------- review follow-ups (#6 #7 #8 #9)
+test('perf: the animated layer is cheap (no shadow blur, about 30 fps, capped at 1.5x pixels)', async (b) => {
+  const pg = await open(b, { dsf: 3 });
+  await mountFx(pg);
+  await pg.waitForTimeout(600);
+  const f0 = (await dbg(pg)).frames; await pg.waitForTimeout(1000); const f1 = (await dbg(pg)).frames;
+  assert.ok(f1 - f0 <= 36, 'drew ' + (f1 - f0) + ' frames in a second');
+  assert.ok(f1 - f0 >= 15, 'drew only ' + (f1 - f0) + ' frames in a second');
+  assert.equal(await pg.evaluate(() => window.__shadow), 0, 'shadowBlur is used on the moving layer');
+  const w = await pg.evaluate(() => document.getElementById('start-fx').width);
+  assert.ok(w <= Math.round(390 * 1.5) + 1, 'effects canvas is ' + w + ' px wide');
+  return pg;
+});
+
 // ---------------------------------------------------------------- runner
 (async () => {
   const only = process.env.ONLY;
@@ -429,6 +471,7 @@ test('hub: nothing sticks out on a 320px screen', async (b) => {
     try { pg = await fn(b); console.log('PASS', name); }
     catch (e) { failed++; console.log('FAIL', name, '\n   ', String(e.message).split('\n').slice(0, 4).join('\n    ')); }
     if (pg && pg.errs) errs.push(...pg.errs);
+    while (OPEN.length) await OPEN.pop().close().catch(() => {});
   }
   console.log('ERRORS', JSON.stringify(errs));
   console.log(failed ? `${failed} FAILED` : 'ALL PASSED');

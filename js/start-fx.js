@@ -28,7 +28,13 @@
     if (i === 0) for (const m of chord.pad) evs.push({ kind: 'pad', midi: m });
     return evs;
   }
-  const music = { BPM: 118, STEPS_PER_BAR, LOOP_STEPS, CHORDS, midiToHz, stepEvents };
+  /** After a main-thread stall the scheduler can be behind the audio clock: jump to just after "now" instead of replaying
+   *  every missed step at once (an audible clump). */
+  const catchUp = (nextTime, now) => (nextTime < now ? now + 0.03 : nextTime);
+  /** (Re)starting the loop: keep notes that are still queued ahead (the audio clock is frozen while suspended), so nothing
+   *  is doubled; if the clock is far behind (or this is the first start), begin just after "now". */
+  const resumeTime = (nextTime, now) => Math.max(nextTime, now + 0.02);
+  const music = { BPM: 118, STEPS_PER_BAR, LOOP_STEPS, CHORDS, midiToHz, stepEvents, catchUp, resumeTime };
 
   // ------------------------------------------------------------ Tron field simulation
   const CELL = 38;
@@ -136,7 +142,7 @@
 
   let mounted = false; let opts = null;
   let gridC = null, fxC = null, gc = null, fc = null, W = 0, H = 0, DPR = 1;
-  let runners = [], nodes = [], rng = null, raf = 0, last = 0, running = false, reduce = false, resizeTimer = 0;
+  let runners = [], nodes = [], rng = null, raf = 0, last = 0, frames = 0, running = false, reduce = false, resizeTimer = 0;
   let AC = null, master = null, delay = null, noiseBuf = null, schedTimer = 0, stopTimer = 0, startTimer = 0;
   let step = 0, nextTime = 0, wantMusic = false, musicPlaying = false, unlocked = false, unlocking = false;
 
@@ -168,10 +174,21 @@
       }
     }
   }
+  // Glow without shadowBlur (which is costly on phones, every frame): one small pre-rendered radial sprite per colour.
+  const glows = {};
+  function glow(color) {
+    if (glows[color]) return glows[color];
+    const c = document.createElement('canvas'); c.width = c.height = 48;
+    const g = c.getContext('2d'); const gr = g.createRadialGradient(24, 24, 0, 24, 24, 24);
+    gr.addColorStop(0, 'rgba(' + RGB[color] + ',0.85)'); gr.addColorStop(0.35, 'rgba(' + RGB[color] + ',0.28)'); gr.addColorStop(1, 'rgba(' + RGB[color] + ',0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 48, 48);
+    return (glows[color] = c);
+  }
   function drawNode(n, a) {
     const c = RGB[n.color];
-    fc.shadowColor = 'rgba(' + c + ',1)'; fc.shadowBlur = 14; fc.fillStyle = 'rgba(' + c + ',' + a.toFixed(3) + ')';
-    fc.save(); fc.translate(n.x, n.y); fc.rotate(Math.PI / 4); fc.fillRect(-n.r / 2, -n.r / 2, n.r, n.r); fc.restore(); fc.shadowBlur = 0;
+    fc.globalAlpha = Math.max(0, Math.min(1, a)); fc.drawImage(glow(n.color), n.x - n.r * 2.5, n.y - n.r * 2.5, n.r * 5, n.r * 5); fc.globalAlpha = 1;
+    fc.fillStyle = 'rgba(' + c + ',' + Math.max(0, a).toFixed(3) + ')';
+    fc.save(); fc.translate(n.x, n.y); fc.rotate(Math.PI / 4); fc.fillRect(-n.r / 2, -n.r / 2, n.r, n.r); fc.restore();
   }
   function drawStatic() { // reduced motion: a still scatter of nodes, no loop
     fc.clearRect(0, 0, W, H);
@@ -187,14 +204,18 @@
       fc.strokeStyle = 'rgba(' + c + ',' + (a * p * 0.85).toFixed(3) + ')'; fc.lineWidth = p * 2.6;
       fc.beginPath(); fc.moveTo(tr[j - 1][0], tr[j - 1][1]); fc.lineTo(tr[j][0], tr[j][1]); fc.stroke();
     }
-    fc.shadowColor = 'rgba(' + c + ',1)'; fc.shadowBlur = 12; fc.fillStyle = 'rgba(' + c + ',' + a.toFixed(3) + ')';
-    fc.beginPath(); fc.arc(r.x, r.y, 2.4, 0, 7); fc.fill(); fc.shadowBlur = 0;
+    fc.globalAlpha = Math.max(0, Math.min(1, a)); fc.drawImage(glow(r.color), r.x - 12, r.y - 12, 24, 24); fc.globalAlpha = 1;
+    fc.fillStyle = 'rgba(' + c + ',' + Math.max(0, a).toFixed(3) + ')';
+    fc.beginPath(); fc.arc(r.x, r.y, 2.4, 0, 7); fc.fill();
   }
 
   // ---- animation loop
+  // Drawn at about 30 fps (every other frame on a 60 Hz screen): slow glides don't need more, and it halves the phone's work.
+  const FRAME_MS = 30;
   function frame(ts) {
     if (!running) return;
-    const dt = Math.min(0.05, ((ts - last) / 1000) || 0); last = ts;
+    if (last && ts - last < FRAME_MS) { raf = requestAnimationFrame(frame); return; }
+    const dt = Math.min(0.05, ((ts - last) / 1000) || 0); last = ts; frames++;
     fc.clearRect(0, 0, W, H);
     for (let i = runners.length - 1; i >= 0; i--) {
       if (field.stepRunner(runners[i], dt, rng)) drawRunner(runners[i]); else runners.splice(i, 1);
@@ -212,8 +233,10 @@
 
   function resize() {
     W = window.innerWidth; H = window.innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
-    for (const c of [gridC, fxC]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
-    gc.setTransform(DPR, 0, 0, DPR, 0, 0); fc.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const fxDpr = Math.min(window.devicePixelRatio || 1, 1.5); // the animated canvas is redrawn every frame: keep it lighter
+    gridC.width = Math.round(W * DPR); gridC.height = Math.round(H * DPR);
+    fxC.width = Math.round(W * fxDpr); fxC.height = Math.round(H * fxDpr);
+    gc.setTransform(DPR, 0, 0, DPR, 0, 0); fc.setTransform(fxDpr, 0, 0, fxDpr, 0, 0);
     drawGrid();
     for (const r of runners) r.bounds = [W, H];
     if (reduce) drawStatic();
@@ -262,6 +285,7 @@
     else if (ev.kind === 'pad') tone('sawtooth', ev.midi, t, sixteenth * 15, 0.03, 1300, false);
   }
   function schedule() {
+    nextTime = music.catchUp(nextTime, AC.currentTime);
     while (nextTime < AC.currentTime + LOOKAHEAD) {
       for (const ev of music.stepEvents(step)) playEvent(ev, nextTime);
       nextTime += sixteenth; step++;
@@ -277,7 +301,7 @@
     clearTimeout(stopTimer); stopTimer = 0;
     wantMusic = true; musicPlaying = true;
     try { const p = AC.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ }
-    if (!schedTimer && !document.hidden) { nextTime = AC.currentTime + 0.1; schedule(); }
+    if (!schedTimer && !document.hidden) { nextTime = music.resumeTime(nextTime, AC.currentTime); schedule(); }
     ramp(MASTER_GAIN, FADE_IN_S);
     setMusicAttr();
   }
@@ -294,7 +318,7 @@
   function resumeAudio() {
     if (!wantMusic || !AC) return;
     try { const p = AC.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ }
-    if (!schedTimer) { nextTime = AC.currentTime + 0.1; schedule(); }
+    if (!schedTimer) { nextTime = music.resumeTime(nextTime, AC.currentTime); schedule(); }
   }
 
   // ---- events
@@ -370,7 +394,7 @@
   function _debug() {
     return { running, contexts: AC ? 1 : 0, musicOn: musicPlaying, runners: runners.length, nodes: nodes.length,
       canvases: document.querySelectorAll('#start-grid, #start-fx').length, audioState: AC ? AC.state : null,
-      masterGain: master ? Math.round(master.gain.value * 1000) / 1000 : 0 };
+      masterGain: master ? Math.round(master.gain.value * 1000) / 1000 : 0, frames };
   }
 
   root.StartFX = { music, field, mount, unmount, setSound, isMounted, _debug };
