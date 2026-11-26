@@ -229,6 +229,82 @@ test('shell: entry views stay dark even when the OS and theme are light', async 
   return pg;
 });
 
+// ---------------------------------------------------------------- Task 4: the Welcome screen
+const THREE = [player('p0', 'Sam', '🐧'), player('p1', 'Mom', '🦊'), player('p2', 'Dad', '🤖')];
+const welcome = (b, o = {}) => open(b, { players: THREE, current: null, ...o });
+const centerOff = (pg, sel) => pg.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return Math.abs((r.left + r.right) / 2 - window.innerWidth / 2); }, sel);
+
+test('welcome: copy and structure', async (b) => {
+  const pg = await open(b, { save: null });
+  assert.equal((await pg.textContent('h1.entry-title')).trim(), 'LilNux');
+  assert.equal((await pg.innerText('.entry-tag')).trim(), 'Crack the machine, level up, save the day. No pressure.');
+  assert.equal(await pg.getAttribute('input[name=name]', 'placeholder'), 'What should we call you?');
+  assert.equal((await pg.textContent('#pform button[type=submit]')).trim(), 'Begin ▸');
+  assert.match(await pg.innerText('#pform h2'), /new recruit/i);
+  await pg.fill('input[name=name]', 'Sam'); await pg.click('#pform button[type=submit]');
+  await pg.waitForSelector('.hub-card.learn');
+  const pg2 = await welcome(b);
+  assert.match(await pg2.innerText('h2.kicker'), /who is awake\?/i);
+  return pg;
+});
+
+test('welcome: everything is centered', async (b) => {
+  const pg = await welcome(b);
+  for (const sel of ['.entry-hero', '.players', '#pform']) assert.ok((await centerOff(pg, sel)) <= 2, sel + ' off-centre by ' + (await centerOff(pg, sel)));
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('h1.entry-title')).textAlign), 'center');
+  return pg;
+});
+
+test('welcome: the music hint shows only until the music starts', async (b) => {
+  const pg = await welcome(b);
+  assert.equal(await pg.isVisible('.music-hint'), true);
+  await pg.mouse.click(5, 300);
+  assert.equal(await pg.isVisible('.music-hint'), false);
+  const off = await welcome(b, { sound: false });
+  assert.equal(await off.isVisible('.music-hint'), false);
+  return pg;
+});
+
+test('welcome: player cards still select, edit and delete', async (b) => {
+  const pg = await welcome(b);
+  await pg.click('[data-edit="p2"]');
+  assert.equal(await pg.inputValue('input[name=name]'), 'Dad');
+  assert.equal((await pg.textContent('#pform button[type=submit]')).trim(), 'Save');
+  await pg.click('#pform button[type=submit]');
+  assert.equal(await pg.locator('.player').count(), 3);
+  await pg.click('[data-del="p2"]');
+  assert.equal(await pg.locator('.player').count(), 2);
+  await pg.click('[data-play="p1"]');
+  await pg.waitForSelector('.hub-card.learn');
+  assert.match(await pg.innerText('.hub h1'), /Mom/);
+  return pg;
+});
+
+test('welcome: every control is at least 44px', async (b) => {
+  const pg = await welcome(b);
+  const small = await pg.evaluate(() => [...document.querySelectorAll('#app button, #top button, .avatars span')]
+    .filter((e) => e.offsetParent !== null).map((e) => { const r = e.getBoundingClientRect(); return { t: (e.textContent || e.className).trim().slice(0, 14), w: Math.round(r.width), h: Math.round(r.height) }; })
+    .filter((x) => x.w < 44 || x.h < 44));
+  assert.deepEqual(small, []);
+  return pg;
+});
+
+test('welcome: 8 players with long names fit a 320px screen', async (b) => {
+  const eight = ['🐧', '🦊', '🤖', '🐙', '🦉', '👾', '🐢', '🦄'].map((a, i) => player('p' + i, 'ABCDEFGHIJKLMNOPQRST', a));
+  const pg = await open(b, { players: eight, current: null, viewport: { width: 320, height: 640 } });
+  assert.equal(await pg.locator('.player').count(), 8);
+  assert.ok((await pg.evaluate(() => document.documentElement.scrollWidth)) <= 320, 'horizontal scroll');
+  return pg;
+});
+
+test('welcome: reduced motion switches the title animation off', async (b) => {
+  const normal = await welcome(b);
+  assert.notEqual(await normal.evaluate(() => getComputedStyle(document.querySelector('.entry-title')).animationName), 'none');
+  const pg = await welcome(b, { reduced: true });
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('.entry-title')).animationName), 'none');
+  return pg;
+});
+
 // ---------------------------------------------------------------- runner
 (async () => {
   const only = process.env.ONLY;

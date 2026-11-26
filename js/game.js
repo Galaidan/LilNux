@@ -269,36 +269,36 @@
     const list = S.players.slice().sort((a, b) => b.xp - a.xp);
     const editing = editId ? S.players.find((p) => p.id === editId) : null;
     app.innerHTML = `
-      <section class="hero">
+      <section class="entry-hero">
         <div class="hero-tux">${TUX}</div>
-        <div>
-          <h1>Welcome to <span class="grad">LilNux</span>!</h1>
-          <p class="lead">A family game for learning <b>Fedora 44 Workstation</b> and <b>Linux</b> — the desktop, files, the terminal and installing software. Pick who’s playing!</p>
-        </div>
+        <h1 class="entry-title">Lil<span class="nx">Nux</span></h1>
+        <p class="entry-tag">Crack the machine, level up, save the day. <b>No pressure.</b></p>
+        <p class="music-hint">🔊 tap anywhere to start the music</p>
       </section>
-      ${list.length ? `<h2 class="sec">👪 Who’s playing?</h2>
+      ${list.length ? `<h2 class="sec kicker">// who is awake?</h2>
       <div class="players">${list.map((p, i) => `
         <div class="player ${p.id === S.current ? 'current' : ''}">
           <button class="player-main" data-play="${p.id}">
             <span class="medal">${['🥇', '🥈', '🥉'][i] || ''}</span>
-            <span class="pav">${p.avatar}</span>
+            <span class="ring"><span class="pav">${p.avatar}</span></span>
             <b>${esc(p.name)}</b>
             <small>${esc(rankOf(p.xp))}</small>
-            <small>${p.xp} XP · ${WORLDS.filter((w) => worldDone(p, w.id)).length}/${WORLDS.length} worlds · ${p.badges.length} 🏅</small>
+            <small>${p.xp} XP</small>
+            <small>${WORLDS.filter((w) => worldDone(p, w.id)).length}/${WORLDS.length} worlds · ${p.badges.length} 🏅</small>
             ${p.kid ? '<span class="tag">Kid mode</span>' : ''}
           </button>
           <div class="player-tools"><button class="mini" data-edit="${p.id}" title="Edit">✏️</button><button class="mini" data-del="${p.id}" title="Remove">🗑️</button></div>
         </div>`).join('')}
       </div>` : ''}
       <form class="panel add-player" id="pform">
-        <h2>${editing ? '✏️ Edit player' : '➕ Add a family member'}</h2>
-        <label class="field">Name <input name="name" maxlength="20" required placeholder="e.g. Mom, Dad, Sam" value="${editing ? esc(editing.name) : ''}" autocomplete="off"></label>
+        <h2>${editing ? '✏️ Edit player' : '+ new recruit'}</h2>
+        <label class="field">Name <input name="name" maxlength="20" required placeholder="What should we call you?" value="${editing ? esc(editing.name) : ''}" autocomplete="off"></label>
         <div class="field">Pick an avatar
           <div class="avatars">${AVATARS.map((a, i) => `<label><input type="radio" name="avatar" value="${a}" ${(editing ? editing.avatar === a : i === S.players.length % AVATARS.length) ? 'checked' : ''}><span>${a}</span></label>`).join('')}</div>
         </div>
         <label class="check"><input type="checkbox" name="kid" ${editing && editing.kid ? 'checked' : ''}> <span><b>Kid mode</b> — hints are free (no lost stars) and grown‑up extra tips are hidden. Great for younger players!</span></label>
         <div class="row">
-          <button class="primary" type="submit">${editing ? 'Save' : 'Add player'}</button>
+          <button class="primary" type="submit">${editing ? 'Save' : 'Begin ▸'}</button>
           ${editing ? '<button type="button" class="ghost" data-go="players">Cancel</button>' : ''}
         </div>
       </form>

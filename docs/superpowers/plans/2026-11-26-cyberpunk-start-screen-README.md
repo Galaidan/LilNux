@@ -22,3 +22,12 @@ Plan: `2026-11-26-cyberpunk-start-screen.md` · Spec: `../specs/2026-11-26-cyber
 - **Call:** the game's own click sounds (`SFX`) keep their separate AudioContext, so the page has two in total. The "one AudioContext" test counts only StartFX's.
 - **Call:** FX tests now `unmount()` first, because the shell mounts the FX on its own.
 - **Seen by eye (to tune in Tasks 4–5):** bright trace lines run behind headline text in places; the old Welcome/hub layouts are still left-aligned until restyled.
+
+## Task 4 — Welcome screen
+- Centered Welcome: Lil Tux, glowing `LilNux` title (flicker + occasional glitch, both off under reduced motion), the tagline, a "tap anywhere to start the music" hint (visible only until music starts), `// who is awake?` kicker, circuit-ring player cards, `+ new recruit` panel with a violet `Begin ▸` button, neon lightbars top and bottom, embossed buttons. 24 e2e tests pass.
+- ✏️/🗑️ moved to a row under each card at 44 px; every button and avatar on the screen is ≥ 44 px; 8 players with 20-letter names fit a 320 px phone with no sideways scroll.
+- **Call:** the stats line is now two lines (`340 XP` / `0/8 worlds · 0 🏅`) so it never wraps awkwardly.
+- **Call:** player cards use centered flex-wrap (not a grid) so an odd last card sits in the middle.
+- **Call:** `.primary.primary` (doubled class) in `entry.css` is deliberate: it beats the dark-mode rule in `style.css` without `!important`.
+- **Call:** a dark halo (text-shadow) sits under body text so it stays readable over the moving circuits.
+- The "Pick an avatar" label and the Kid-mode text are unchanged on purpose (clear for newcomers).
