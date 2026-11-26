@@ -7,7 +7,7 @@
     k: '#060a1c', n: '#14103a', c: '#38f2ff', m: '#ff4fd8', v: '#8b5cff', g: '#6dffb0', a: '#ffb347', r: '#ff5d73',
     y: '#ffd166', w: '#e8f1ff', d: '#7f8bb3', s: '#1c2448', S: '#2b3768', W: '#ffffff', b: '#0b0b10', o: '#f5a623',
     B: '#18285a', e: '#0c1430', G: '#c99a2e', L: '#4a5a8a', C: '#1673d6', N: '#0d1430', F: '#161f48', f: '#1b2654',
-    V: '#4b2fa0', R: '#a8324a', M: '#9b2f8a',
+    V: '#4b2fa0', R: '#a8324a', M: '#9b2f8a', X: '#6e1c36',
     l: '#b6ff5c', E: '#4f8a1e', O: '#c4721a', A: '#8a5418', T: '#f4f7ff', Q: '#2a0f33',
   };
 
@@ -40,68 +40,102 @@
   }
 
   // ---- Colonel Kernel (32x32, feet at row 29) ------------------------------------------------
-  const CAP = (emblem) => [
-    'kkkkkkkk',
-    'kkBBBBBBBBkk',
-    'kBBBBBBBBBBBBk',
-    emblem ? 'kBBBBBBbbBBBBBBk' : 'kBBBBBBBBBBBBBBk',
-    emblem ? 'kBBBBBbWWbBBBBBk' : 'kBBBBBBBBBBBBBBk',
-    'kyyyyyyyyyyyyyyk',
-    'keeeeeeeeeeeeeeeek',
-  ];
-  const FACE = ['kSSSSSSSSSSSSSSk', 'kSmmmvvvvvvcccSk', 'kSmWWvvvvvvWWcSk', 'kSmmmvvvvvvcccSk', 'kkSSSSSSSSSSSSkk'];
-  const BACK_HEAD = ['kSSSSSSSSSSSSSSk', 'kSSSSSSSSSSSSSSk', 'kSSSLSSSSSSLSSSk', 'kSSSSSSSSSSSSSSk', 'kkSSSSSSSSSSSSkk'];
-  const BODY = (front) => [
-    'kyyykSSSSSSSSkyyyk',
-    'kGyGkSSSSSSSSkGyGk',
-    front ? 'kssksSSSccSSSskssk' : 'kssksSSSSSSSSskssk',
-    front ? 'kssksSScWWcSSskssk' : 'kssksSSSSSSSSskssk',
-    front ? 'kssksSScWWcSSskssk' : 'kssksSSSLLSSSskssk',
-    front ? 'kssksSSSccSSSskssk' : 'kssksSSSSSSSSskssk',
-    'kssksccccccccskssk',
-    'kLLksSSSSSSSSskLLk',
-    'kkkksssssssssskkkk',
-    'kssssssssssk',
-  ];
-  const LEGS_STAND = ['ksssskkssssk', 'kSSSk..kSSSk', 'kSSSk..kSSSk', 'kSSSk..kSSSk', 'ksssk..ksssk', 'kkkkk..kkkkk'];
-  const LEGS_STEP = ['ksssskkssssk', 'kSSSk..kSSSk', 'kSSSk..kSSSk', 'ksssk..kSSSk', 'kkkkk..ksssk', '.......kkkkk'];
-  const front = (legs) => centre(CAP(true).concat(FACE, BODY(true), legs), 32, 32, 2);
-  const back = (legs) => centre(CAP(false).concat(BACK_HEAD, BODY(false), legs), 32, 32, 2);
+  // Built from simple shapes (wedge pauldrons, a tapered chest plate, a flared cape) and outlined
+  // automatically, so every pose keeps the same angular silhouette. Light comes from the upper left.
+  function shapes(w, h, layers) { // later layers paint over earlier ones; returns a grid of palette keys / null
+    const g = Array.from({ length: h }, () => Array(w).fill(null));
+    for (const f of layers) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const c = f(x, y); if (c) g[y][x] = c; }
+    return g;
+  }
+  function outline(g) { // a 1 px dark outline round the silhouette
+    const out = g.map((r) => r.slice());
+    for (let y = 0; y < g.length; y++) for (let x = 0; x < g[0].length; x++) {
+      if (g[y][x]) continue;
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => g[y + dy] && g[y + dy][x + dx])) out[y][x] = 'k';
+    }
+    return out.map((r) => r.map((c) => c || '.').join(''));
+  }
+  const inPoly = (pts) => (x, y) => { // pixel centre inside a polygon (continuous coordinates)
+    const px = x + 0.5; const py = y + 0.5; let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i]; const [xj, yj] = pts[j];
+      if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  const box = (x0, y0, x1, y1) => (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const flipX = (pts) => pts.map(([x, y]) => [32 - x, y]);
+  const layer = (test, paint) => (x, y) => (test(x, y) ? (typeof paint === 'function' ? paint(x, y) : paint) : null);
 
-  const SIDE_TOP = [
-    '.....kkkkkkkk.......',
-    '...kkBBBBBBBBkk.....',
-    '..kBBBBBBBBBBBBk....',
-    '..kBBBBBBBBbbBBk....',
-    '..kBBBBBBBbWWbBk....',
-    '..kyyyyyyyyyyyyk....',
-    '..keeeeeeeeeeeeeeek.',
-    '...kSSSSSSSSSSSk....',
-    '...kSSSSSSSmmvck....',
-    '...kSSSSSSSmvWck....',
-    '...kSSSSSSSmmvck....',
-    '...kkSSSSSSSSSkk....',
-    '....kyyykSSSSSk.....',
-    '....kGyGkSSSSSk.....',
-    '....ksskSSSSSck.....',
-    '....ksskSSSSSWk.....',
-    '....ksskSSSSSck.....',
-    '....kLLkSSSSSSk.....',
-    '....kkkkcccccck.....',
-    '.....kSSSSSSSk......',
-    '.....ksssssssk......',
+  // pauldron: a sharp wedge pointing up and out, gold along its top edge, shadowed underneath
+  const PAULDRON_L = [[2.5, 11.5], [6, 14.2], [12, 15], [11.5, 17.5], [9, 19], [6, 18.2]];
+  const pauldron = (pts) => { const inP = inPoly(pts); return layer(inP, (x, y) => (!inP(x, y - 1) ? 'y' : !inP(x, y + 1) ? 'G' : !inP(x, y - 2) ? 'L' : 'S')); };
+  const capeShade = (inC, edgeLining) => (x, y) => {
+    if (!inC(x, y)) return null;
+    if (y >= 27 && x % 3 === 0) return null; // a ragged hem
+    if (edgeLining && y >= 23 && (!inC(x - 1, y) || !inC(x + 1, y))) return 'M'; // the lining shows where it flares
+    return x % 4 === 1 && y > 18 ? 'X' : 'R'; // long folds
+  };
+  // head: an angular visor helmet under a peaked officer cap with the penguin emblem
+  const capLayers = (emblem) => [
+    layer(box(11, 2, 20, 2), 'B'), layer(box(10, 3, 21, 3), 'B'), layer(box(9, 4, 22, 5), 'B'),
+    layer((x, y) => emblem && ((y === 4 && (x === 15 || x === 16)) || (y === 5 && (x === 14 || x === 17))), 'b'),
+    layer((x, y) => emblem && y === 5 && (x === 15 || x === 16), 'W'),
+    layer(box(9, 6, 22, 6), 'y'), layer(box(7, 7, 24, 7), 'e'),
   ];
-  const SIDE_LEGS_STAND = ['.....ksssksssk......', '.....kSSSkSSSk......', '.....kSSSkSSSk......', '.....kSSSkSSSk......', '.....ksssksssk......', '.....kkkkkkkkkkk....'];
-  const SIDE_LEGS_STEP = ['.....ksssksssk......', '....kSSSk.kSSSk.....', '...kSSSk...kSSSk....', '...kSSSk...kSSSk....', '..kkkkk.....kkkkk...', '....................'];
-  const side = (legs) => centre(SIDE_TOP.concat(legs), 32, 32, 2);
+  const VISOR = { 9: 'mmvvvvvvcc', 10: 'mWWvvvvWWc', 11: 'mmvvvvvvcc' };
+  const faceFront = [
+    layer(box(10, 8, 21, 12), 'S'), layer(box(12, 13, 19, 13), 'S'), layer(box(10, 8, 10, 12), 'L'),
+    (x, y) => (VISOR[y] && x >= 11 && x <= 20 ? VISOR[y][x - 11] : null),
+  ];
+  const faceBack = [layer(box(10, 8, 21, 12), 'S'), layer(box(12, 13, 19, 13), 's'), layer((x, y) => y === 10 && (x === 13 || x === 18), 'L')];
+  const legsFront = (step) => [
+    layer(box(11, 23, 14, step ? 27 : 28), (x, y) => (y >= (step ? 25 : 26) ? 's' : 'S')),
+    layer(box(17, 23, 20, 28), (x, y) => (y >= 26 ? 's' : x === 20 ? 's' : 'S')),
+    layer((x, y) => y === (step ? 25 : 26) && ((x >= 11 && x <= 14) || (x >= 17 && x <= 20)), 'L'), // boot cuffs
+  ];
+  const chest = [
+    layer(inPoly([[9, 15], [23, 15], [20.5, 23], [11.5, 23]]), (x, y) => (x >= 19 ? 's' : 'S')),
+    layer((x, y) => y >= 16 && y <= 20 && (x === 11 + (y - 16) || x === 20 - (y - 16)), 'L'), // V plate edges
+    layer((x, y) => (y === 17 || y === 19) && (x === 15 || x === 16), 'c'), layer((x, y) => y === 18 && (x === 15 || x === 16), 'W'), // core
+    layer(box(11, 22, 20, 22), 'G'), layer(box(15, 22, 16, 22), 'y'), // belt
+  ];
+  const armsFront = [layer(box(7, 18, 9, 24), (x, y) => (y === 24 ? 'L' : x === 7 ? 'L' : 'S')), layer(box(22, 18, 24, 24), (x, y) => (y === 24 ? 'L' : x === 24 ? 's' : 'S'))];
+  const CAPE_FRONT = [[8, 15], [24, 15], [26.5, 28], [5.5, 28]];
+  const CAPE_BACK = [[8, 15], [24, 15], [26.5, 28], [5.5, 28]];
 
-  const down0 = front(LEGS_STAND); const up0 = back(LEGS_STAND); const side0 = side(SIDE_LEGS_STAND);
+  const front = (step) => outline(shapes(32, 32, [capeShade(inPoly(CAPE_FRONT), true)].concat(legsFront(step), armsFront, chest,
+    [pauldron(PAULDRON_L), pauldron(flipX(PAULDRON_L))], faceFront, capLayers(true))));
+  const back = (step) => outline(shapes(32, 32, legsFront(step).concat(armsFront, chest, [capeShade(inPoly(CAPE_BACK), false)],
+    [pauldron(PAULDRON_L), pauldron(flipX(PAULDRON_L))], faceBack, capLayers(false))));
+
+  // side view (facing right; the game mirrors it for left): the cape trails behind and flares when walking
+  const SIDE_CAPE = { stand: [[10, 15], [14, 15], [13, 22], [8, 28.5], [4, 28.5], [8, 20]], step: [[10, 15], [14, 15], [12, 21], [5, 27.5], [1.5, 26], [7, 19]],
+    dash: [[10, 15], [14, 15.5], [11, 20], [1, 21], [0.5, 17.5], [6, 16]] };
+  const sideLegs = (step) => (step
+    ? [layer(inPoly([[10, 23], [14, 23], [12.5, 29], [9, 29]]), (x, y) => (y >= 26 ? 's' : 'S')), layer(inPoly([[15, 23], [19, 23], [21.5, 29], [17.5, 29]]), (x, y) => (y >= 26 ? 's' : 'S'))]
+    : [layer(box(13, 23, 18, 28), (x, y) => (y >= 26 ? 's' : x === 15 ? 's' : 'S')), layer(box(19, 28, 19, 28), 's')]);
+  const SIDE_PAULDRON = [[8, 12], [11.5, 14.5], [18, 15], [18, 18.5], [15.5, 20.5], [11, 19.5]];
+  const sideBody = [
+    layer(inPoly([[11.5, 15], [20.5, 15], [19.5, 23], [12.5, 23]]), (x, y) => (x >= 19 ? 'L' : x <= 13 ? 's' : 'S')),
+    layer((x, y) => x === 19 && (y === 17 || y === 19), 'c'), layer((x, y) => x === 19 && y === 18, 'W'),
+    layer(box(13, 22, 19, 22), 'G'), layer(box(16, 18, 18, 24), (x, y) => (y === 24 ? 'L' : 'S')), // arm
+  ];
+  const sideHead = [
+    layer(box(12, 2, 19, 2), 'B'), layer(box(11, 3, 20, 5), 'B'), layer((x, y) => (y === 4 && (x === 17 || x === 18)) || (y === 5 && (x === 16 || x === 19)), 'b'), layer((x, y) => y === 5 && (x === 17 || x === 18), 'W'),
+    layer(box(11, 6, 20, 6), 'y'), layer(box(11, 7, 23, 7), 'e'),
+    layer(box(12, 8, 20, 12), 'S'), layer(box(13, 13, 19, 13), 'S'), layer(box(12, 8, 12, 12), 's'),
+    (x, y) => ({ 9: 'mmvc', 10: 'mvWc', 11: 'mmvc' }[y] && x >= 17 && x <= 20 ? { 9: 'mmvc', 10: 'mvWc', 11: 'mmvc' }[y][x - 17] : null),
+  ];
+  const side = (pose) => outline(shapes(32, 32, [capeShade(inPoly(SIDE_CAPE[pose]), false)].concat(sideLegs(pose !== 'stand'), sideBody, [pauldron(SIDE_PAULDRON)], sideHead)));
+
+  const down0 = front(false); const up0 = back(false); const side0 = side('stand');
 
   // Attack poses: the arm thrusts out with a bright `kill` energy edge (the swing arc is drawn by the scene).
-  const attackDown = patch(down0, 22, 20, ['kLLk', 'kcck', 'kcWk', 'kcWk', '.kk.']);
-  const attackUp = patch(up0, 22, 7, ['.kk.', 'kcWk', 'kcWk', 'kcck', 'kLLk', 'kssk']);
-  const attackSide = patch(side0, 19, 17, ['kkkkkkk', 'LLcccWWk', 'kkkkkkk']);
-  const dash = patch(side(SIDE_LEGS_STEP), 0, 14, ['ccc.....', '........', '.cccc...', '........', 'cc......']);
+  const attackDown = patch(down0, 22, 21, ['kLLk', 'kcck', 'kcWk', 'kcWk', '.kk.']);
+  const attackUp = patch(up0, 22, 6, ['.kk.', 'kcWk', 'kcWk', 'kcck', 'kLLk', 'kssk']);
+  const attackSide = patch(side0, 20, 17, ['kkkkkkk', 'LLcccWWk', 'kkkkkkk']);
+  const dash = patch(side('dash'), 0, 13, ['........', 'ccc.....', '........', '.cccc...', '........', 'cc......']);
 
   // ---- Pip (16x16): one big eye, a little magenta "1" badge ----------------------------------
   const pip = grid(16, 16, (x, y) => {
@@ -318,9 +352,9 @@
     mod_ram: { rows: modRam }, mod_fan: { rows: modFan }, mod_cpu: { rows: modCpu }, mod_ssd: { rows: modSsd }, bits: { rows: bits },
     crystal: { rows: crystal }, sign: { rows: sign }, switch_off: { rows: switchSpr(false) }, switch_on: { rows: switchSpr(true) },
     crack: { rows: crack }, block: { rows: block }, gate: { rows: gate }, barrier: { rows: barrier },
-    colonel_down_0: { rows: down0 }, colonel_down_1: { rows: front(LEGS_STEP) },
-    colonel_up_0: { rows: up0 }, colonel_up_1: { rows: back(LEGS_STEP) },
-    colonel_side_0: { rows: side0 }, colonel_side_1: { rows: side(SIDE_LEGS_STEP) },
+    colonel_down_0: { rows: down0 }, colonel_down_1: { rows: front(true) },
+    colonel_up_0: { rows: up0 }, colonel_up_1: { rows: back(true) },
+    colonel_side_0: { rows: side0 }, colonel_side_1: { rows: side('step') },
     colonel_attack_down: { rows: attackDown }, colonel_attack_up: { rows: attackUp }, colonel_attack_side: { rows: attackSide },
     colonel_dash: { rows: dash },
     pip: { rows: pip }, mite_0: { rows: mite0 }, mite_1: { rows: mite1 },

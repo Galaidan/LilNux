@@ -160,7 +160,7 @@ const tests = {
     const lum = await pg.evaluate(() => {
       const m = CK._test.main; const e = m.engine; const v = e.view; const P = m.sim.player; const cam = m.scene.cam;
       const at = (bx, by) => { const d = e.ctx.getImageData(Math.round((bx - cam.x) * v.k + v.ox), Math.round((by - cam.y) * v.k + v.oy), 1, 1).data; return 0.3 * d[0] + 0.59 * d[1] + 0.11 * d[2]; };
-      return { near: at(P.x + 4, P.y - 30), far: at(P.x - 120, P.y - 80) };
+      return { near: at(P.x + 18, P.y - 6), far: at(P.x - 120, P.y - 80) }; // near: open floor beside the Colonel, clear of his cap and cape
     });
     assert.ok(lum.near > lum.far + 40, JSON.stringify(lum));
     await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-coldboot.png') });
