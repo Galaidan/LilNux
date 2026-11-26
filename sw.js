@@ -1,9 +1,9 @@
 /* LilNux service worker: keeps the game playable offline once it has been opened.
  * Bump VERSION whenever any file changes so phones pick up the new copy. */
-const VERSION = 'lilnux-v13';
+const VERSION = 'lilnux-v14';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest',
-  'css/style.css', 'js/terminal.js', 'js/content.js', 'js/game.js', 'css/ck.css',
+  'css/style.css', 'js/terminal.js', 'js/content.js', 'js/game.js', 'css/ck.css', 'css/entry.css', 'js/start-fx.js',
   'js/ck/state.js', 'js/ck/world.js', 'js/ck/rules.js', 'js/ck/story.js', 'js/ck/puzzle.js', 'js/ck/ui.js', 'js/ck/main.js',
   'js/ck/pixengine.js', 'js/ck/pixel.js', 'js/ck/sprites.js', 'js/ck/rooms.js', 'js/ck/roomgen.js', 'js/ck/foes.js', 'js/ck/action.js', 'js/ck/input.js', 'js/ck/roomart.js', 'js/ck/roomscene.js', 'js/ck/puzzlescene.js',
   'assets/lilnux.svg', 'assets/apple-touch-icon.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/icon-maskable-512.png',
