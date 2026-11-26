@@ -6,7 +6,7 @@
 
   const TUNING = {
     MOVE: 110, PLAYER_R: 7, IFRAMES_HURT: 0.6, ATTACK_MOVE_MUL: 0.4,
-    DASH_DIST: 70, DASH_TIME: 0.15, DASH_CD: 0.35,
+    DASH_DIST: 70, DASH_TIME: 0.15, DASH_CD: 0.35, DASH_GRACE: 0.12, // after a dash, its energy shield lingers this long
     KILL_DMG: 12, KILL_TIME: 0.22, KILL_CHAIN: 0.4, KILL_RANGE: 30, KILL_LUNGE: 10, KILL_COOL_HEAT: 8, KILL_ARC_DEG: 70, KNOCK: 4,
     PARRY: 0.18, PARRY_KID: 0.30, PARRY_RECOVER: 0.35, STUN: 1.2, REFLECT_MUL: 2,
     ECHO_SPEED: 260, ECHO_DMG: 10, ECHO_CD: 0.35, ECHO_HEAT: 9, OVERHEAT_LOCK: 1.5, HEAT_DECAY: 25, BOLT_R: 3, ORB_R: 3,
@@ -39,7 +39,7 @@
       player: {
         x: room.player.x, y: room.player.y, face: { x: 0, y: 1 }, stability: maxStability, maxStability,
         dashT: 0, dashCd: 0, dashDir: { x: 0, y: 1 }, iframes: 0, attackT: 0, combo: 0, chainT: 0,
-        parryT: 0, recoverT: 0, parryCaught: false, heat: 0, overheatUntil: 0, hitsTaken: 0, moving: false, chargeT: 0, charged: false,
+        parryT: 0, recoverT: 0, parryCaught: false, shieldT: 0, heat: 0, overheatUntil: 0, hitsTaken: 0, moving: false, chargeT: 0, charged: false,
       },
       enemies: [],
       orbs: [], bolts: [], cooldowns: { echo: 0, ls: 0 },
@@ -72,6 +72,7 @@
 
     function hurt(dmg, x, y) {
       if (P.dashT > 0 || P.iframes > 0 || s.outcome) return false;
+      if (P.shieldT > 0) { ev('shield-block', x, y); return false; } // the dash shield takes it: no damage, not a hit
       P.stability = Math.max(0, P.stability - dmg); P.hitsTaken++; P.iframes = T.IFRAMES_HURT;
       ev('hurt', x, y);
       if (P.stability <= 0) { s.outcome = 'lose'; ev('lose'); }
@@ -225,6 +226,7 @@
       P.iframes = Math.max(0, P.iframes - dt);
       P.dashCd = Math.max(0, P.dashCd - dt);
       P.recoverT = Math.max(0, P.recoverT - dt);
+      P.shieldT = Math.max(0, P.shieldT - dt);
       P.heat = Math.max(0, P.heat - T.HEAT_DECAY * dt);
       for (const k of Object.keys(s.cooldowns)) s.cooldowns[k] = Math.max(0, s.cooldowns[k] - dt);
       if (P.attackT > 0) { P.attackT -= dt; if (P.attackT <= 0) { P.attackT = 0; P.chainT = T.KILL_CHAIN; } }
@@ -262,7 +264,7 @@
         const d = (T.DASH_DIST / T.DASH_TIME) * Math.min(dt, P.dashT);
         const m = CK.Rooms.moveCircle(room, P.x, P.y, T.PLAYER_R, P.dashDir.x * d, P.dashDir.y * d);
         P.x = m.x; P.y = m.y; P.dashT -= dt;
-        if (P.dashT <= 1e-9) { P.dashT = 0; P.dashCd = T.DASH_CD * mods.dashCdMul; }
+        if (P.dashT <= 1e-9) { P.dashT = 0; P.dashCd = T.DASH_CD * mods.dashCdMul; P.shieldT = T.DASH_GRACE; }
         P.moving = true;
       } else {
         const sp = T.MOVE * mods.moveMul * (P.attackT > 0 ? T.ATTACK_MOVE_MUL : 1) * dt;

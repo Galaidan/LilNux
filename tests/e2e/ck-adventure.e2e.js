@@ -718,6 +718,25 @@ const tests = {
     const pg2 = await openWith(b, null, null, { viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce' });
     assert.equal(await pg2.$eval('#ck-root', (e) => getComputedStyle(e).animationName), 'none');
   },
+  // ---- every ability has its own look ----
+  async 'abilities have their own effects: dash shield, trap ward, echo waves, ls scan, kill -9 charge'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], upgrades: ['kill-9'], modules: ['cpu'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg); await pg.evaluate(() => CK._test.main.place(14 * 16 + 8, 9 * 16 + 8)); await wait(100);
+    const fx = () => pg.evaluate(() => Object.assign({}, CK._test.main.scene.fx));
+    await pg.keyboard.press(' '); await wait(50);
+    assert.equal((await fx()).shield, true, 'dash: energy shield'); await wait(500);
+    assert.equal((await fx()).shield, false, 'the shield fades after the grace window');
+    await pg.keyboard.press('k'); await wait(50);
+    assert.equal((await fx()).ward, true, 'trap: a ward'); await wait(500);
+    await pg.keyboard.press('1'); await wait(60);
+    assert.ok((await fx()).echoWaves > 0, 'echo: sound waves behind the bolt'); await wait(500);
+    await pg.keyboard.press('2'); await wait(100);
+    assert.equal((await fx()).scan, true, 'ls: a scan sweep'); await wait(800);
+    await pg.keyboard.down('j'); await wait(450);
+    assert.equal((await fx()).charge, true, 'kill -9: a charging aura'); await pg.keyboard.up('j'); await wait(200);
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-fx.png') });
+    assert.deepEqual(pg.errs, []);
+  },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);
     const step = async (side, id) => { await walk(pg, side, id); await settle(pg); };

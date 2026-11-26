@@ -364,3 +364,21 @@ test('lock-on with nothing in view stays off', () => {
   const s = mk(); freeze(s); press(s, { mx: 1 }); place3(s, [null, null, null]);
   drain(s); press(s, { lock: true }); assert.equal(s.locked, false); assert.ok(drain(s).includes('lock-none'));
 });
+
+// ---- dash: an energy shield that keeps you safe for a moment after the dash ends -------------------------
+test('dash grace: the shield absorbs a hit just after the dash ends, without breaking a clean clear', () => {
+  const s = mk(); freeze(s); drain(s);
+  press(s, { dash: true }); run(s, T.DASH_TIME + 1 / 60);
+  assert.equal(s.player.dashT, 0); assert.ok(s.player.shieldT > 0, 'shield up after the dash');
+  const P = s.player; s.spawnOrb({ x: P.x, y: P.y, dmg: 8 }); press(s, {});
+  assert.equal(P.stability, 100); assert.equal(P.hitsTaken, 0); assert.equal(s.orbs.length, 0, 'the shield ate the orb');
+  assert.ok(drain(s).includes('shield-block'));
+});
+test('dash grace lasts DASH_GRACE, then hits land again', () => {
+  const s = mk(); freeze(s);
+  press(s, { dash: true }); run(s, T.DASH_TIME + 1 / 60); run(s, T.DASH_GRACE + 0.02);
+  assert.equal(s.player.shieldT, 0);
+  const P = s.player; s.spawnOrb({ x: P.x, y: P.y, dmg: 8 }); press(s, {});
+  assert.equal(P.stability, 92);
+  assert.ok(T.DASH_GRACE >= 0.1 && T.DASH_GRACE <= 0.2);
+});
