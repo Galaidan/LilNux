@@ -132,9 +132,47 @@
   const down0 = front(false); const up0 = back(false); const side0 = side('stand');
 
   // Attack poses: the arm thrusts out with a bright `kill` energy edge (the swing arc is drawn by the scene).
-  const attackDown = patch(down0, 22, 21, ['kLLk', 'kcck', 'kcWk', 'kcWk', '.kk.']);
-  const attackUp = patch(up0, 22, 6, ['.kk.', 'kcWk', 'kcWk', 'kcck', 'kLLk', 'kssk']);
-  const attackSide = patch(side0, 20, 17, ['kkkkkkk', 'LLcccWWk', 'kkkkkkk']);
+  // His sword: a curved, single-edged blade that widens toward the tip (scimitar) on a gold guard with a
+  // knuckle bow (sabre). W/w blade, c the glowing cutting edge on the outer curve, y/G gold, b grip, L hand.
+  const attackSide = patch(side0, 19, 11, [ // held out front, curving up
+    '...........k.',
+    '..........kWk',
+    '.........kWck',
+    '........kWWck',
+    '.......kWWck.',
+    '.....kkWWcck.',
+    '....kyWWcck..',
+    'kkkkkyWcck...',
+    'SLbbbykkk....',
+    'kLGkkyk......',
+    '.kGGGGk......',
+    '..kkkk.......',
+  ]);
+  const attackDown = patch(down0, 23, 17, [ // swept out to his side, curving down
+    '.kk......',
+    'kyykkk...',
+    'kbyWWWkk.',
+    'kLyccWWWk',
+    '.kGkkccWk',
+    '..k..kkcW',
+    '.......kc',
+    '........k',
+  ]);
+  const attackUp = patch(up0, 23, 1, [ // raised overhead, curving forward
+    '......k.',
+    '.....kWk',
+    '....kWck',
+    '...kWWck',
+    '...kWcck',
+    '..kWWck.',
+    '..kWck..',
+    '..kWck..',
+    '.kyyyyk.',
+    '..kbk...',
+    '..kLk...',
+    '.kSSk...',
+    'kSSk....',
+  ]);
   const dash = patch(side('dash'), 0, 13, ['........', 'ccc.....', '........', '.cccc...', '........', 'cc......']);
 
   // ---- Pip (16x16): one big eye, a little magenta "1" badge ----------------------------------

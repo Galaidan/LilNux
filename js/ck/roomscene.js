@@ -386,12 +386,13 @@
 
     // Effects draw normally (not additive) with a dark under-stroke, so they read on the pale plaza.
     function drawEffects(g) {
-      for (const a of arcs) {
-        const al = Math.max(0, a.life / 0.1); const w = a.combo === 3 ? 3 : 2;
-        g.globalAlpha = al * 0.55; g.strokeStyle = A.cliff2; g.lineWidth = w + 2;
-        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
-        g.globalAlpha = al; g.strokeStyle = a.combo === 3 ? COL.magenta : COL.white; g.lineWidth = w;
-        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
+      for (const a of arcs) { // a crescent, like the sweep of a curved blade: thick in the middle, thin at the ends
+        const al = Math.max(0, a.life / 0.1); const w = a.combo === 3 ? 3 : 2; const R = a.big ? 30 : 26;
+        const strokes = [[R, 0.9, w], [R - 2, 0.55, w], [R - 4, 0.25, w - 1]];
+        g.globalAlpha = al * 0.55; g.strokeStyle = A.cliff2;
+        for (const [r, span, lw] of strokes) { g.lineWidth = lw + 2; g.beginPath(); g.arc(a.x, a.y, r, a.dir - span, a.dir + span); g.stroke(); }
+        g.globalAlpha = al; g.strokeStyle = a.combo === 3 ? COL.magenta : COL.white;
+        for (const [r, span, lw] of strokes) { g.lineWidth = lw; g.beginPath(); g.arc(a.x, a.y, r, a.dir - span, a.dir + span); g.stroke(); }
       }
       for (const r of rings) {
         const k = 1 - r.life / r.max; const rad = r.r0 + (r.r1 - r.r0) * k; const al = Math.max(0, r.life / r.max);
