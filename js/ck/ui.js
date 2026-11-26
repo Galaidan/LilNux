@@ -61,7 +61,18 @@
           <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip" title="Pip’s panel: quests, items, map and tasks"><span class="ck-orb"></span><span>Pip</span></button>
           <button class="ck-btn" data-ck="exit" aria-label="Leave the adventure" title="Back to choose a mode">✕</button>
         </div>`;
+      layoutHud();
     };
+    // The top HUD can wrap onto two rows on a narrow screen: the action bar sits below wherever it ends.
+    function layoutHud() {
+      const hud = $('.ck-hud'); if (!hud) return;
+      const items = hud.querySelectorAll('.ck-hud-left > *, .ck-hud-right > *'); let bottom = 0;
+      items.forEach((e) => { bottom = Math.max(bottom, e.getBoundingClientRect().bottom); });
+      if (bottom) rootEl.style.setProperty('--hud-h', Math.ceil(bottom) + 'px');
+    }
+    root.addEventListener('resize', layoutHud);
+    // iOS only shows :active (the pressed look) when the page listens for touches
+    const noop = () => {}; document.addEventListener('touchstart', noop, { passive: true });
 
     // ------------------------------------------------------------ action HUD (rooms): stability, heat, tool chips
     const inFight = () => !!(h.inFight && h.inFight());
@@ -337,7 +348,7 @@
       if (d.buy) { h.onBuy(d.buy); ui.pip('items'); }
     });
 
-    ui.destroy = function () { document.removeEventListener('keydown', onKey); rootEl.innerHTML = ''; rootEl.classList.remove('ck-ui'); };
+    ui.destroy = function () { document.removeEventListener('keydown', onKey); root.removeEventListener('resize', layoutHud); document.removeEventListener('touchstart', noop); rootEl.innerHTML = ''; rootEl.classList.remove('ck-ui'); };
     return ui;
   }
 

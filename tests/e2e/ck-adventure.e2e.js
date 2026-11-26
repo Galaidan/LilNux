@@ -626,6 +626,38 @@ const tests = {
     await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-lock-phone.png') });
     assert.deepEqual(pg.errs, []);
   },
+  // ---- HUD layout and button feel ----
+  async 'the top HUD never covers the Stability bar (phones and desktop)'(b) {
+    const save = Object.assign({ node: 'f3', prev: 'f1', bits: 120, memories: ['[    0.000000] efi: EFI v2.9 by LilNux Firmware'], switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw);
+    for (const opts of [{ ...devices['iPhone 13 landscape'] }, { ...devices['iPhone SE landscape'] }, { viewport: { width: 1280, height: 720 } }]) {
+      const pg = await openWith(b, save, null, opts); await settle(pg); await wait(200);
+      const r = await pg.evaluate(() => {
+        const box = (e) => { const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom, e.className]; };
+        const hud = [...document.querySelectorAll('.ck-hud-left > *, .ck-hud-right > *')].filter((e) => e.offsetParent).map(box);
+        const act = [...document.querySelectorAll('.ck-act > *')].filter((e) => e.offsetParent).map(box);
+        const toast = [...document.querySelectorAll('.ck-toast')].map(box);
+        const hits = []; const over = (p, q) => p[0] < q[2] - 1 && q[0] < p[2] - 1 && p[1] < q[3] - 1 && q[1] < p[3] - 1;
+        for (const a of hud) for (const c of act) if (over(a, c)) hits.push(a[4] + ' x ' + c[4]);
+        for (const t of toast) for (const c of hud.concat(act)) if (over(t, c)) hits.push('toast x ' + c[4]);
+        return { hits, n: act.length, toasts: toast.length, vw: innerWidth };
+      });
+      assert.ok(r.n >= 2, 'the action bar is showing'); assert.ok(r.toasts >= 1, 'Pip says welcome back');
+      assert.deepEqual(r.hits, [], 'overlap at ' + r.vw + 'px wide');
+      await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-hud-' + r.vw + '.png') });
+    }
+  },
+  async 'touch buttons sink when pressed and spring back'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw), null, { ...devices['iPhone 13 landscape'] });
+    await settle(pg);
+    const scale = () => pg.$eval('#ck-root .ck-tbtn-trap', (e) => new DOMMatrix(getComputedStyle(e).transform).a);
+    const fire = (t) => pg.evaluate((type) => { const el = document.querySelector('#ck-root .ck-tbtn-trap'); const b = el.getBoundingClientRect();
+      el.dispatchEvent(new PointerEvent(type, { pointerId: 9, clientX: b.left + 20, clientY: b.top + 20, bubbles: true, cancelable: true, pointerType: 'touch' })); }, t);
+    assert.match(await pg.$eval('#ck-root .ck-tbtn-trap', (e) => getComputedStyle(e).boxShadow), /inset/, 'embossed');
+    await fire('pointerdown'); await wait(120);
+    assert.ok((await scale()) < 0.97, 'pressed in');
+    await fire('pointerup'); await wait(400);
+    assert.ok(Math.abs((await scale()) - 1) < 0.01, 'back to size');
+  },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);
     const step = async (side, id) => { await walk(pg, side, id); await settle(pg); };
