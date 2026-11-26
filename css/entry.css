@@ -1,1 +1,6 @@
 /* LilNux — entry screens (Welcome + hub): the always-dark "Circuit Void" look. Scoped to body[data-screen="entry"]. */
+
+/* the animated circuit field (js/start-fx.js) sits behind the page */
+.start-bg { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#start-grid { z-index: 0; }
+#start-fx { z-index: 1; }

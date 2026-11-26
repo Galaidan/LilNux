@@ -127,5 +127,230 @@
 
   const field = { CELL, TRAIL_MAX, COLORS, makeRng, counts, makeTraces, makeRunner, stepRunner, runnerAlpha, makeNode, stepNode, nodeAlpha };
 
-  root.StartFX = { music, field };
+  // ------------------------------------------------------------ runtime: canvas field + Web Audio loop
+  // Browser only; nothing below runs until mount(). Animated with requestAnimationFrame, audio is
+  // synthesized (no files), starts only after the first user gesture, and obeys the shell's sound switch.
+  const RGB = { teal: '57,215,196', violet: '180,77,255', mint: '143,246,214' };
+  const GRID_SEED = 20261126, LOOKAHEAD = 0.12, TICK_MS = 26, START_DELAY_MS = 300, MASTER_GAIN = 0.2, FADE_IN_S = 0.6, FADE_OUT_S = 0.4;
+  const sixteenth = 60 / music.BPM / 4;
+
+  let mounted = false; let opts = null;
+  let gridC = null, fxC = null, gc = null, fc = null, W = 0, H = 0, DPR = 1;
+  let runners = [], nodes = [], rng = null, raf = 0, last = 0, running = false, reduce = false, resizeTimer = 0;
+  let AC = null, master = null, delay = null, noiseBuf = null, schedTimer = 0, stopTimer = 0, startTimer = 0;
+  let step = 0, nextTime = 0, wantMusic = false, musicPlaying = false, gestured = false;
+
+  const soundOn = () => !!(opts && opts.soundOn && opts.soundOn());
+
+  function setMusicAttr() {
+    if (!mounted) { delete document.body.dataset.music; return; }
+    document.body.dataset.music = !soundOn() ? 'off' : ((musicPlaying || gestured) ? 'on' : 'waiting');
+  }
+
+  // ---- drawing
+  function drawGrid() {
+    gc.clearRect(0, 0, W, H);
+    const cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL);
+    gc.lineWidth = 1; gc.strokeStyle = 'rgba(28,52,84,0.20)'; gc.beginPath();
+    for (let x = 0; x <= cols; x++) { gc.moveTo(x * CELL, 0); gc.lineTo(x * CELL, H); }
+    for (let y = 0; y <= rows; y++) { gc.moveTo(0, y * CELL); gc.lineTo(W, y * CELL); }
+    gc.stroke();
+    gc.lineJoin = 'round'; gc.lineCap = 'round';
+    for (const t of field.makeTraces(field.makeRng(GRID_SEED), cols, rows, field.counts(W, H).traces)) {
+      const c = RGB[t.color];
+      gc.beginPath(); gc.moveTo(t.pts[0][0] * CELL, t.pts[0][1] * CELL);
+      for (let i = 1; i < t.pts.length; i++) gc.lineTo(t.pts[i][0] * CELL, t.pts[i][1] * CELL);
+      gc.shadowColor = 'rgba(' + c + ',0.9)'; gc.shadowBlur = 8; gc.strokeStyle = 'rgba(' + c + ',0.45)'; gc.lineWidth = 1.6; gc.stroke();
+      gc.shadowBlur = 0; gc.strokeStyle = 'rgba(' + c + ',0.85)'; gc.lineWidth = 0.8; gc.stroke();
+      for (const p of [t.pts[0], t.pts[t.pts.length - 1]]) {
+        gc.shadowColor = 'rgba(' + c + ',0.9)'; gc.shadowBlur = 10; gc.fillStyle = 'rgba(' + c + ',0.9)';
+        gc.fillRect(p[0] * CELL - 2.5, p[1] * CELL - 2.5, 5, 5); gc.shadowBlur = 0;
+      }
+    }
+  }
+  function drawNode(n, a) {
+    const c = RGB[n.color];
+    fc.shadowColor = 'rgba(' + c + ',1)'; fc.shadowBlur = 14; fc.fillStyle = 'rgba(' + c + ',' + a.toFixed(3) + ')';
+    fc.save(); fc.translate(n.x, n.y); fc.rotate(Math.PI / 4); fc.fillRect(-n.r / 2, -n.r / 2, n.r, n.r); fc.restore(); fc.shadowBlur = 0;
+  }
+  function drawStatic() { // reduced motion: a still scatter of nodes, no loop
+    fc.clearRect(0, 0, W, H);
+    nodes = [];
+    for (let i = 0; i < field.counts(W, H).nodes; i++) nodes.push(field.makeNode(rng, W, H));
+    for (const n of nodes) drawNode(n, 0.8);
+  }
+  function drawRunner(r) {
+    const a = field.runnerAlpha(r), c = RGB[r.color], tr = r.trail, n = tr.length;
+    fc.lineCap = 'round';
+    for (let j = 1; j < n; j++) {
+      const p = j / n;
+      fc.strokeStyle = 'rgba(' + c + ',' + (a * p * 0.85).toFixed(3) + ')'; fc.lineWidth = p * 2.6;
+      fc.beginPath(); fc.moveTo(tr[j - 1][0], tr[j - 1][1]); fc.lineTo(tr[j][0], tr[j][1]); fc.stroke();
+    }
+    fc.shadowColor = 'rgba(' + c + ',1)'; fc.shadowBlur = 12; fc.fillStyle = 'rgba(' + c + ',' + a.toFixed(3) + ')';
+    fc.beginPath(); fc.arc(r.x, r.y, 2.4, 0, 7); fc.fill(); fc.shadowBlur = 0;
+  }
+
+  // ---- animation loop
+  function frame(ts) {
+    if (!running) return;
+    const dt = Math.min(0.05, ((ts - last) / 1000) || 0); last = ts;
+    fc.clearRect(0, 0, W, H);
+    for (let i = runners.length - 1; i >= 0; i--) {
+      if (field.stepRunner(runners[i], dt, rng)) drawRunner(runners[i]); else runners.splice(i, 1);
+    }
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (field.stepNode(nodes[i], dt)) drawNode(nodes[i], field.nodeAlpha(nodes[i]) * (0.7 + 0.3 * Math.sin(nodes[i].life * 6)) * 0.9); else nodes.splice(i, 1);
+    }
+    const want = field.counts(W, H);
+    if (runners.length < want.runners && rng() < 0.09) runners.push(field.makeRunner(rng, W, H));
+    if (nodes.length < want.nodes && rng() < 0.05) nodes.push(field.makeNode(rng, W, H));
+    raf = requestAnimationFrame(frame);
+  }
+  function startLoop() { if (running || reduce || !mounted) return; running = true; last = 0; raf = requestAnimationFrame(frame); }
+  function stopLoop() { running = false; if (raf) cancelAnimationFrame(raf); raf = 0; }
+
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    for (const c of [gridC, fxC]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
+    gc.setTransform(DPR, 0, 0, DPR, 0, 0); fc.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawGrid();
+    for (const r of runners) r.bounds = [W, H];
+    if (reduce) drawStatic();
+  }
+  function onResize() { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (mounted) resize(); }, 150); }
+
+  // ---- audio
+  function ensureAudio() {
+    if (AC) return true;
+    try {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (!Ctor) return false;
+      AC = new Ctor();
+      master = AC.createGain(); master.gain.value = 0; master.connect(AC.destination);
+      delay = AC.createDelay(); delay.delayTime.value = sixteenth * 3;
+      const fb = AC.createGain(); fb.gain.value = 0.28; const wet = AC.createGain(); wet.gain.value = 0.33;
+      delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(master);
+      return true;
+    } catch (e) { AC = null; return false; }
+  }
+  function tone(type, midi, t, dur, peak, lp, send) {
+    const o = AC.createOscillator(), g = AC.createGain(), f = AC.createBiquadFilter();
+    o.type = type; o.frequency.value = music.midiToHz(midi); f.type = 'lowpass'; f.frequency.value = lp;
+    o.connect(f); f.connect(g); g.connect(master); if (send) g.connect(delay);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function kick(t) {
+    const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.11);
+    g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.22);
+  }
+  function hat(t) {
+    if (!noiseBuf) { noiseBuf = AC.createBuffer(1, 1024, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < 1024; i++) d[i] = Math.random() * 2 - 1; }
+    const s = AC.createBufferSource(); s.buffer = noiseBuf;
+    const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
+    const g = AC.createGain(); g.gain.setValueAtTime(0.13, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    s.connect(hp); hp.connect(g); g.connect(master); s.start(t); s.stop(t + 0.05);
+  }
+  function playEvent(ev, t) {
+    if (ev.kind === 'kick') kick(t);
+    else if (ev.kind === 'hat') hat(t);
+    else if (ev.kind === 'bass') tone('sawtooth', ev.midi, t, 0.22, 0.19, 620, false);
+    else if (ev.kind === 'arp') tone('square', ev.midi, t, 0.13, 0.06, 2600, true);
+    else if (ev.kind === 'pad') tone('sawtooth', ev.midi, t, sixteenth * 15, 0.03, 1300, false);
+  }
+  function schedule() {
+    while (nextTime < AC.currentTime + LOOKAHEAD) {
+      for (const ev of music.stepEvents(step)) playEvent(ev, nextTime);
+      nextTime += sixteenth; step++;
+    }
+    schedTimer = setTimeout(schedule, TICK_MS);
+  }
+  function ramp(to, secs) {
+    const now = AC.currentTime;
+    master.gain.cancelScheduledValues(now); master.gain.setValueAtTime(master.gain.value, now); master.gain.linearRampToValueAtTime(to, now + secs);
+  }
+  function startMusic() {
+    if (!mounted || !gestured || !soundOn() || !ensureAudio()) return;
+    clearTimeout(stopTimer); stopTimer = 0;
+    wantMusic = true; musicPlaying = true;
+    try { const p = AC.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ }
+    if (!schedTimer && !document.hidden) { nextTime = AC.currentTime + 0.1; schedule(); }
+    ramp(MASTER_GAIN, FADE_IN_S);
+    setMusicAttr();
+  }
+  function stopMusic() {
+    wantMusic = false; musicPlaying = false;
+    clearTimeout(startTimer); startTimer = 0;
+    if (!AC) return;
+    ramp(0.0001, FADE_OUT_S);
+    clearTimeout(stopTimer);
+    stopTimer = setTimeout(() => { stopTimer = 0; clearTimeout(schedTimer); schedTimer = 0; if (AC && AC.state === 'running') AC.suspend(); }, FADE_OUT_S * 1000 + 100);
+  }
+  function pauseAudio() { clearTimeout(schedTimer); schedTimer = 0; if (AC && AC.state === 'running') AC.suspend(); }
+  function resumeAudio() {
+    if (!wantMusic || !AC) return;
+    try { const p = AC.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ }
+    if (!schedTimer) { nextTime = AC.currentTime + 0.1; schedule(); }
+  }
+
+  // ---- events
+  function onGesture() {
+    document.removeEventListener('pointerdown', onGesture); document.removeEventListener('keydown', onGesture);
+    gestured = true; setMusicAttr();
+    // a short delay, so tapping straight through to a mode never plays a blip of music
+    startTimer = setTimeout(() => { startTimer = 0; if (mounted && soundOn()) startMusic(); }, START_DELAY_MS);
+  }
+  function onVisibility() {
+    if (!mounted) return;
+    if (document.hidden) { stopLoop(); pauseAudio(); } else { startLoop(); resumeAudio(); }
+  }
+
+  // ---- public lifecycle
+  function mount(o) {
+    if (mounted) return;
+    mounted = true; opts = o || {};
+    reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    rng = field.makeRng(Date.now());
+    gridC = document.createElement('canvas'); gridC.id = 'start-grid'; gridC.className = 'start-bg';
+    fxC = document.createElement('canvas'); fxC.id = 'start-fx'; fxC.className = 'start-bg';
+    for (const c of [gridC, fxC]) { c.setAttribute('aria-hidden', 'true'); document.body.appendChild(c); }
+    gc = gridC.getContext('2d'); fc = fxC.getContext('2d');
+    resize();
+    if (!reduce) {
+      W = window.innerWidth; H = window.innerHeight;
+      for (let i = 0; i < field.counts(W, H).runners; i++) runners.push(field.makeRunner(rng, W, H));
+      startLoop();
+    }
+    window.addEventListener('resize', onResize);
+    document.addEventListener('visibilitychange', onVisibility);
+    if (gestured) { startTimer = setTimeout(() => { startTimer = 0; if (mounted && soundOn()) startMusic(); }, START_DELAY_MS); }
+    else { document.addEventListener('pointerdown', onGesture); document.addEventListener('keydown', onGesture); }
+    setMusicAttr();
+  }
+  function unmount() {
+    if (!mounted) return;
+    mounted = false;
+    stopLoop(); stopMusic();
+    clearTimeout(resizeTimer); clearTimeout(startTimer); startTimer = 0;
+    window.removeEventListener('resize', onResize); document.removeEventListener('visibilitychange', onVisibility);
+    document.removeEventListener('pointerdown', onGesture); document.removeEventListener('keydown', onGesture);
+    for (const c of [gridC, fxC]) if (c && c.parentNode) c.parentNode.removeChild(c);
+    gridC = fxC = gc = fc = null; runners = []; nodes = [];
+    delete document.body.dataset.music;
+  }
+  function setSound(on) {
+    if (!mounted) return;
+    if (on) { if (gestured) startMusic(); } else stopMusic();
+    setMusicAttr();
+  }
+  const isMounted = () => mounted;
+  function _debug() {
+    return { running, contexts: AC ? 1 : 0, musicOn: musicPlaying, runners: runners.length, nodes: nodes.length,
+      canvases: document.querySelectorAll('#start-grid, #start-fx').length, audioState: AC ? AC.state : null };
+  }
+
+  root.StartFX = { music, field, mount, unmount, setSound, isMounted, _debug };
 })(typeof window !== 'undefined' ? window : globalThis);

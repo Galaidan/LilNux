@@ -1,0 +1,17 @@
+# Cyberpunk start screen — build notes (review after changes)
+
+All commentary, decisions and caveats from the build go here instead of the chat. Newest entries at the bottom of each task.
+Plan: `2026-11-26-cyberpunk-start-screen.md` · Spec: `../specs/2026-11-26-cyberpunk-start-screen-design.md`
+
+## Task 1 — pure core + wiring (done, commit 37185e0)
+- Added `js/start-fx.js` (score + field simulation), `css/entry.css` (stub), wired both into `index.html` and `sw.js`; cache is now `lilnux-v14`.
+- 190 unit tests pass (173 existing + 16 FX + 1 wiring).
+- **Call:** runners carry their own `bounds` because the planned `stepRunner(r, dt, rng)` has no screen size. Cosmetic risk only.
+- **Call:** trace/runner turns are true 90° turns (the mockup's turn list could reverse direction).
+
+## Task 2 — StartFX runtime
+- Canvas field + gesture-gated synthwave loop + lifecycle (`mount/unmount/setSound/isMounted/_debug`). 10 e2e tests (`tests/e2e/start-screen.e2e.js`) pass; 190 unit tests still pass.
+- **Call:** `_debug()` also reports `audioState` (needed to test that a hidden tab suspends audio).
+- **Call:** `body[data-music]` flips to `on` at the first tap (so the hint hides immediately); the music itself starts 0.3 s later. If the browser can't make audio, the hint stays hidden rather than nagging.
+- **Call:** once the page has had a first tap, later mounts (e.g. coming back from Learn mode) resume music on their own after 0.3 s.
+- Hat noise buffer is cached instead of rebuilt per hit (small perf gain over the mockup).
