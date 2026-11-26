@@ -32,3 +32,9 @@ Plan: `2026-11-26-cyberpunk-start-screen.md` · Spec: `../specs/2026-11-26-cyber
 - **Call:** a dark halo (text-shadow) sits under body text so it stays readable over the moving circuits.
 - The "Pick an avatar" label and the Kid-mode text are unchanged on purpose (clear for newcomers).
 - **Bug found and fixed (caught by the Learn regression suite):** the music hint used `display:none`, so the first press shifted the page up and a first tap on **Begin** was lost. It now uses `visibility:hidden` (keeps its space); new test `first press does not move the page`.
+
+## Task 5 — hub
+- Hub is centered: `<name> <avatar> — choose your path` + "Two ways in…" lead; Learn card is a dark teal circuit card with an embossed teal button, Adventure card keeps its neon with a violet button; card bullets became `›` lines. 5 new hub tests (30 e2e total).
+- **Call:** hub heading/lead copy changed to match the Welcome tone (plan-specified strings).
+- **Call:** on phones ≤ 440 px the top bar wraps to two rows (brand + Learn/Adventure on top, the other buttons below), because 44 px buttons no longer fit one row. Wider screens stay one row.
+- **Found by the stronger check:** the old `scrollWidth` test passes even when the page overflows (body clips it), so the 320 px tests now also check the right-most edge of every visible element; the hub top bar failed that until the wrap rule was added.

@@ -212,8 +212,8 @@
     const done = WORLDS.filter((w) => worldDone(p, w.id)).length;
     app.innerHTML = `
       <section class="hub">
-        <h1>Hi ${esc(p.name)} ${p.avatar} — what do you want to play?</h1>
-        <p class="lead">LilNux has two parts. Both teach real Fedora &amp; Linux, and both share your XP, rank and badges.</p>
+        <h1>${esc(p.name)} ${p.avatar} — choose your path</h1>
+        <p class="lead">Two ways in. Both teach real Fedora &amp; Linux, and both share your XP, rank and badges.</p>
         <div class="hub-grid">
           <article class="hub-card learn" data-go="map">
             <div class="hub-art">${TUX}</div>

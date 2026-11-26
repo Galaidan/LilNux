@@ -232,6 +232,9 @@ test('shell: entry views stay dark even when the OS and theme are light', async 
 // ---------------------------------------------------------------- Task 4: the Welcome screen
 const THREE = [player('p0', 'Sam', '🐧'), player('p1', 'Mom', '🦊'), player('p2', 'Dad', '🤖')];
 const welcome = (b, o = {}) => open(b, { players: THREE, current: null, ...o });
+// the right-most edge of anything visible in the page or the top bar (body clips sideways overflow, so scrollWidth alone can hide it)
+const overflowRight = (pg) => pg.evaluate(() => Math.max(...[...document.querySelectorAll('#app *, #top *')]
+  .filter((e) => e.offsetParent !== null && !e.closest('.avatars input') && e.getClientRects().length).map((e) => e.getBoundingClientRect().right)));
 const centerOff = (pg, sel) => pg.evaluate((s) => { const r = document.querySelector(s).getBoundingClientRect(); return Math.abs((r.left + r.right) / 2 - window.innerWidth / 2); }, sel);
 
 test('welcome: copy and structure', async (b) => {
@@ -307,6 +310,7 @@ test('welcome: 8 players with long names fit a 320px screen', async (b) => {
   const pg = await open(b, { players: eight, current: null, viewport: { width: 320, height: 640 } });
   assert.equal(await pg.locator('.player').count(), 8);
   assert.ok((await pg.evaluate(() => document.documentElement.scrollWidth)) <= 320, 'horizontal scroll');
+  assert.ok((await overflowRight(pg)) <= 321, 'something sticks out on the right: ' + (await overflowRight(pg)));
   return pg;
 });
 
@@ -315,6 +319,57 @@ test('welcome: reduced motion switches the title animation off', async (b) => {
   assert.notEqual(await normal.evaluate(() => getComputedStyle(document.querySelector('.entry-title')).animationName), 'none');
   const pg = await welcome(b, { reduced: true });
   assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('.entry-title')).animationName), 'none');
+  return pg;
+});
+
+// ---------------------------------------------------------------- Task 5: the hub
+const hub = (b, o = {}) => open(b, { players: THREE, current: 'p0', ...o });
+
+test('hub: heading and lead', async (b) => {
+  const pg = await hub(b);
+  assert.equal((await pg.textContent('.hub h1')).trim(), 'Sam 🐧 — choose your path');
+  assert.equal((await pg.textContent('.hub .lead')).trim(), 'Two ways in. Both teach real Fedora & Linux, and both share your XP, rank and badges.');
+  return pg;
+});
+
+test('hub: everything is centered', async (b) => {
+  const pg = await hub(b);
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('.hub h1')).textAlign), 'center');
+  assert.equal(await pg.evaluate(() => getComputedStyle(document.querySelector('.hub-card.learn')).textAlign), 'center');
+  assert.ok((await centerOff(pg, '.hub-grid')) <= 2, '.hub-grid off-centre');
+  const wide = await hub(b, { viewport: { width: 1280, height: 800 } });
+  assert.ok((await centerOff(wide, '.hub-grid')) <= 2, 'wide .hub-grid off-centre');
+  return pg;
+});
+
+test('hub: the cards keep their contract and both buttons navigate', async (b) => {
+  const pg = await hub(b);
+  const learn = await pg.textContent('.hub-card.learn'); const adv = await pg.textContent('.hub-card.adventure');
+  assert.match(learn, /Learn/); assert.match(learn, /Start learning/);
+  assert.match(adv, /Colonel Kernel/); assert.match(adv, /Play adventure/);
+  const box = await pg.locator('.hub-preview').boundingBox();
+  assert.ok(box && box.width > 50 && box.height > 50, 'preview canvas has a size');
+  await pg.click('.hub-card.learn [data-go=map]');
+  await pg.waitForSelector('.mode-banner.learn');
+  await pg.click('.brand');
+  await pg.click('.hub-card.adventure [data-go=kernel]');
+  await pg.waitForSelector('#ck-root', { timeout: 5000 });
+  return pg;
+});
+
+test('hub: every control is at least 44px', async (b) => {
+  const pg = await hub(b);
+  const small = await pg.evaluate(() => [...document.querySelectorAll('#app button, #top button')]
+    .filter((e) => e.offsetParent !== null).map((e) => { const r = e.getBoundingClientRect(); return { t: (e.textContent || e.className).trim().slice(0, 14), w: Math.round(r.width), h: Math.round(r.height) }; })
+    .filter((x) => x.w < 44 || x.h < 44));
+  assert.deepEqual(small, []);
+  return pg;
+});
+
+test('hub: nothing sticks out on a 320px screen', async (b) => {
+  const pg = await hub(b, { viewport: { width: 320, height: 640 } });
+  assert.ok((await pg.evaluate(() => document.documentElement.scrollWidth)) <= 320, 'horizontal scroll');
+  assert.ok((await overflowRight(pg)) <= 321, 'something sticks out on the right: ' + (await overflowRight(pg)));
   return pg;
 });
 

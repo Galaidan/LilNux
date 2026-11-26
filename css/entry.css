@@ -40,11 +40,11 @@ body[data-screen="entry"] .primary.primary {
 }
 body[data-screen="entry"] .primary.primary:hover { filter: brightness(1.08); }
 body[data-screen="entry"] .primary.primary:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5), inset 0 -2px 5px rgba(0, 40, 34, .5), 0 1px 0 #0c6c5e, 0 0 16px rgba(57, 215, 196, .5); }
-body[data-screen="entry"] #pform .primary.primary {
+body[data-screen="entry"] #pform .primary.primary, body[data-screen="entry"] .hub-card.adventure .primary.primary {
   color: #1a0128; background: linear-gradient(180deg, #e6b8ff, #b44dff 55%, #8a2fd6);
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), inset 0 -3px 6px rgba(40, 0, 55, .5), 0 4px 0 #5f1f99, 0 0 22px rgba(180, 77, 255, .5);
 }
-body[data-screen="entry"] #pform .primary.primary:active { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45), inset 0 -2px 5px rgba(40, 0, 55, .5), 0 1px 0 #5f1f99, 0 0 16px rgba(180, 77, 255, .5); }
+body[data-screen="entry"] #pform .primary.primary:active, body[data-screen="entry"] .hub-card.adventure .primary.primary:active { box-shadow: inset 0 2px 0 rgba(255, 255, 255, .45), inset 0 -2px 5px rgba(40, 0, 55, .5), 0 1px 0 #5f1f99, 0 0 16px rgba(180, 77, 255, .5); }
 body[data-screen="entry"] .ghost, body[data-screen="entry"] .mini {
   min-height: 44px; min-width: 44px; color: var(--ink); border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(40, 70, 110, .55), rgba(10, 20, 40, .9));
@@ -110,3 +110,28 @@ body[data-screen="entry"] .check { min-height: 44px; align-items: center; text-a
 body[data-screen="entry"] .check b { color: var(--ink); }
 body[data-screen="entry"] .add-player .row { justify-content: center; }
 body[data-screen="entry"] .note { text-align: center; font-family: var(--mono); font-size: .74rem; }
+
+/* ---------- top bar on the entry screens: 44px buttons need to wrap on small phones ---------- */
+body[data-screen="entry"] .topbar { flex-wrap: wrap; row-gap: 6px; }
+@media (max-width: 440px) {
+  body[data-screen="entry"] .topbar { justify-content: center; }
+  body[data-screen="entry"] .top-actions { width: 100%; justify-content: center; }
+}
+
+/* ---------- hub ---------- */
+body[data-screen="entry"] .hub { text-align: center; }
+body[data-screen="entry"] .hub h1 { text-shadow: 0 0 8px rgba(57, 215, 196, .45), 0 1px 2px #060b18, 0 0 18px #060b18; }
+body[data-screen="entry"] .hub .lead { max-width: 560px; margin: 0 auto; }
+body[data-screen="entry"] .hub-grid { justify-items: stretch; }
+body[data-screen="entry"] .hub-card { align-items: center; text-align: center; border-radius: 26px; }
+body[data-screen="entry"] .hub-card .primary { align-self: center; }
+body[data-screen="entry"] .hub-card ul { padding: 0; list-style: none; }
+body[data-screen="entry"] .hub-card li::before { content: "› "; color: var(--teal); font-weight: 800; }
+body[data-screen="entry"] .hub-card.learn {
+  border: 1px solid rgba(57, 215, 196, .45);
+  background: radial-gradient(120% 90% at 20% 0%, rgba(57, 215, 196, .18), transparent 60%), linear-gradient(160deg, #0a1830, #0c1a34);
+  box-shadow: inset 0 1px 0 rgba(120, 240, 215, .14), 0 10px 28px rgba(0, 0, 0, .6);
+}
+body[data-screen="entry"] .hub-card.learn:hover { box-shadow: inset 0 1px 0 rgba(120, 240, 215, .2), 0 0 34px rgba(57, 215, 196, .4), 0 16px 36px rgba(0, 0, 0, .5); }
+body[data-screen="entry"] .hub-card.adventure { border: 1px solid rgba(180, 77, 255, .5); }
+body[data-screen="entry"] .hub-card.adventure:hover { box-shadow: 0 0 34px rgba(180, 77, 255, .45), 0 16px 36px rgba(0, 0, 0, .45); }
