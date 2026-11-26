@@ -118,7 +118,7 @@ body.ck-open { overflow: hidden; }
 @media (pointer: coarse) { .ck-term-line input { font-size: 16px; } }
 
 /* Toasts and banners */
-.ck-toasts { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 46px); left: 50%; transform: translateX(-50%); display: grid; gap: 6px; width: min(460px, calc(100vw - 24px)); z-index: 6; }
+.ck-toasts { position: absolute; top: calc(var(--hud-h, 54px) + 52px); left: 50%; transform: translateX(-50%); display: grid; gap: 6px; width: min(460px, calc(100vw - 24px)); z-index: 6; }
 .ck-toast { padding: 10px 14px; border-radius: 14px; background: var(--glass-2); border: 1px solid var(--c-mint); box-shadow: 0 0 20px rgba(109, 255, 176, .25); animation: ck-pop .2s ease-out; transition: opacity .4s; }
 .ck-toast.out { opacity: 0; }
 .ck-banner { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: radial-gradient(circle, rgba(10, 14, 40, .7), rgba(2, 4, 14, .85)); z-index: 7; animation: ck-pop .3s ease-out; cursor: pointer; padding: 16px; }
@@ -195,7 +195,7 @@ body.ck-open { overflow: hidden; }
 /* ---------------------------------------------------------------- room-based Adventure */
 #ck-root .ck-pix { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; image-rendering: pixelated; image-rendering: crisp-edges; }
 #ck-root { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
-.ck-act { position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left)); top: calc(max(8px, env(safe-area-inset-top)) + 52px);
+.ck-act { position: absolute; z-index: 3; left: max(10px, env(safe-area-inset-left)); top: calc(var(--hud-h, calc(max(8px, env(safe-area-inset-top)) + 44px)) + 8px);
   display: flex; gap: 8px; align-items: center; pointer-events: none; }
 .ck-act[hidden] { display: none; }
 .ck-prompt { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); bottom: max(14px, env(safe-area-inset-bottom)); padding: 6px 14px; border-radius: 12px;
@@ -233,3 +233,33 @@ body.ck-open { overflow: hidden; }
 /* lock-on toggle: small, by the stick on the left, above where the thumb usually lands */
 .ck-tbtn-lock { width: 44px; height: 44px; left: max(14px, env(safe-area-inset-left)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 132px); font-size: 20px; }
 .ck-tbtn-lock.locked { border-color: var(--c-magenta); background: rgba(255, 79, 216, .3); box-shadow: 0 0 12px rgba(255, 79, 216, .6); }
+
+/* Short screens (phones held sideways): a compact top row, so the HUD usually fits on one line. The
+   action bar is placed below wherever the HUD ends (--hud-h, measured in ui.js), so a wrap never covers it. */
+@media (max-height: 500px) {
+  .ck-hud .ck-mode { display: none; }
+  .ck-hud .ck-region, .ck-hud .ck-stat { height: 30px; padding: 0 9px; font-size: 11px; gap: 6px; }
+  .ck-hud-left { gap: 4px; }
+}
+
+/* Buttons: a little embossed (lit top edge, shaded bottom edge, a drop shadow), they sink in when pressed
+   and spring back with a small overshoot when let go. Touch buttons show "pressed" with the .on class. */
+#ck-root { --emboss: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -2px 0 rgba(0, 0, 0, .38), 0 2px 0 rgba(2, 4, 14, .6), 0 4px 10px rgba(0, 0, 0, .3);
+  --pressed: inset 0 2px 5px rgba(0, 0, 0, .55), inset 0 -1px 0 rgba(255, 255, 255, .08); --bevel: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, .2)); }
+#ck-root .ck-btn, #ck-root .ck-tab, #ck-root .ck-tbtn {
+  background-image: var(--bevel); box-shadow: var(--emboss);
+  transition: transform .26s cubic-bezier(.34, 1.8, .64, 1), box-shadow .15s, filter .15s, background-color .2s;
+}
+#ck-root .ck-btn.ck-primary { background-image: var(--bevel), linear-gradient(135deg, #1fb6d1, #7a4dff); box-shadow: var(--emboss), 0 6px 20px rgba(122, 77, 255, .35); }
+#ck-root .ck-btn:hover:not(:disabled) { box-shadow: var(--emboss), 0 0 0 1px var(--c-cyan), 0 0 18px rgba(56, 242, 255, .35); }
+#ck-root .ck-tab.on { box-shadow: var(--pressed); }
+#ck-root .ck-btn:active:not(:disabled), #ck-root .ck-tab:active, #ck-root .ck-tbtn.on {
+  transform: translateY(2px) scale(.94); transition-duration: .05s; filter: brightness(1.18);
+}
+#ck-root .ck-btn:active:not(:disabled), #ck-root .ck-tab:active { box-shadow: var(--pressed); }
+#ck-root .ck-tbtn.on { box-shadow: var(--pressed), 0 0 14px var(--c-cyan); }
+#ck-root .ck-tbtn-lock.locked { box-shadow: var(--emboss), 0 0 12px rgba(255, 79, 216, .6); }
+@media (prefers-reduced-motion: reduce) {
+  #ck-root .ck-btn, #ck-root .ck-tab, #ck-root .ck-tbtn { transition: none; }
+  #ck-root .ck-btn:active:not(:disabled), #ck-root .ck-tab:active, #ck-root .ck-tbtn.on { transform: none; }
+}

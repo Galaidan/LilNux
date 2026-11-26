@@ -94,7 +94,7 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 
 When adding files: add them to `index.html`, `tests/e2e/ck-harness.html` if tests need them, and the
 `FILES` list in `sw.js` (`tests/ck/wiring.test.js` checks this); bump `VERSION` in `sw.js` whenever shipped
-files change (currently `lilnux-v10`).
+files change (currently `lilnux-v11`).
 
 ## Tests (run one at a time — the sandbox has limited memory)
 

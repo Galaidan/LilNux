@@ -4,6 +4,7 @@ const path = require('path');
 const assert = require('node:assert/strict');
 const URL = require('url').pathToFileURL(path.resolve(__dirname, 'ck-harness.html')).href + '?ckdebug';
 const SHOTS = process.env.SHOTS || require('os').tmpdir();
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function page(b, opts) {
   const ctx = await b.newContext(opts || { viewport: { width: 1280, height: 800 } });
@@ -160,6 +161,26 @@ const tests = {
     await pg.evaluate(() => H.ui.pip('quests'));
     assert.doesNotMatch(await pg.getAttribute('[data-ck=pip]', 'title'), /combat/);
     assert.doesNotMatch(await pg.textContent('.ck-pip'), /nodes?\b/);
+  },
+  async 'buttons look embossed and pop when clicked'(b) {
+    const pg = await page(b);
+    const st = () => pg.$eval('[data-ck=pip]', (e) => { const c = getComputedStyle(e); return { shadow: c.boxShadow, bg: c.backgroundImage, a: new DOMMatrix(c.transform).a }; });
+    const up = await st();
+    assert.match(up.shadow, /inset/, 'a lit top edge and a shaded bottom edge'); assert.match(up.bg, /gradient/);
+    const bx = await pg.$eval('[data-ck=pip]', (e) => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+    await pg.mouse.move(bx[0], bx[1]); await pg.mouse.down(); await wait(120);
+    const down = await st(); assert.ok(down.a < 0.97, 'sinks in: ' + down.a); assert.notEqual(down.shadow, up.shadow, 'pressed look');
+    await pg.mouse.up(); await wait(400);
+    assert.ok(Math.abs((await st()).a - 1) < 0.01, 'springs back');
+  },
+  async 'with reduced motion, buttons change shade but do not move'(b) {
+    const pg = await page(b, { viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+    const bx = await pg.$eval('[data-ck=pip]', (e) => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+    const before = await pg.$eval('[data-ck=pip]', (e) => getComputedStyle(e).boxShadow);
+    await pg.mouse.move(bx[0], bx[1]); await pg.mouse.down(); await wait(80);
+    const c = await pg.$eval('[data-ck=pip]', (e) => { const s = getComputedStyle(e); return { t: s.transform, shadow: s.boxShadow }; });
+    await pg.mouse.up();
+    assert.equal(c.t, 'none'); assert.notEqual(c.shadow, before);
   },
   async 'portrait is pixel art'(b) {
     const pg = await page(b);
