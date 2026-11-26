@@ -31,3 +31,4 @@ Plan: `2026-11-26-cyberpunk-start-screen.md` · Spec: `../specs/2026-11-26-cyber
 - **Call:** `.primary.primary` (doubled class) in `entry.css` is deliberate: it beats the dark-mode rule in `style.css` without `!important`.
 - **Call:** a dark halo (text-shadow) sits under body text so it stays readable over the moving circuits.
 - The "Pick an avatar" label and the Kid-mode text are unchanged on purpose (clear for newcomers).
+- **Bug found and fixed (caught by the Learn regression suite):** the music hint used `display:none`, so the first press shifted the page up and a first tap on **Begin** was lost. It now uses `visibility:hidden` (keeps its space); new test `first press does not move the page`.

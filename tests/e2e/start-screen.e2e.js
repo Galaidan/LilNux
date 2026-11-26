@@ -265,6 +265,19 @@ test('welcome: the music hint shows only until the music starts', async (b) => {
   return pg;
 });
 
+test('welcome: the first press does not move the page, so a first tap on Begin still submits', async (b) => {
+  const pg = await open(b, { save: null, viewport: { width: 1280, height: 900 } });
+  await pg.fill('input[name=name]', 'Sam');
+  const top = () => pg.evaluate(() => document.querySelector('#pform button[type=submit]').getBoundingClientRect().top);
+  const before = await top();
+  await pg.mouse.move(40, 400); await pg.mouse.down();
+  assert.equal(await top(), before, 'layout shifted when the hint hid');
+  await pg.mouse.up();
+  await pg.click('#pform button[type=submit]');
+  await pg.waitForSelector('.hub-card.learn');
+  return pg;
+});
+
 test('welcome: player cards still select, edit and delete', async (b) => {
   const pg = await welcome(b);
   await pg.click('[data-edit="p2"]');

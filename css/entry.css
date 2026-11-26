@@ -71,7 +71,8 @@ body[data-screen="entry"] .music-hint { text-shadow: 0 1px 2px #060b18, 0 0 10px
 .entry-tag { color: var(--mint); font-size: 1.1rem; max-width: 460px; margin: 14px auto 0; text-wrap: balance; }
 .entry-tag b { color: #fff; }
 .music-hint { margin: 12px 0 0; color: var(--mint); font-family: var(--mono); font-size: .82rem; letter-spacing: .03em; animation: entry-pulse 1.7s ease-in-out infinite; }
-body:not([data-music="waiting"]) .music-hint { display: none; }
+/* hidden with visibility, not display: the page must not jump when the first press hides it, or a first tap on a button is lost */
+body:not([data-music="waiting"]) .music-hint { visibility: hidden; }
 @keyframes entry-pulse { 50% { opacity: .4; } }
 
 body[data-screen="entry"] .kicker { margin: 34px 0 16px; text-align: center; font-family: var(--mono); font-size: .8rem; font-weight: 400; letter-spacing: .26em; text-transform: uppercase; color: var(--muted); }
