@@ -59,7 +59,7 @@
           ${opts.canRest ? '<button class="ck-btn" data-ck="rest" aria-label="Rest (systemctl suspend)" title="Rest — systemctl suspend">💤 Rest</button>' : ''}
           <button class="ck-btn ck-logbtn" data-ck="log" aria-label="Message log" title="Message log">💬<b class="ck-unread" ${ui.unread ? '' : 'hidden'}>${ui.unread}</b></button>
           <button class="ck-btn ck-pipbtn" data-ck="pip" aria-label="Open Pip" title="Pip’s panel: quests, items, map and tasks"><span class="ck-orb"></span><span>Pip</span></button>
-          <button class="ck-btn" data-ck="exit" aria-label="Leave the adventure" title="Back to choose a mode">✕</button>
+          ${h.onPause ? '<button class="ck-btn" data-ck="pause" aria-label="Pause" title="Pause (Esc): resume, sound, or leave">⏸</button>' : '<button class="ck-btn" data-ck="exit" aria-label="Leave the adventure" title="Back to choose a mode">✕</button>'}
         </div>`;
       layoutHud();
     };
@@ -335,6 +335,7 @@
       const b = e.target.closest('button'); if (!b || b.disabled) return;
       const d = b.dataset;
       if (d.ck === 'exit') return h.onExit();
+      if (d.ck === 'pause') return h.onPause && h.onPause();
       if (d.ck === 'rest') return h.onRest && h.onRest();
       if (d.ck === 'log') return $('.ck-log') ? ui.closeLog() : ui.openLog();
       if (d.ck === 'closelog') return ui.closeLog();

@@ -51,9 +51,9 @@
     const pip = { x: sim.player.x - 14, y: sim.player.y - 18 };
     const cam = { x: 0, y: 0 };
 
-    function burst(x, y, color, n, speed) {
+    function burst(x, y, color, n, speed, big) {
       const rng = Math.random;
-      for (let i = 0; i < n; i++) { const a = rng() * TAU; const v = speed * (0.4 + rng() * 0.6); parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.35 + rng() * 0.25, max: 0.6, color }); }
+      for (let i = 0; i < n; i++) { const a = rng() * TAU; const v = speed * (0.4 + rng() * 0.6); const life = big ? 0.6 + rng() * 0.3 : 0.35 + rng() * 0.25; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life, max: life, color, big: !!big }); }
     }
     function handle(ev) {
       const P = sim.player;
@@ -398,7 +398,11 @@
         g.globalAlpha = al * 0.5; g.strokeStyle = A.cliff2; g.lineWidth = 3; g.beginPath(); g.arc(r.x, r.y, rad, 0, TAU); g.stroke();
         g.globalAlpha = al; g.strokeStyle = r.color; g.lineWidth = 1; g.beginPath(); g.arc(r.x, r.y, rad, 0, TAU); g.stroke();
       }
-      for (const p of parts) { g.globalAlpha = Math.max(0, p.life / p.max); g.fillStyle = p.color; g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
+      for (const p of parts) { // pickup sparks are 2 px with a dark shadow so they read on the pale plaza
+        g.globalAlpha = Math.max(0, p.life / p.max);
+        if (p.big) { g.fillStyle = A.cliff3; g.fillRect(Math.round(p.x) + 1, Math.round(p.y) + 1, 2, 2); g.fillStyle = p.color; g.fillRect(Math.round(p.x), Math.round(p.y), 2, 2); }
+        else { g.fillStyle = p.color; g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1); }
+      }
       g.globalAlpha = 1;
       for (const p of pops) {
         g.globalAlpha = Math.min(1, p.life / 0.3);
@@ -427,6 +431,13 @@
       get room() { return room; },
       light(seconds) { litT = Math.max(litT, seconds); },
       flicker() { flickerT = 1.6; },
+      // A pickup: a burst of palette particles and a ring on the spot, plus the amount when there is one.
+      celebrate(x, y, color, n) {
+        burst(x, y - 8, color, 20, 90, true); burst(x, y - 8, COL.white, 6, 50, true);
+        rings.push({ x, y: y - 8, r0: 4, r1: 28, life: 0.35, max: 0.35, color });
+        if (n) pops.push({ x, y: y - 22, n, life: 0.9 });
+      },
+      get particleCount() { return parts.length; },
       // debug: put the Colonel somewhere (the door latch resets, so the real crossing code runs)
       place(x, y) { sim.player.x = x; sim.player.y = y; latch = null; },
       get transitioning() { return slideT > 0; },
