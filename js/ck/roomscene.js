@@ -47,6 +47,8 @@
 
     // ---- effects state ------------------------------------------------------------------------
     const parts = []; const rings = []; const pops = []; const arcs = []; const ghosts = [];
+    const scans = []; const hexes = []; // ls sweeps; hexagonal flashes (dash, parry, shield blocks)
+    const fx = { shield: false, ward: false, echoWaves: 0, scan: false, charge: false }; // what drew last frame (tests read it)
     let hitstop = 0; let shakeT = 0; let hurtFlash = 0; let t = 0;
     const pip = { x: sim.player.x - 14, y: sim.player.y - 18 };
     const cam = { x: 0, y: 0 };
@@ -61,10 +63,12 @@
         case 'hit': burst(ev.x, ev.y, COL.magenta, 6, 60); if (ev.n) pops.push({ x: ev.x, y: ev.y - 22, n: ev.n, life: 0.6 }); hitstop = Math.max(hitstop, 0.05); break;
         case 'kill': burst(ev.x, ev.y, COL.violet, 14, 90); burst(ev.x, ev.y, COL.white, 4, 40); rings.push({ x: ev.x, y: ev.y, r0: 4, r1: 22, life: 0.3, max: 0.3, color: COL.magenta }); hitstop = Math.max(hitstop, 0.06); shake(); break;
         case 'hurt': burst(P.x, P.y - 10, COL.coral, 8, 70); hurtFlash = 0.08; shake(); break;
-        case 'parry': rings.push({ x: ev.x, y: ev.y, r0: 4, r1: 26, life: 0.25, max: 0.25, color: COL.cyan }); burst(ev.x, ev.y, COL.cyan, 8, 80); hitstop = Math.max(hitstop, 0.05); break;
-        case 'parry-miss': rings.push({ x: P.x, y: P.y - 10, r0: 10, r1: 6, life: 0.2, max: 0.2, color: COL.coral }); break;
-        case 'trap': rings.push({ x: P.x, y: P.y - 10, r0: 6, r1: 14, life: 0.18, max: 0.18, color: COL.cyan }); break;
-        case 'reveal': rings.push({ x: P.x, y: P.y - 8, r0: 6, r1: 200, life: 0.5, max: 0.5, color: COL.cyan }); break;
+        case 'parry': hexes.push({ x: ev.x, y: ev.y, r0: 6, r1: 24, life: 0.28, max: 0.28, color: COL.cyan }); burst(ev.x, ev.y, COL.cyan, 10, 80, true); hitstop = Math.max(hitstop, 0.05); break;
+        case 'parry-miss': hexes.push({ x: P.x, y: P.y - 12, r0: 15, r1: 11, life: 0.22, max: 0.22, color: COL.coral, broken: true }); break;
+        case 'trap': break; // the ward is drawn while the window is open
+        case 'reveal': scans.push({ x: P.x, y: P.y - 8, life: 0.6, max: 0.6 }); break;
+        case 'dash': hexes.push({ x: P.x, y: P.y - 12, r0: 9, r1: 22, life: 0.22, max: 0.22, color: COL.cyan }); break;
+        case 'shield-block': hexes.push({ x: ev.x, y: ev.y, r0: 3, r1: 12, life: 0.2, max: 0.2, color: COL.cyan }); burst(ev.x, ev.y, COL.cyan, 6, 60, true); break;
         case 'swing': arcs.push({ x: P.x, y: P.y - 10, dir: Math.atan2(P.face.y, P.face.x), life: 0.1, combo: P.combo }); break;
         case 'echo': burst(P.x + P.face.x * 8, P.y - 10 + P.face.y * 8, COL.cyan, 3, 40); break;
         case 'overheat': burst(P.x, P.y - 20, COL.amber, 10, 50); break;
@@ -122,6 +126,7 @@
       for (const g of ghosts) g.life -= dt;
       for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; p.life -= dt; }
       for (const r of rings) r.life -= dt;
+      for (const q of scans) q.life -= dt; for (const q of hexes) q.life -= dt; prune(scans); prune(hexes);
       for (const a of arcs) a.life -= dt;
       for (const p of pops) { p.life -= dt; p.y -= 18 * dt; }
       prune(ghosts); prune(parts); prune(rings); prune(arcs); prune(pops);
@@ -223,6 +228,7 @@
       }
       for (const b of sim.bolts) Pix.draw(g, spr.bolt, b.x, b.y + 2, { glow: 0.9 });
       drawEffects(g);
+      drawAbilityFx(g);
       drawTells(g);
       drawReticle(g);
 
@@ -246,7 +252,6 @@
       let alpha = 1;
       if (P.iframes > 0 && P.dashT <= 0) alpha = reduced() ? 0.6 : (Math.floor(t * 15) % 2 ? 0.25 : 1);
       Pix.draw(g, s.b, P.x, P.y, { flip: s.flip, alpha, flash: hurtFlash > 0 && !reduced(), glow: 0.35 });
-      if (P.parryT > 0) { g.strokeStyle = COL.cyan; g.globalAlpha = 0.8; g.lineWidth = 1; g.beginPath(); g.arc(Math.round(P.x) + 0.5, Math.round(P.y - 12) + 0.5, 15, 0, TAU); g.stroke(); g.globalAlpha = 1; }
     }
     function drawMite(g, e) {
       const visible = !e.cloaked || sim.time < e.revealedUntil || sim.time < e.stunUntil;
@@ -385,13 +390,89 @@
     }
 
     // Effects draw normally (not additive) with a dark under-stroke, so they read on the pale plaza.
+    // ---- each ability's own look ----------------------------------------------------------------------
+    // Everything strokes twice, dark underneath then bright, so it reads on the pale plaza. Rotations stop
+    // with reduced motion; nothing flashes.
+    const TUN = CK.Action.TUNING;
+    function twice(g, pathFn, color, w, alpha) {
+      g.globalAlpha = alpha * 0.55; g.strokeStyle = A.cliff3; g.lineWidth = w + 2; pathFn(); g.stroke();
+      g.globalAlpha = alpha; g.strokeStyle = color; g.lineWidth = w; pathFn(); g.stroke(); g.globalAlpha = 1;
+    }
+    function hexPath(g, x, y, r, rot, gap) { // a hexagon, a little squashed for the 3/4 view; gap leaves one side open
+      g.beginPath();
+      for (let i = 0; i <= 6; i++) {
+        const a = rot + (i * Math.PI) / 3; const px = x + Math.cos(a) * r; const py = y + Math.sin(a) * r * 0.85;
+        if (i === 0 || (gap && i === 2)) g.moveTo(px, py); else g.lineTo(px, py);
+      }
+    }
+    function drawAbilityFx(g) {
+      const P = sim.player; const spin = reduced() ? 0 : t;
+      fx.shield = false; fx.ward = false; fx.echoWaves = 0; fx.scan = scans.length > 0; fx.charge = false;
+      // dash: an energy shield bubble, with waves trailing behind while you move; it fades over the grace window
+      if (P.dashT > 0 || P.shieldT > 0) {
+        fx.shield = true;
+        const a = P.dashT > 0 ? 1 : Math.max(0, P.shieldT / TUN.DASH_GRACE); const cx = P.x; const cy = P.y - 12;
+        twice(g, () => { g.beginPath(); g.ellipse(cx, cy, 13, 17, 0, 0, TAU); }, COL.cyan, 1, 0.85 * a);
+        g.globalAlpha = 0.18 * a; g.fillStyle = COL.cyan; g.beginPath(); g.ellipse(cx, cy, 12, 16, 0, 0, TAU); g.fill(); g.globalAlpha = 1;
+        for (let i = 0; i < 6; i++) { const ang = spin * 3 + (i * TAU) / 6; g.fillStyle = COL.white; g.globalAlpha = 0.9 * a; g.fillRect(Math.round(cx + Math.cos(ang) * 13), Math.round(cy + Math.sin(ang) * 17), 1, 1); }
+        g.globalAlpha = 1;
+        if (P.dashT > 0) {
+          const d = Math.atan2(P.dashDir.y, P.dashDir.x);
+          for (let k = 1; k <= 3; k++) {
+            const bx = cx - P.dashDir.x * 7 * k; const by = cy - P.dashDir.y * 7 * k;
+            twice(g, () => { g.beginPath(); g.arc(bx, by, 9 + 2 * k, d - 0.9, d + 0.9); }, COL.cyan, 1, 0.8 - 0.2 * k);
+          }
+        }
+      }
+      // trap: a hexagonal ward round the Colonel while the parry window is open
+      if (P.parryT > 0) {
+        fx.ward = true; const cx = P.x; const cy = P.y - 12; const rot = spin * 6;
+        twice(g, () => hexPath(g, cx, cy, 15, rot), COL.cyan, 1, 0.95);
+        for (let i = 0; i < 6; i++) { const a = rot + (i * Math.PI) / 3; g.fillStyle = COL.white; g.fillRect(Math.round(cx + Math.cos(a) * 15) - 1, Math.round(cy + Math.sin(a) * 15 * 0.85) - 1, 2, 2); }
+      }
+      // echo: sound waves rippling behind each bolt
+      for (const b of sim.bolts) {
+        const l = Math.hypot(b.vx, b.vy) || 1; const dx = b.vx / l; const dy = b.vy / l; const d = Math.atan2(dy, dx);
+        for (let k = 1; k <= 3; k++) {
+          const ox = b.x - dx * 5 * k; const oy = b.y + 2 - dy * 5 * k;
+          twice(g, () => { g.beginPath(); g.arc(ox, oy, 2 + 1.6 * k, d - 0.9, d + 0.9); }, k === 1 ? COL.white : COL.cyan, 1, 1 - 0.18 * k);
+          fx.echoWaves++;
+        }
+      }
+      // ls: a dashed scan sweep with tick marks rolling outward
+      for (const q of scans) {
+        const prog = 1 - q.life / q.max; const r = 8 + 190 * (1 - Math.pow(1 - prog, 3)); const a = 1 - prog;
+        g.setLineDash([5, 4]); g.lineDashOffset = reduced() ? 0 : -t * 40;
+        twice(g, () => { g.beginPath(); g.arc(q.x, q.y, r, 0, TAU); }, COL.cyan, 1, a);
+        g.setLineDash([]);
+        for (let i = 0; i < 8; i++) { const ang = (i * TAU) / 8; twice(g, () => { g.beginPath(); g.moveTo(q.x + Math.cos(ang) * (r - 3), q.y + Math.sin(ang) * (r - 3)); g.lineTo(q.x + Math.cos(ang) * (r + 3), q.y + Math.sin(ang) * (r + 3)); }, COL.mint, 1, a); }
+      }
+      // kill -9: gold motes spiral in to the sword hand while it charges; a steady gold ring once it's ready
+      if (P.chargeT > 0.12 && sim.upgrades && sim.upgrades.includes('kill-9')) {
+        fx.charge = true; const k = Math.min(1, P.chargeT / TUN.KILL9_CHARGE);
+        const hx = P.x + P.face.x * 8; const hy = P.y - 12 + P.face.y * 8;
+        if (P.charged) twice(g, () => { g.beginPath(); g.arc(hx, hy, 8, 0, TAU); }, COL.gold, 1, 0.6 + 0.3 * pulse(0, 6));
+        for (let i = 0; i < 6; i++) {
+          const ang = spin * 5 + (i * TAU) / 6; const r = 6 + 16 * (1 - k);
+          g.fillStyle = A.cliff3; g.fillRect(Math.round(hx + Math.cos(ang) * r) + 1, Math.round(hy + Math.sin(ang) * r) + 1, 2, 2);
+          g.fillStyle = COL.gold; g.fillRect(Math.round(hx + Math.cos(ang) * r), Math.round(hy + Math.sin(ang) * r), 2, 2);
+        }
+      }
+      // hexagon flashes: the dash launch, a caught signal, a shield block, a cracked (missed) parry
+      for (const q of hexes) {
+        const prog = 1 - q.life / q.max; const r = q.r0 + (q.r1 - q.r0) * prog;
+        twice(g, () => hexPath(g, q.x, q.y, r, 0, q.broken), q.color, q.r1 > 20 ? 2 : 1, Math.max(0, q.life / q.max));
+      }
+    }
+
     function drawEffects(g) {
-      for (const a of arcs) {
-        const al = Math.max(0, a.life / 0.1); const w = a.combo === 3 ? 3 : 2;
-        g.globalAlpha = al * 0.55; g.strokeStyle = A.cliff2; g.lineWidth = w + 2;
-        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
-        g.globalAlpha = al; g.strokeStyle = a.combo === 3 ? COL.magenta : COL.white; g.lineWidth = w;
-        g.beginPath(); g.arc(a.x, a.y, a.big ? 30 : 26, a.dir - 0.9, a.dir + 0.9); g.stroke();
+      for (const a of arcs) { // a crescent, like the sweep of a curved blade: thick in the middle, thin at the ends
+        const al = Math.max(0, a.life / 0.1); const w = a.combo === 3 ? 3 : 2; const R = a.big ? 30 : 26;
+        const strokes = [[R, 0.9, w], [R - 2, 0.55, w], [R - 4, 0.25, w - 1]];
+        g.globalAlpha = al * 0.55; g.strokeStyle = A.cliff2;
+        for (const [r, span, lw] of strokes) { g.lineWidth = lw + 2; g.beginPath(); g.arc(a.x, a.y, r, a.dir - span, a.dir + span); g.stroke(); }
+        g.globalAlpha = al; g.strokeStyle = a.combo === 3 ? COL.magenta : COL.white;
+        for (const [r, span, lw] of strokes) { g.lineWidth = lw; g.beginPath(); g.arc(a.x, a.y, r, a.dir - span, a.dir + span); g.stroke(); }
       }
       for (const r of rings) {
         const k = 1 - r.life / r.max; const rad = r.r0 + (r.r1 - r.r0) * k; const al = Math.max(0, r.life / r.max);
@@ -443,6 +524,7 @@
       get transitioning() { return slideT > 0; },
       get bars() { return bars; },
       get reticle() { return reticle; },
+      get fx() { return fx; },
       resize(view) {
         if (!view || (deep && deep.img.width === view.w && deep.img.height === view.h)) return;
         deep = Art.deep(view.w, view.h, 3); vig = Art.vignette(view.w, view.h); seedMotes(view.w, view.h);

@@ -160,7 +160,7 @@ const tests = {
     const lum = await pg.evaluate(() => {
       const m = CK._test.main; const e = m.engine; const v = e.view; const P = m.sim.player; const cam = m.scene.cam;
       const at = (bx, by) => { const d = e.ctx.getImageData(Math.round((bx - cam.x) * v.k + v.ox), Math.round((by - cam.y) * v.k + v.oy), 1, 1).data; return 0.3 * d[0] + 0.59 * d[1] + 0.11 * d[2]; };
-      return { near: at(P.x + 4, P.y - 30), far: at(P.x - 120, P.y - 80) };
+      return { near: at(P.x + 18, P.y - 6), far: at(P.x - 120, P.y - 80) }; // near: open floor beside the Colonel, clear of his cap and cape
     });
     assert.ok(lum.near > lum.far + 40, JSON.stringify(lum));
     await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-coldboot.png') });
@@ -717,6 +717,25 @@ const tests = {
     assert.equal(await pg.$eval('#ck-root', (e) => getComputedStyle(e).animationName), 'ck-fade-in');
     const pg2 = await openWith(b, null, null, { viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce' });
     assert.equal(await pg2.$eval('#ck-root', (e) => getComputedStyle(e).animationName), 'none');
+  },
+  // ---- every ability has its own look ----
+  async 'abilities have their own effects: dash shield, trap ward, echo waves, ls scan, kill -9 charge'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], upgrades: ['kill-9'], modules: ['cpu'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg); await pg.evaluate(() => CK._test.main.place(14 * 16 + 8, 9 * 16 + 8)); await wait(100);
+    const fx = () => pg.evaluate(() => Object.assign({}, CK._test.main.scene.fx));
+    await pg.keyboard.press(' '); await wait(50);
+    assert.equal((await fx()).shield, true, 'dash: energy shield'); await wait(500);
+    assert.equal((await fx()).shield, false, 'the shield fades after the grace window');
+    await pg.keyboard.press('k'); await wait(50);
+    assert.equal((await fx()).ward, true, 'trap: a ward'); await wait(500);
+    await pg.keyboard.press('1'); await wait(60);
+    assert.ok((await fx()).echoWaves > 0, 'echo: sound waves behind the bolt'); await wait(500);
+    await pg.keyboard.press('2'); await wait(100);
+    assert.equal((await fx()).scan, true, 'ls: a scan sweep'); await wait(800);
+    await pg.keyboard.down('j'); await wait(450);
+    assert.equal((await fx()).charge, true, 'kill -9: a charging aura'); await pg.keyboard.up('j'); await wait(200);
+    await pg.screenshot({ path: path.join(SHOTS, 'ck-adv-fx.png') });
+    assert.deepEqual(pg.errs, []);
   },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);
