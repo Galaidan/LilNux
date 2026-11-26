@@ -57,7 +57,40 @@
       }
     } catch (e) { /* no audio */ }
   }
-  const SFX = { good: () => tone([[660, 0.12], [880, 0.2]]), bad: () => tone([[200, 0.25]]), win: () => tone([[523, 0.13], [659, 0.13], [784, 0.13], [1047, 0.4]]), pop: () => tone([[520, 0.06]]) };
+  // Short noise bursts and a looping, low-passed "room tone" for the Adventure. No audio files.
+  function noiseBuffer(sec, brown) {
+    const n = Math.floor(AC.sampleRate * sec); const buf = AC.createBuffer(1, n, AC.sampleRate); const d = buf.getChannelData(0); let last = 0;
+    for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; }
+    return buf;
+  }
+  function click() {
+    if (!S.sound) return;
+    try {
+      AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+      const t = AC.currentTime; const src = AC.createBufferSource(); src.buffer = noiseBuffer(0.03, false);
+      const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 1.2;
+      const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.1, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+      src.connect(f); f.connect(g); g.connect(AC.destination); src.start(t); src.stop(t + 0.04);
+    } catch (e) { /* no audio */ }
+  }
+  let amb = null;
+  function ambient(on) {
+    try {
+      if (on && S.sound) {
+        if (amb) return;
+        AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+        const t = AC.currentTime; const src = AC.createBufferSource(); src.buffer = noiseBuffer(6, true); src.loop = true;
+        const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380;
+        const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.035, t + 1.2);
+        src.connect(f); f.connect(g); g.connect(AC.destination); src.start(t); amb = { src, g };
+      } else if (amb) {
+        const { src, g } = amb; amb = null; const t = AC.currentTime;
+        g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4); src.stop(t + 0.45);
+      }
+    } catch (e) { /* no audio */ }
+  }
+  const vary = () => 1 + (Math.random() - 0.5) * 0.16; // repeats don't grate
+  const SFX = { click, ambient, good: () => { const v = vary(); tone([[660 * v, 0.12], [880 * v, 0.2]]); }, bad: () => tone([[200, 0.25]]), win: () => tone([[523, 0.13], [659, 0.13], [784, 0.13], [1047, 0.4]]), pop: () => tone([[520, 0.06]]) };
   const canSpeak = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
   function speak(html) {
     if (!canSpeak) return;
@@ -223,7 +256,7 @@
     if (!window.CK || !CK.open) { toast('Colonel Kernel could not load.'); return; }
     CK.open({
       root: document.body, player: me(), user: unixName(me().name), save, addXP, giveBadge, speak,
-      sound: SFX, soundOn: () => S.sound, onExit: () => go('hub'),
+      sound: SFX, soundOn: () => S.sound, setSound: (on) => { S.sound = !!on; save(); renderTop(); if (!S.sound) SFX.ambient(false); }, onExit: () => go('hub'),
     });
   }
 

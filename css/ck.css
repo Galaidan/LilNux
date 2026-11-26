@@ -263,3 +263,11 @@ body.ck-open { overflow: hidden; }
   #ck-root .ck-btn, #ck-root .ck-tab, #ck-root .ck-tbtn { transition: none; }
   #ck-root .ck-btn:active:not(:disabled), #ck-root .ck-tab:active, #ck-root .ck-tbtn.on { transform: none; }
 }
+
+/* feel floor: numbers animate, never snap */
+.ck-sheat b { transition: width .15s ease-out; }
+.ck-ssegs i { transition: background-color .25s ease-out, border-color .25s ease-out, box-shadow .25s ease-out; }
+/* shell floor: no hard cut into the Adventure */
+#ck-root { animation: ck-fade-in .3s ease-out; }
+@keyframes ck-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #ck-root { animation: none; } }

@@ -182,6 +182,12 @@ const tests = {
     await pg.mouse.up();
     assert.equal(c.t, 'none'); assert.notEqual(c.shadow, before);
   },
+  async 'heat and stability ease instead of snapping'(b) {
+    const pg = await page(b);
+    await pg.evaluate(() => H.ui.action(true));
+    assert.match(await pg.$eval('.ck-act .ck-sheat b', (e) => getComputedStyle(e).transitionProperty), /width/);
+    assert.match(await pg.$eval('.ck-act .ck-ssegs i', (e) => getComputedStyle(e).transitionProperty), /background/);
+  },
   async 'portrait is pixel art'(b) {
     const pg = await page(b);
     await pg.evaluate(() => { H.ui.say('bios', ['Hello.']); });

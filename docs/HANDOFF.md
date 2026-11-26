@@ -56,6 +56,12 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 - Planned: Chapters 2–8 (Kernel Core, systemd, Filesystem, Bash, Packages, Network…), then the NullNux finale
   (phase 3: player types real commands from memory, clickable "adds" drop hint fragments).
 
+## Art bible (Adventure)
+
+- **Style:** "computer ruins with corrupted overgrowth": original 3/4 top-down pixel art, one pixel density, dark outlines on everything you fight or talk to.
+- **Palette:** Neon Circuit only: pale mint/teal plazas over a navy data void, magenta/violet corruption, cyan/mint/amber/coral for light and feedback; region accents Firmware amber, GRUB lime, Home orange.
+- **Feel & sound:** every action gets a visible and audible answer within 100 ms (effects keep a dark under-stroke so they read on the pale plaza); a quiet room tone, a click on UI buttons, a sting for wins; text stays in the HTML overlay.
+
 ## Hard rules
 
 - **Never cause or pretend real harm** to the computer, files or browser outside the game window.
@@ -94,7 +100,7 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 
 When adding files: add them to `index.html`, `tests/e2e/ck-harness.html` if tests need them, and the
 `FILES` list in `sw.js` (`tests/ck/wiring.test.js` checks this); bump `VERSION` in `sw.js` whenever shipped
-files change (currently `lilnux-v11`).
+files change (currently `lilnux-v12`).
 
 ## Tests (run one at a time — the sandbox has limited memory)
 

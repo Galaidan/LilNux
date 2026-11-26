@@ -57,7 +57,16 @@
 
       const save = () => { player.ck = state; try { h.save(); } catch (e) { /* storage blocked: keep playing */ } };
       const xp = (n) => { if (n) h.addXP(n); };
-      const sound = (k) => { try { if (h.sound && h.sound[k] && (!h.soundOn || h.soundOn())) h.sound[k](); } catch (e) { /* ignore */ } };
+      const sounds = []; // debug: what played
+      const sound = (k) => { try { if (h.sound && h.sound[k] && (!h.soundOn || h.soundOn())) { h.sound[k](); if (sounds.length > 200) sounds.splice(0, 100); sounds.push(k); } } catch (e) { /* ignore */ } };
+      // The quiet room tone: on while you're in the Adventure with sound on and the page visible.
+      let ambOn = false;
+      const ambient = (on) => {
+        const want = !!on && (!h.soundOn || h.soundOn()) && !document.hidden;
+        if (want === ambOn) return; ambOn = want; sounds.push(want ? 'ambient:on' : 'ambient:off');
+        try { if (h.sound && h.sound.ambient) h.sound.ambient(want); } catch (e) { /* ignore */ }
+        if (CK.PixEngine.debug) root.__lastAmbient = want;
+      };
       const say = (who, lines) => ui.say(who, lines);
       let lock = 0; const m = { learning: null, learnExample: null };
       let remindPending = false; let reminderOpen = false; let hiddenAt = 0;
@@ -70,6 +79,7 @@
         user: h.user || (player.name || 'colonel').toLowerCase().replace(/[^a-z0-9]/g, '') || 'colonel',
         getState: () => state,
         onExit: () => { CK.close(); if (h.onExit) h.onExit(); },
+        onPause: () => pauseMenu(),
         onEquip: (id) => { if (!inFight()) { R.equip(state, id); toolsChanged(); save(); } },
         onUnequip: (id) => { if (!inFight()) { R.unequip(state, id); toolsChanged(); save(); } },
         onBuy: (id) => {
@@ -178,8 +188,8 @@
         else ui.toast('🌀 <code>cd</code> works at terminals and path signs. Walk up to one.');
       }
       function onTouch(p) {
-        if (p.kind === 'crystal' && !p.taken) { p.taken = true; busy(() => memory(reg().nodes[roomId])); }
-        else if (p.kind === 'pedestal' && !p.taken) { p.taken = true; takeItem(); }
+        if (p.kind === 'crystal' && !p.taken) { p.taken = true; scene.celebrate(p.x, p.y, '#8b5cff'); busy(() => memory(reg().nodes[roomId])); }
+        else if (p.kind === 'pedestal' && !p.taken) { p.taken = true; takeItem(p); }
         else if (p.kind === 'gate') busy(() => exit());
       }
 
@@ -247,8 +257,9 @@
         if (close) busy(async () => { await say('pip', LINES.echoGap); await learn('echo'); });
       }
       // Touching the pedestal takes what's on it; the room counts as visited from then on.
-      function takeItem() {
+      function takeItem(p) {
         const node = reg().nodes[roomId]; if (R.isCleared(state, roomId)) return;
+        if (p) scene.celebrate(p.x, p.y, typeof node.ref === 'string' ? '#6dffb0' : '#ffd166', typeof node.ref === 'string' ? 0 : node.ref.bits);
         R.clear(state, roomId); state.checkpoint = { region: state.region, node: roomId };
         item(node); refresh();
       }
@@ -309,6 +320,7 @@
             const rr = R.reward(state, 'region'); xp(rr.xp);
             h.giveBadge(...BADGES[state.region]); sound('win');
             reapplyDoors(); save();
+            await ui.banner(`${c.name} defeated`, `${reg().name} restored`, 1800);
             await say('pip', reg().outro);
             await say(teacherOf(c.weak), ['In real Linux: ' + c.real]);
             claim();
@@ -481,6 +493,7 @@
       }
       parts.intervals.push(setInterval(() => { if (cur && sim) { ui.actionTick(sim); gapCheck(); } }, 100));
       parts.intervals.push(setInterval(() => {
+        ambient(!!cur);
         if (!cur || document.hidden) return;
         if (S.addPlayTime(state, 1000) && !reminderOpen) remindPending = true;
         state.story.lastSeen = Date.now();
@@ -495,15 +508,46 @@
       document.addEventListener('visibilitychange', onVis); root.addEventListener('pagehide', onHide);
       parts.offs.push(() => { document.removeEventListener('visibilitychange', onVis); root.removeEventListener('pagehide', onHide); state.story.lastSeen = Date.now(); save(); });
       parts.offs.push(() => { if (puzzle) { puzzle.destroy(); puzzle = null; } });
+      parts.offs.push(() => ambient(false));
+
+      // A soft click whenever an overlay button or tab is pressed (fight buttons have their own sounds).
+      const onPress = (e) => { if (e.target.closest && e.target.closest('.ck-btn, .ck-tab') && !e.target.closest('[disabled]')) sound('click'); };
+      host.addEventListener('pointerdown', onPress, true);
+      // Esc or P pauses (the ⏸ button in the HUD does the same).
+      const onPauseKey = (e) => {
+        if (e.key !== 'Escape' && e.key !== 'p' && e.key !== 'P') return;
+        if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+        if (puzzle || lock || ui.busy()) return;
+        e.preventDefault(); pauseMenu();
+      };
+      root.addEventListener('keydown', onPauseKey);
+      parts.offs.push(() => { host.removeEventListener('pointerdown', onPress, true); root.removeEventListener('keydown', onPauseKey); });
+      function pauseMenu() {
+        if (lock || puzzle) return;
+        busy(async () => {
+          for (;;) {
+            const on = !h.soundOn || h.soundOn();
+            const pick = await ui.choice('⏸ Paused', [
+              { label: 'Resume', html: '▶ Resume', value: 'resume', primary: true },
+              { label: on ? 'Sound: on' : 'Sound: off', html: on ? '🔊 Sound: on' : '🔇 Sound: off', value: 'sound' },
+              { label: 'Leave the adventure', html: '🚪 Leave the adventure — your progress is saved', value: 'leave' },
+            ], 'The machine waits. Take your time.');
+            if (pick === 'sound') { if (h.setSound) h.setSound(!on); ambient(!!cur); continue; }
+            if (pick === 'leave') setTimeout(() => { CK.close(); if (h.onExit) h.onExit(); }, 0);
+            return;
+          }
+        });
+      }
 
       enterRoom(state.node, null);
+      ambient(true);
 
       if (CK.PixEngine.debug) {
         CK._test = CK._test || {};
         CK._test.main = {
           get state() { return state; }, get room() { return room; }, get sim() { return sim; }, get scene() { return scene; }, get roomId() { return roomId; },
           engine, input, ui, events,
-          sceneKind: () => (puzzle ? 'puzzle' : scene ? 'room' : 'none'),
+          sceneKind: () => (puzzle ? 'puzzle' : scene ? 'room' : 'none'), sounds,
           busy: () => lock > 0 || ui.busy(),
           get learning() { return m.learning; }, get learnExample() { return m.learnExample; },
           place: (x, y) => scene.place(x, y),

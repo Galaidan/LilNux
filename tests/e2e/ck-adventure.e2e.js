@@ -252,7 +252,7 @@ const tests = {
     await settle(pg);
     const s = await pg.evaluate(() => { const st = CK._test.main.state; return { learned: st.learned, bits: st.bits, room: CK._test.main.roomId, newMoves: st.story.newMoves }; });
     assert.deepEqual([s.learned.includes('kill'), s.learned.includes('trap'), s.bits, s.room, s.newMoves], [true, true, 55, 'f3', false]);
-    await pg.click('[data-ck=exit]'); await pg.waitForSelector('.hub'); await openAdv(pg); await settle(pg);
+    await pg.click('[data-ck=pause]'); await pg.click('.ck-choice button >> text=Leave'); await pg.waitForFunction(() => !document.getElementById('ck-root')); await openAdv(pg); await settle(pg);
     const n = await pg.evaluate(() => CK._test.main.state.log.filter((e) => /New moves/.test(e.html)).length);
     assert.equal(n, 1, 'the toast shows once');
   },
@@ -657,6 +657,66 @@ const tests = {
     assert.ok((await scale()) < 0.97, 'pressed in');
     await fire('pointerup'); await wait(400);
     assert.ok(Math.abs((await scale()) - 1) < 0.01, 'back to size');
+  },
+  // ---- craft floors: shell, sound, feel ----
+  async 'Esc pauses: Resume, a sound switch, and the room stays frozen'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg);
+    await pg.keyboard.press('Escape'); await pg.waitForSelector('.ck-choice');
+    assert.match(await pg.textContent('.ck-choice h2'), /Paused/);
+    const t0 = await pg.evaluate(() => CK._test.main.sim.time); await wait(300);
+    assert.equal(await pg.evaluate(() => CK._test.main.sim.time), t0, 'frozen while paused');
+    await pg.click('.ck-choice button >> text=Sound'); await pg.waitForSelector('.ck-choice');
+    assert.match(await pg.textContent('.ck-choice'), /Sound: off/);
+    assert.equal(await pg.evaluate((k) => JSON.parse(localStorage.getItem(k)).sound, KEY), false, 'the sound switch is the same one Learn mode uses');
+    await pg.click('.ck-choice button >> text=Sound'); await pg.waitForSelector('.ck-choice');
+    await pg.click('.ck-choice button >> text=Resume'); await wait(300);
+    assert.equal(await pg.evaluate(() => !!document.querySelector('.ck-choice')), false);
+    assert.ok((await pg.evaluate(() => CK._test.main.sim.time)) > t0, 'running again');
+  },
+  async 'the pause button opens the same menu; Leave saves and goes back to the hub'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f3', prev: 'f1', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f3'] }, cleared: { firmware: ['f1', 'f3'] } }, learnedFw));
+    await settle(pg);
+    await pg.click('[data-ck=pause]'); await pg.waitForSelector('.ck-choice');
+    await pg.click('.ck-choice button >> text=Leave'); await pg.waitForFunction(() => !document.getElementById('ck-root'));
+    assert.equal(await pg.evaluate(() => !!document.getElementById('ck-root')), false);
+    assert.equal(await pg.evaluate((k) => JSON.parse(localStorage.getItem(k)).players[0].ck.node, KEY), 'f3');
+  },
+  async 'sound floor: UI clicks, a pickup blip and a quiet room tone that stops on leave'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f1', prev: 'f0', switches: ['f1'], explored: { firmware: ['f0', 'f1', 'f2', 'f3'] }, cleared: { firmware: ['f1'] } }, learnedFw));
+    await settle(pg);
+    const log = () => pg.evaluate(() => CK._test.main.sounds.slice());
+    assert.ok((await log()).includes('ambient:on'), 'room tone on');
+    await pg.click('[data-ck=pip]'); await wait(100);
+    assert.ok((await log()).includes('click'), 'UI click');
+    await pg.click('.ck-pip [data-ck=closepip]');
+    await walk(pg, 'n', 'f2'); await settle(pg);
+    await pg.evaluate(() => { const m = CK._test.main; m.room.tiles.forEach((row, y) => row.forEach((c, x) => { if (c === 'b') m.room.clearTile(x, y); })); const p = m.room.props.find((q) => q.kind === 'crystal'); m.place(p.x, p.y + 16); });
+    await pg.waitForFunction(() => CK._test.main.state.memories.length === 1, null, { timeout: 3000 });
+    assert.ok((await log()).includes('good'), 'pickup blip');
+    await pg.evaluate(() => CK.close());
+    assert.equal((await pg.evaluate(() => window.__lastAmbient)), false, 'room tone stopped');
+  },
+  async 'feel floor: a pickup bursts on the spot, and a boss defeat is a moment'(b) {
+    const pg = await openWith(b, Object.assign({ node: 'f5', prev: 'f3', explored: { firmware: ['f0', 'f1', 'f3', 'f5', 'f6', 'f9'] }, cleared: { firmware: ['f1', 'f3', 'f5'] } }, learnedFw));
+    await settle(pg); await walk(pg, 'n', 'f6'); await settle(pg);
+    const before = await pg.evaluate(() => CK._test.main.scene.particleCount);
+    await pg.evaluate(() => { const m = CK._test.main; const p = m.room.props.find((x) => x.kind === 'pedestal'); m.place(p.x, (p.ty + 1) * 16 + 9); });
+    await pg.waitForFunction(() => CK._test.main.state.modules.includes('ram'), null, { timeout: 3000 });
+    assert.ok((await pg.evaluate(() => CK._test.main.scene.particleCount)) >= before + 16, 'a burst at the pedestal');
+    const pg2 = await openWith(b, Object.assign({ node: 'f10', prev: 'f9', explored: { firmware: ['f9', 'f10', 'f12'] }, cleared: { firmware: ['f1', 'f3', 'f5', 'f9', 'f10'] } }, learnedFw));
+    await settle(pg2); await pg2.evaluate(() => CK._test.main.place(280, 200)); await wait(100);
+    await pg2.evaluate(() => CK._test.main.toDoor('s')); await pg2.waitForSelector('.ck-choice'); await pg2.click('.ck-choice button >> text=Fight!');
+    await pg2.waitForFunction(() => CK._test.main.roomId === 'f12' && !CK._test.main.scene.transitioning); await settle(pg2);
+    await pg2.evaluate(() => CK._test.main.clearFoes({ clean: false }));
+    await pg2.waitForSelector('.ck-banner', { timeout: 3000 });
+    assert.match(await pg2.textContent('.ck-banner'), /Corrupt Boot Glitch defeated/);
+  },
+  async 'shell floor: the Adventure fades in (still with reduced motion)'(b) {
+    const pg = await openWith(b);
+    assert.equal(await pg.$eval('#ck-root', (e) => getComputedStyle(e).animationName), 'ck-fade-in');
+    const pg2 = await openWith(b, null, null, { viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce' });
+    assert.equal(await pg2.$eval('#ck-root', (e) => getComputedStyle(e).animationName), 'none');
   },
   async 'full Chapter 1 playthrough'(b) {
     const pg = await openWith(b);
