@@ -165,7 +165,7 @@
     toast: 'Still ticking. Somebody has to.',
     lines: [
       'Mmh? Oh. A visitor. Keep it down. When the power’s off, I’m the only one in here still awake.',
-      'I’m CMOS: a coin battery, about three volts, the size of a button. I keep the clock running and the firmware’s settings remembered while the computer is switched off.',
+      'I’m CMOS: a coin battery, about three volts, the size of a button. I keep the clock running while the computer is switched off. On older boards I remember the firmware’s settings too.',
       'If I ever die, the machine forgets the date. On Linux, `timedatectl` shows what time the system thinks it is, and `hwclock` reads the battery-backed clock directly.',
       'Years, I’ve lasted. Years. Nobody ever says thank you. …Anyway. Go on.',
     ],
@@ -266,7 +266,7 @@
   const BLURBS = {
     f0: 'Power has just arrived. Nothing has started yet.',
     f1: 'Power supplies deliver steady voltage rails to the board.',
-    f2: 'A coin battery keeps the clock and settings alive with the power off.',
+    f2: 'A coin battery keeps the clock running with the power off.',
     f3: 'Firmware sits in flash memory on the board and runs before any operating system.',
     f4: 'The first code the processor runs comes from firmware storage, not the disk.',
     f5: 'POST tests memory before anything is allowed to use it.',
@@ -284,7 +284,7 @@
     g4: 'A wrong path can send a bootloader around in circles.', g5: 'The kernel is a file, vmlinuz, that GRUB loads into memory.',
     g6: 'Spare parts turn up in odd places.', g7: 'The initramfs is a tiny temporary filesystem the kernel uses to get started.',
     g8: 'Fedora keeps older kernels as fallback boot entries.', g9: 'The kernel has to find and mount the root filesystem.',
-    g10: 'Boot parameters, like quiet and ro, are passed to the kernel.', g11: 'Disks are identified by UUID, not by name.',
+    g10: 'Boot parameters, like quiet and ro, are passed to the kernel.', g11: 'Filesystems are found by UUID, not by device name.',
     g12: 'GRUB hands control to the kernel and steps aside.', g13: 'The desktop. Linux is up.',
     g14: 'A cache nobody was meant to find.', g15: 'A cache nobody was meant to find.',
   };

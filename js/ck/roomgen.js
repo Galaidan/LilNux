@@ -72,7 +72,7 @@
     const INTERIOR = { power: ['U', 4], rom: ['R', 5], ram: ['M', 5], lanes: ['L', 5] };
     if (zone && INTERIOR[zone] && node.kind !== 'start') {
       const [letter, w] = INTERIOR[zone]; const ir = CK.rng(hash(region.id + ':in:' + nodeId)); // its own stream: the rest of the room is unchanged
-      const quads = [[4, 4], [20, 4], [4, 10], [20, 10]].filter(([qx, qy]) => !(node.friend && qx === 20 && qy === 4)); // keep the NPC spot open
+      const quads = [[4, 4], [20, 4], [4, 10], [20, 10]].filter(([qx, qy]) => !((node.friend || node.kind === 'character') && qx === 20 && qy === 4)); // keep the NPC spot open
       for (let i = quads.length - 1; i > 0; i--) { const j = Math.floor(ir() * (i + 1)); [quads[i], quads[j]] = [quads[j], quads[i]]; }
       for (const [qx, qy] of quads.slice(0, 2)) for (let y = qy; y <= qy + 1; y++) for (let x = qx; x < qx + w; x++) if (isFloor(x, y) && x <= right - 2) set(x, y, letter);
     }

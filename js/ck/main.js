@@ -137,7 +137,7 @@
         }
         ui.signs.doors(doors);
         if (scene) { scene.setPower(R.isPowered(state, roomId), R.regionPowered(state)); scene.setGoal(R.goalSide(state, roomId)); }
-        if (withBanner) ui.signs.room({ name: node.label, blurb: node.blurb || '', note: node.friend && !state.friends.includes(node.friend) ? `👋 ${W.CHARACTERS[node.friend].name} is here${friendWhere()}. Press E near them.` : '' });
+        if (withBanner) ui.signs.room({ name: node.label, blurb: node.blurb || '', note: node.friend && !state.friends.includes(node.friend) ? `👋 ${W.CHARACTERS[node.friend].name} is here${friendWhere()}. Go near and press E (✋ on a phone).` : '' });
       }
       function makeSim() {
         const node = reg().nodes[roomId]; const ds = R.doorStates(state, roomId, { bossFight });
@@ -259,7 +259,7 @@
       async function meet(who, arriving) {
         if (who === 'liltux') return meetLilTux();
         if (W.CHARACTERS[who] && W.CHARACTERS[who].friend) { // an optional Firmware neighbour: a voice and a true fact, no new command
-          if (!state.friends.includes(who)) { state.friends.push(who); save(); await say(who, W.CHARACTERS[who].lines); xp(5); signsRefresh(true); }
+          if (!state.friends.includes(who)) { state.friends.push(who); save(); await say(who, W.CHARACTERS[who].lines); xp(5); }
           else ui.toast(`<b>${W.CHARACTERS[who].name}:</b> ${W.CHARACTERS[who].toast}`);
           return;
         }

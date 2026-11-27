@@ -22,7 +22,7 @@ in the top bar). Both share players, XP, ranks, badges and the sound switch (`lo
 
 - GitHub `Galaidan/LilNux`. **`main` = the live site** (GitHub Pages): https://galaidan.github.io/LilNux/
 - `main` is at `6d4eca8` + nothing; the branch **`ck-firmware-map`** (2026-11-27, cache **`lilnux-v15`**) holds the Firmware map rework and is **not merged or pushed yet**. `main` is at cache **`lilnux-v14`** and is live (checked 2026-11-26: `sw.js` serves v14, `js/start-fx.js`
-  and `css/entry.css` return 200). Everything below is merged and pushed; nothing is waiting on a branch.
+  and `css/entry.css` return 200). Everything below is merged and pushed. The one thing waiting on a branch is the Firmware map rework (branch `ck-firmware-map`, see its section below).
 - Local feature branches `ck-action`, `ck-chapter1`, `ck-polish`, `ck-hud-buttons`, `ck-craft-floors`,
   `ck-colonel-look`, `cyberpunk-start`, `handoff-2026-11-26` are all merged into `main` (safe to delete). Old remote branches `colonel-kernel-design`,
   `ck-story-update`, `ck-ux-tweaks` are merged too (delete on github.com if wanted).
@@ -195,7 +195,7 @@ change** (currently `lilnux-v15` on `ck-firmware-map`, v14 on `main`; the wiring
 
 ```bash
 export NODE_PATH='C:\ClaudeBro\.pw\node_modules'   # Playwright + Chromium live outside the repo
-node --test tests/ck/                              # 211 unit tests
+node --test tests/ck/                              # 212 unit tests
 node tests/e2e/start-screen.e2e.js                 # 37 tests: StartFX runtime, shell wiring, Welcome screen, hub; ONLY='name' runs some
 node tests/e2e/ck-ui.e2e.js                        # 21 overlay tests
 node tests/e2e/ck-adventure.e2e.js                 # 54 tests incl. a full Chapter 1 playthrough; ONLY='name' runs one

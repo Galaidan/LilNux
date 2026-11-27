@@ -148,8 +148,8 @@
   function goalNode(state) {
     const reg = cur(state); const { dist } = steps(state, state.node);
     const teaches = (n) => Object.values(W().SKILLS).some((sk) => sk.teacher === n.ref && !state.learned.includes(sk.id) && (n.ref !== 'pip' || sk.id === 'kill'));
-    const cands = Object.keys(reg.nodes).filter((id) => reg.nodes[id].kind === 'character' && teaches(reg.nodes[id]));
-    if (cands.length) return cands.sort((a, b) => (dist[a] === undefined ? 99 : dist[a]) - (dist[b] === undefined ? 99 : dist[b]))[0];
+    const cands = Object.keys(reg.nodes).filter((id) => reg.nodes[id].kind === 'character' && teaches(reg.nodes[id]) && dist[id] !== undefined); // reachable only
+    if (cands.length) return cands.sort((a, b) => dist[a] - dist[b])[0];
     if (reg.boss && !isCleared(state, reg.boss)) return reg.boss;
     return reg.exit || reg.home || null;
   }
