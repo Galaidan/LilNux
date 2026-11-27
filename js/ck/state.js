@@ -19,7 +19,7 @@
     return {
       v: 2, region: 'firmware', node: 'f0', prev: null, explored: { firmware: ['f0'] }, cleared: {},
       learned: [], equipped: [], upgrades: [], modules: [], bits: 0, memories: [], tasksDone: [], codex: [],
-      switches: [], signs: [],
+      switches: [], signs: [], friends: [],
       checkpoint: { region: 'firmware', node: 'f0' }, stats: { clean: 0, fights: 0, wins: 0 },
       chapterDone: false, seenIntro: false, log: [],
       story: { liltuxMet: false, liltuxTaken: false, restUnlocked: false, rests: 0, lastSeen: 0, glitched: [], oddLogs: [], flicker: false, playMs: 0, lastReminderMs: 0, newMoves: false },
@@ -47,7 +47,7 @@
     s.prev = nodeOk && typeof raw.prev === 'string' ? raw.prev : null;
     s.explored = mapOfLists(raw.explored, s.explored);
     s.cleared = mapOfLists(raw.cleared, {});
-    ['learned', 'equipped', 'upgrades', 'modules', 'memories', 'tasksDone', 'codex', 'switches', 'signs'].forEach((k) => { s[k] = strList(raw[k], []); });
+    ['learned', 'equipped', 'upgrades', 'modules', 'memories', 'tasksDone', 'codex', 'switches', 'signs', 'friends'].forEach((k) => { s[k] = strList(raw[k], []); });
     s.bits = Number.isFinite(raw.bits) && raw.bits >= 0 ? Math.floor(raw.bits) : 0;
     if (isObj(raw.stats)) for (const k of Object.keys(s.stats)) if (Number.isFinite(raw.stats[k])) s.stats[k] = raw.stats[k];
     s.chapterDone = raw.chapterDone === true;

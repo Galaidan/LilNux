@@ -1,6 +1,6 @@
 /* LilNux service worker: keeps the game playable offline once it has been opened.
  * Bump VERSION whenever any file changes so phones pick up the new copy. */
-const VERSION = 'lilnux-v14';
+const VERSION = 'lilnux-v15';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest',
   'css/style.css', 'js/terminal.js', 'js/content.js', 'js/game.js', 'css/ck.css', 'css/entry.css', 'js/start-fx.js',

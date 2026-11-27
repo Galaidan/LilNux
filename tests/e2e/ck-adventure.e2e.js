@@ -67,6 +67,7 @@ async function settle(pg, opts) {
 const toDoor = (pg, side) => pg.evaluate((s) => CK._test.main.toDoor(s), side);
 const waitRoom = (pg, id) => pg.waitForFunction((x) => CK._test.main.roomId === x && !CK._test.main.scene.transitioning, id, { timeout: 4000 });
 const place = (pg, x, y) => pg.evaluate(([a, c]) => CK._test.main.place(a, c), [x, y]);
+const FW_SEEN = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', 'f13']; // everything but the two hidden caches
 const learnedFw = { learned: ['kill', 'trap', 'echo', 'ls'], codex: ['kill', 'trap', 'echo', 'ls'], equipped: ['echo', 'ls'] };
 const learnedAll = { learned: ['kill', 'trap', 'echo', 'ls', 'cd'], codex: ['kill', 'trap', 'echo', 'ls', 'cd'], equipped: ['ls', 'cd'] };
 const badges = (pg) => pg.evaluate((k) => JSON.parse(localStorage.getItem(k)).players[0].badges, KEY);
@@ -773,6 +774,69 @@ const tests = {
     assert.equal(await pg.evaluate(() => CK._test.main.state.chapterDone), true);
     const bs = await badges(pg); for (const id of ['ck-r1', 'ck-r2', 'ck-ch1']) assert.ok(bs.includes(id), id);
     assert.deepEqual(pg.errs, []);
+  },
+
+  // ---- Firmware map rework: signposting, friends, power ---------------------------------------------------
+  async 'signposting: the banner names the room, the goal door is gold, a shut door says why'(b) {
+    const pg = await openWith(b, { node: 'f1', explored: { firmware: FW_SEEN }, learned: ['kill'], codex: ['kill'], equipped: [] });
+    await settle(pg);
+    const banner = await pg.evaluate(() => { const e = document.querySelector('.ck-roomname'); return e ? e.textContent : ''; });
+    assert.match(banner, /Power Rail/); assert.match(banner, /voltage rails/);
+    const goal = await pg.evaluate(() => { const e = document.querySelector('.ck-sign.goal'); return e ? { cls: e.className, text: e.textContent } : null; });
+    assert.ok(goal, 'a goal door label'); assert.match(goal.text, /Firmware Vault/); assert.match(goal.cls, /s-e/);
+    assert.match(goal.text, /echo the switch/);
+    const hidden = await pg.evaluate(() => getComputedStyle(document.querySelector('.ck-sign.s-w')).opacity);
+    assert.equal(Number(hidden), 0, 'a far door shows no name');
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'signposting: a sealed room explains itself, names fade in near a door, and the chip clears with the room'(b) {
+    const pg = await openWith(b, { node: 'f3', explored: { firmware: FW_SEEN }, ...learnedFw });
+    await settle(pg);
+    await walk(pg, 'e', 'f5'); await settle(pg);
+    let chips = await pg.evaluate(() => [...document.querySelectorAll('.ck-sign.lock .why')].map((e) => e.textContent));
+    assert.ok(chips.length >= 2 && chips.every((t) => /Clear this room first/.test(t)), chips.join('|'));
+    await place(pg, 240, 24); await wait(250);
+    const near = await pg.evaluate(() => { const e = document.querySelector('.ck-sign.s-n'); return { cls: e.className, text: e.textContent }; });
+    assert.match(near.cls, /near/); assert.match(near.text, /DIMM Slot/);
+    await clearFoes(pg, true); await settle(pg); await wait(300);
+    chips = await pg.evaluate(() => [...document.querySelectorAll('.ck-sign.lock')].length);
+    assert.equal(chips, 0, 'no lock chips once the room is cleared');
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'friends: CMOS is optional, talks once with a true fact, then a short toast'(b) {
+    const pg = await openWith(b, { node: 'f2', explored: { firmware: FW_SEEN }, ...learnedFw });
+    await settle(pg);
+    assert.match(await pg.evaluate(() => document.querySelector('.ck-roomname') ? document.querySelector('.ck-roomname').textContent : ''), /CMOS is here/);
+    const learnedBefore = await pg.evaluate(() => CK._test.main.state.learned.length);
+    await useProp(pg, 'npc');
+    await pg.waitForSelector('.ck-say');
+    assert.match(await pg.textContent('.ck-say'), /CMOS|coin battery/);
+    await settle(pg);
+    const st = await pg.evaluate(() => ({ friends: CK._test.main.state.friends, learned: CK._test.main.state.learned.length }));
+    assert.deepEqual(st.friends, ['cmos']); assert.equal(st.learned, learnedBefore, 'a friend teaches no command');
+    await useProp(pg, 'npc'); await wait(200);
+    assert.equal(await pg.evaluate(() => !!document.querySelector('.ck-say')), false, 'the second visit is a toast, not a conversation');
+    assert.match(await pg.evaluate(() => document.querySelector('.ck-toasts').textContent), /Still ticking/);
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'power: a problem room is dim until cleared, then the power comes on'(b) {
+    const pg = await openWith(b, { node: 'f3', explored: { firmware: FW_SEEN }, ...learnedFw });
+    await settle(pg);
+    assert.deepEqual(await pg.evaluate(() => { const p = CK._test.main.scene.power; return { t: p.target, r: p.region }; }), { t: 1, r: false }, 'the Vault is on');
+    await walk(pg, 'e', 'f5'); await settle(pg);
+    assert.equal(await pg.evaluate(() => CK._test.main.scene.power.target), 0, 'RAM Bank is off until it is fixed');
+    await clearFoes(pg, true); await settle(pg); await wait(1100);
+    const p = await pg.evaluate(() => CK._test.main.scene.power);
+    assert.equal(p.target, 1); assert.ok(p.k > 0.99, 'the power came on');
+    assert.deepEqual(pg.errs, []);
+  },
+  async 'goal: the gold door follows the story'(b) {
+    const pg = await openWith(b, { node: 'f1', explored: { firmware: FW_SEEN }, learned: ['kill'], codex: ['kill'], equipped: [] });
+    await settle(pg);
+    assert.equal(await pg.evaluate(() => CK._test.main.scene.power.goal), 'e', 'toward Bios');
+    const pg2 = await openWith(b, { node: 'f1', explored: { firmware: FW_SEEN } });
+    await settle(pg2);
+    assert.equal(await pg2.evaluate(() => CK._test.main.scene.power.goal), null, 'standing in Pip\'s room before kill: you are at the goal');
   },
 };
 
