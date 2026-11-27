@@ -9,7 +9,7 @@ const { State, World, RoomGen, Rooms } = globalThis.CK;
 const fw = World.REGIONS[0]; const grub = World.REGIONS[1];
 
 test('every Firmware room has an area look and a banner blurb; GRUB rooms have blurbs too', () => {
-  const zones = new Set(['power', 'rom', 'ram', 'lanes', 'boss']);
+  const zones = new Set(['power', 'rom', 'ram', 'lanes', 'boss', 'gate']);
   for (const id of Object.keys(fw.nodes)) {
     assert.ok(zones.has(fw.nodes[id].zone), `${id} zone`);
     assert.ok(fw.nodes[id].blurb && fw.nodes[id].blurb.length <= 100, `${id} blurb`);
@@ -22,7 +22,8 @@ test('the five areas group the rooms as designed', () => {
   assert.deepEqual(of('power'), ['f0', 'f1', 'f2']);
   assert.deepEqual(of('ram'), ['f5', 'f6']);
   assert.deepEqual(of('lanes'), ['f10', 'f11', 'f7', 'f9']);
-  assert.deepEqual(of('boss'), ['f12', 'f13']);
+  assert.deepEqual(of('boss'), ['f12']);
+  assert.deepEqual(of('gate'), ['f13']);
   assert.deepEqual(of('rom'), ['f14', 'f15', 'f3', 'f4', 'f8']);
 });
 
@@ -112,4 +113,15 @@ test('the north door approach and the doors are never covered by a landmark', ()
     const rows = RoomGen.build(fw, id);
     for (let y = 0; y <= 3; y++) for (let x = 12; x <= 17; x++) assert.ok(!'URMVQZL'.includes(rows[y][x]), `${id} ${x},${y}`);
   }
+});
+
+test('the cross between the doors stays clear, and rooms have machines in the middle too', () => {
+  let withInterior = 0;
+  for (const id of Object.keys(fw.nodes)) {
+    const rows = RoomGen.build(fw, id);
+    for (let y = 6; y <= 9; y++) for (let x = 2; x <= 27; x++) assert.ok(!'URMVQZL'.includes(rows[y][x]), `${id} corridor ${x},${y}`);
+    for (let y = 0; y < rows.length; y++) for (const x of [14, 15]) assert.ok(!'URMVQZL'.includes(rows[y][x]), `${id} column ${x},${y}`);
+    if (rows.slice(4, 6).some((r) => /[URML]/.test(r)) || rows.slice(10, 12).some((r) => /[URML]/.test(r))) withInterior++;
+  }
+  assert.ok(withInterior >= 10, `interior machines in ${withInterior} rooms`);
 });

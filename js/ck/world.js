@@ -187,7 +187,7 @@
       'Shh. I’m ACPI: a set of tables the firmware hands to the operating system. They describe the hardware: what’s installed, and how to switch it on and off.',
       'I’m also how a computer sleeps. ACPI defines sleep states, and S3 is “suspend to RAM”: nearly everything powers down while memory stays alive.',
       'On Fedora, `systemctl suspend` asks the system to go to sleep, and I help make that happen. Rest isn’t a luxury, Colonel. It’s a feature.',
-      'Funny thing, though: while everything sleeps, the idle task keeps running. Nobody ever watches the idle task. …Never mind. Forget I said that.',
+      'Ask me about S4 sometime: hibernate. Memory gets written to disk and the power goes off completely, so it survives even a flat battery. Slower to wake, though.',
     ],
   };
 
@@ -261,7 +261,7 @@
   };
 
   // Room character: an area look (zone), a one-line banner blurb, and optional friends. Facts are real firmware / GRUB behaviour.
-  const ZONES = { f0: 'power', f1: 'power', f2: 'power', f3: 'rom', f4: 'rom', f8: 'rom', f14: 'rom', f15: 'rom', f5: 'ram', f6: 'ram', f7: 'lanes', f9: 'lanes', f10: 'lanes', f11: 'lanes', f12: 'boss', f13: 'boss' };
+  const ZONES = { f0: 'power', f1: 'power', f2: 'power', f3: 'rom', f4: 'rom', f8: 'rom', f14: 'rom', f15: 'rom', f5: 'ram', f6: 'ram', f7: 'lanes', f9: 'lanes', f10: 'lanes', f11: 'lanes', f12: 'boss', f13: 'gate' };
   const FRIENDS = { f2: 'cmos', f8: 'opti', f10: 'acpi' };
   const BLURBS = {
     f0: 'Power has just arrived. Nothing has started yet.',

@@ -115,6 +115,13 @@
         signsRefresh(false);
         return ds;
       }
+      // "to the north-east": where the room's character stands, for dark rooms and wide ones
+      function friendWhere() {
+        const p = room.props.find((x) => x.kind === 'npc'); if (!p) return '';
+        const dx = p.tx - room.cols / 2; const dy = p.ty - room.rows / 2;
+        const v = dy < -2 ? 'north' : dy > 2 ? 'south' : ''; const h = dx > 3 ? 'east' : dx < -3 ? 'west' : '';
+        return v || h ? `, to the ${[v, h].filter(Boolean).join('-')}` : '';
+      }
       // The overlay's door labels and (on entering) the room-name banner. Text never goes into the pixel canvas.
       function signsRefresh(withBanner) {
         if (!room || !ui || !ui.signs) return;
@@ -130,7 +137,7 @@
         }
         ui.signs.doors(doors);
         if (scene) { scene.setPower(R.isPowered(state, roomId), R.regionPowered(state)); scene.setGoal(R.goalSide(state, roomId)); }
-        if (withBanner) ui.signs.room({ name: node.label, blurb: node.blurb || '', note: node.friend && !state.friends.includes(node.friend) ? `👋 ${W.CHARACTERS[node.friend].name} is here. Press E near them.` : '' });
+        if (withBanner) ui.signs.room({ name: node.label, blurb: node.blurb || '', note: node.friend && !state.friends.includes(node.friend) ? `👋 ${W.CHARACTERS[node.friend].name} is here${friendWhere()}. Press E near them.` : '' });
       }
       function makeSim() {
         const node = reg().nodes[roomId]; const ds = R.doorStates(state, roomId, { bossFight });
@@ -407,9 +414,9 @@
           },
           onLeave: () => endPuzzle(),
         });
-        ui.action(false); engine.setScene(puzzle);
+        ui.action(false); ui.signs.show(false); engine.setScene(puzzle);
       }
-      function endPuzzle() { if (!puzzle) return; puzzle.destroy(); puzzle = null; engine.setScene(scene); ui.action(true); input.clear(); }
+      function endPuzzle() { if (!puzzle) return; puzzle.destroy(); puzzle = null; engine.setScene(scene); ui.action(true); ui.signs.show(true); input.clear(); }
       function needCd(what) {
         if (!state.learned.includes('cd')) { ui.toast(`🌀 The ${what} blinks at you. Someone at the GRUB Gate could show you how it works.`); return true; }
         if (!state.equipped.includes('cd')) { ui.toast(`🌀 Equip <code>cd</code> in Pip → Items to use ${what === 'sign' ? 'path signs' : 'terminals'}.`); return true; }

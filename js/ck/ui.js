@@ -59,15 +59,19 @@
           signLabels[side] = { el, cx: d.cx, cy: d.cy, side, x: null, y: null, near: false };
         }
       },
+      show(on) { signsEl.hidden = !on; }, // hidden while the circuit puzzle owns the canvas
       frame(cam, view, P) { // called every frame by the room scene
         const IN = { n: [0, 26], s: [0, -26], w: [30, 0], e: [-30, 0] };
+        const act = rootEl.querySelector('.ck-act'); const ar = act && !act.hidden ? act.getBoundingClientRect() : null; const rr = rootEl.getBoundingClientRect();
+        const top = Math.max((parseFloat(rootEl.style.getPropertyValue('--hud-h')) || 54), ar ? ar.bottom - rr.top : 0) + 10; // labels never sit under the top HUD or the tool chips
         for (const l of Object.values(signLabels)) {
           const wx = l.cx + IN[l.side][0]; const wy = l.cy + IN[l.side][1];
-          const rx = (view.ox + (wx - cam.x) * view.k) / view.dpr; const ry = (view.oy + (wy - cam.y) * view.k) / view.dpr;
-          const inView = rx >= 0 && rx <= view.cssW && ry >= 100 && ry <= view.cssH; // below the top HUD
-          const show = inView || l.el.classList.contains('goal'); // the goal door stays as an edge pointer when it is off screen
+          const px = (view.ox + (wx - cam.x) * view.k) / view.dpr; const py = (view.oy + (wy - cam.y) * view.k) / view.dpr;
+          const dx = (view.ox + (l.cx - cam.x) * view.k) / view.dpr; const dy = (view.oy + (l.cy - cam.y) * view.k) / view.dpr;
+          const doorOn = dx >= -8 && dx <= view.cssW + 8 && dy >= -8 && dy <= view.cssH + 8; // the door itself is on screen
+          const show = doorOn || l.el.classList.contains('goal'); // the goal door stays as an edge pointer when it is off screen
           if (show !== l.shown) { l.shown = show; l.el.classList.toggle('off', !show); }
-          const x = Math.round(Math.max(6, Math.min(view.cssW - 6, rx))); const y = Math.round(Math.max(100, Math.min(view.cssH - 6, ry)));
+          const x = Math.round(Math.max(6, Math.min(view.cssW - 6, px))); const y = Math.round(Math.max(top, Math.min(view.cssH - 6, py)));
           if (x !== l.x || y !== l.y) { l.x = x; l.y = y; l.el.style.transform = `translate(${x}px,${y}px)`; }
           const near = Math.hypot(P.x - l.cx, P.y - l.cy) < 56;
           if (near !== l.near) { l.near = near; l.el.classList.toggle('near', near); }

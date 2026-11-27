@@ -64,6 +64,7 @@
     ram: { tint: ['#38f2ff', 0.08], motif: 'sticks', c: ['#bba76a', '#ffd166'] },
     lanes: { tint: ['#6dffb0', 0.07], motif: 'lanes', c: ['#6aa79c', '#38f2ff'] },
     boss: { tint: ['#12082a', 0.22], motif: 'rings', c: ['#6a5aa8', '#ff4fd8'] },
+    gate: { tint: ['#b6ff5c', 0.10], motif: 'gate', c: ['#8fb05a', '#b6ff5c'] }, // the exit glows GRUB lime
   };
 
   function paint(room, opts) {
@@ -146,6 +147,8 @@
       } else if (m === 'lanes') { // a bundle of parallel data lanes with east-pointing chevrons
         for (let i = 0; i < 4; i++) for (let x = 0; x < room.w; x++) plot(x, 96 + i * 4, 1, 1);
         for (let x = 40; x < room.w - 24; x += 56) for (let k = 0; k < 4; k++) { plot(x + k, 96 + k, 1, 1); plot(x + k, 111 - k, 1, 1); }
+      } else if (m === 'gate') { // lime east-pointing chevrons run down the corridor to the exit
+        for (let x = 40; x < room.w - 40; x += 36) for (let k = 0; k < 8; k++) { plot(x + k, 112 + k * 2, 2, 1); plot(x + k, 144 - k * 2, 2, 1); }
       } else if (m === 'rings') { // concentric sector rings
         for (const r of [36, 62, 88]) for (let a = 0; a < 720; a++) { const t = (a / 720) * Math.PI * 2; if (r === 62 && a % 12 < 4) continue; plot(Math.round(room.w / 2 + Math.cos(t) * r), Math.round(room.h / 2 + Math.sin(t) * r * 0.8), 1, 1); }
       }

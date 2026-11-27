@@ -15,7 +15,9 @@ Branch `ck-firmware-map`, built 2026-11-27 from the design in `docs/superpowers/
 - The Vaults: Firmware Vault, Boot ROM, Option ROM, both Hidden Caches (violet pad grid, ROM chip rows, the padlocked BIOS chip)
 - Memory: RAM Bank, DIMM Slot (RAM sticks, slot lines with gold contacts)
 - Lanes and Buses: PCIe Lane, Power Bus, ACPI Table, Clock Gen (data-lane bundle with east chevrons, PCIe slots, the crystal can)
-- Boot Sector and Gate: bare rooms with concentric sector rings
+- Boot Sector (`boss`): a bare arena with concentric sector rings
+- To GRUB (`gate`): a bare room whose floor glows GRUB lime, with chevrons running to the exit
+- Rooms in the first four areas also get two interior machines in the quadrants (capacitor banks, ROM chips, RAM sticks or slot rows), chosen per room from a seeded stream; the cross between the four doors is always clear (a unit test guards it).
 - Hidden Cache rooms keep the Vaults look plus a cyan glow.
 
 **State colors.** A room is *powered* when its own job is done (problem, circuit and boss rooms are dim, cool-tinted and low-glow until cleared; every other room is on). The scene crossfades over 0.8 s (a cut with reduced motion). Once the region's power node is solved (Power Bus `f9`, GRUB's Root Bridge `g9`), each area's floor motif lights up and shimmers (rails go gold, lanes go cyan with chevrons). Doors and the bridge, terminal and switch show enabled vs disabled as before, with the new bar colors.
@@ -35,7 +37,12 @@ Branch `ck-firmware-map`, built 2026-11-27 from the design in `docs/superpowers/
 
 Each line is in `js/ck/world.js` (`CHARACTERS.cmos / opti / acpi`, and the `BLURBS` table for every room). Facts used: a CMOS coin battery (about 3 V) keeps the real-time clock and firmware settings alive; `timedatectl` and `hwclock` are real; Option ROMs are firmware on add-in cards and run at boot (UEFI runs them as drivers); ACPI tables describe hardware to the OS, and S3 is suspend-to-RAM; `systemctl suspend` is real.
 
-One deliberate story clue: Acpi's last line says the idle task keeps running while everything sleeps and "nobody ever watches the idle task". That foreshadows NullNux (PID 0). The story doc says to reveal slowly, so cut or soften it if it feels too early.
+Acpi's last line is about S4 (hibernate: memory to disk, power fully off). An earlier draft hinted at the idle task; that was cut, because it is wrong for S3 (nothing runs while suspended) and gives away the NullNux reveal too early.
+
+## Not done (said plainly)
+
+- **Varied room silhouettes.** Option B in the chat mentioned "varied room shapes". Every room is still the same 30x17 plaza with seeded corner bites. The look now comes from the area floor, landmarks and interior machines, not from different outlines. If "feels empty" survives playtesting, this is the next lever.
+- The back-wall landmarks sit on rows 1 and 2, which scroll under the top HUD on small screens; the interior machines are the ones you will see most.
 
 ## Not verified
 

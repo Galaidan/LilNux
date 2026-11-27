@@ -830,6 +830,33 @@ const tests = {
     assert.equal(p.target, 1); assert.ok(p.k > 0.99, 'the power came on');
     assert.deepEqual(pg.errs, []);
   },
+  async 'signposting: door labels stay clear of the HUD and the tool chips, and the north door stays labelled'(b) {
+    for (const vp of [{ width: 844, height: 390, deviceScaleFactor: 3, hasTouch: true }, { width: 667, height: 375, deviceScaleFactor: 2, hasTouch: true }, { width: 1280, height: 720, deviceScaleFactor: 1 }]) {
+      const pg = await openWith(b, { node: 'f3', explored: { firmware: FW_SEEN }, ...learnedFw }, null, { viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: vp.deviceScaleFactor, hasTouch: vp.hasTouch });
+      await settle(pg); await walk(pg, 'e', 'f5'); await settle(pg); await wait(600);
+      const r = await pg.evaluate(() => {
+        const rect = (e) => e.getBoundingClientRect();
+        const boxes = [...document.querySelectorAll('.ck-hud > *, .ck-act > *')].filter((e) => e.offsetParent !== null).map(rect);
+        const signs = [...document.querySelectorAll('.ck-sign:not(.off)')].filter((e) => Number(getComputedStyle(e).opacity) > 0).map((e) => ({ cls: e.className, r: rect(e) }));
+        const hit = [];
+        for (const s2 of signs) for (const bx of boxes) if (s2.r.left < bx.right && s2.r.right > bx.left && s2.r.top < bx.bottom && s2.r.bottom > bx.top) hit.push(s2.cls);
+        const north = document.querySelector('.ck-sign.s-n');
+        return { hit, northShown: !!north && !north.classList.contains('off') && Number(getComputedStyle(north).opacity) > 0, count: signs.length };
+      });
+      assert.deepEqual(r.hit, [], `${vp.width}px: labels overlap the HUD`);
+      assert.ok(r.northShown, `${vp.width}px: the sealed north door shows its chip`);
+    }
+  },
+  async 'signposting: labels are hidden while the circuit puzzle is open'(b) {
+    const pg = await openWith(b, { node: 'f5', cleared: { firmware: ['f5'] }, explored: { firmware: FW_SEEN }, ...learnedFw });
+    await settle(pg); await walk(pg, 's', 'f9'); await settle(pg);
+    assert.equal(await pg.evaluate(() => document.querySelector('.ck-signs').hidden), false);
+    await useProp(pg, 'terminal'); await wait(600);
+    assert.equal(await pg.evaluate(() => CK._test.main.sceneKind()), 'puzzle');
+    assert.equal(await pg.evaluate(() => document.querySelector('.ck-signs').hidden), true, 'no door labels float over the puzzle');
+    await pg.click('[data-pz=leave]');
+    await wait(300); assert.equal(await pg.evaluate(() => document.querySelector('.ck-signs').hidden), false, 'labels come back after stepping away');
+  },
   async 'goal: the gold door follows the story'(b) {
     const pg = await openWith(b, { node: 'f1', explored: { firmware: FW_SEEN }, learned: ['kill'], codex: ['kill'], equipped: [] });
     await settle(pg);

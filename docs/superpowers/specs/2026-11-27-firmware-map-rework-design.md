@@ -46,7 +46,7 @@ Goal: the first unlearned teacher character in the region (Bios, then Grub), els
 2. The Vaults (ROM): Firmware Vault, Boot ROM, Option ROM (rows of ROM chips, a padlocked BIOS chip)
 3. Memory: RAM Bank, DIMM Slot (rows of RAM sticks)
 4. Lanes and Buses: PCIe Lane, Power Bus, ACPI Table, Clock Gen (striped data lanes, a crystal can)
-5. Boot Sector and the Gate: Boot Sector, To GRUB (dark sector rings, lime exit)
+5. Boot Sector (dark sector rings) and, as its own look, To GRUB (lime glow with chevrons to the exit)
 
 Hidden Cache rooms use their neighbour's look with a faint glow. Landmarks replace the random chips and heat sinks in Firmware; GRUB Gate keeps them.
 
