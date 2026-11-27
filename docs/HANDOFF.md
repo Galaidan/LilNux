@@ -198,7 +198,7 @@ export NODE_PATH='C:\ClaudeBro\.pw\node_modules'   # Playwright + Chromium live 
 node --test tests/ck/                              # 212 unit tests
 node tests/e2e/start-screen.e2e.js                 # 37 tests: StartFX runtime, shell wiring, Welcome screen, hub; ONLY='name' runs some
 node tests/e2e/ck-ui.e2e.js                        # 21 overlay tests
-node tests/e2e/ck-adventure.e2e.js                 # 54 tests incl. a full Chapter 1 playthrough; ONLY='name' runs one
+node tests/e2e/ck-adventure.e2e.js                 # 56 tests incl. a full Chapter 1 playthrough; ONLY='name' runs one
 node tests/e2e/lilnux-regression.e2e.js            # Learn mode; prints ERRORS [] when clean
 ```
 
