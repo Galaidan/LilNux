@@ -67,6 +67,8 @@
       el.classList.toggle('closed', legendClosed);
       el.innerHTML = `<button class="ck-btn" data-ck="legend" aria-expanded="${!legendClosed}" title="Show or hide what the map colours mean">🗺 Legend <span>${legendClosed ? '▸' : '▾'}</span></button>
         <ul>${LEGEND.map(([k, label]) => `<li data-kind="${k}"><i style="border-color:${k === 'exit' ? (accent || K.exit.color) : K[k].color}"></i>${esc(label)}</li>`).join('')}
+        <li class="ck-leg-note"><i class="goal"></i>Gold marker — your next goal</li>
+        <li class="ck-leg-note"><i class="door"></i>Door between rooms · 🔒 red = locked until fixed</li>
         <li class="ck-leg-note"><i class="dim"></i>Dimmed with ✓ — done or visited</li>
         <li class="ck-leg-note"><i class="line lit" style="border-color:${accent || '#38f2ff'}"></i>Glowing line — restored path</li>
         <li class="ck-leg-note"><i class="line"></i>Dashed line — not restored yet</li></ul>`;
@@ -81,6 +83,7 @@
         <div class="ck-hud-left">
           <span class="ck-mode">🎮 Adventure</span>
           <span class="ck-region" style="--acc:${reg.accent}"><i></i>${esc(reg.name)}</span>
+          ${opts.objective ? `<span class="ck-goal" title="Your next goal — follow the gold marker">🎯 Next: ${esc(opts.objective)}</span>` : ''}
           <span class="ck-stat" title="Bits"><b>${state.bits}</b> bits</span>
           <span class="ck-stat" title="Memory fragments"><b>${state.memories.length}</b>/${mems} memories</span>
         </div>

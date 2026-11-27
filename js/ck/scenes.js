@@ -4,62 +4,82 @@
   const CK = (root.CK = root.CK || {});
   const Art = () => CK.Art;
   const Rules = () => CK.Rules;
-  const TRAVEL_SPEED = 320;
 
   // ------------------------------------------------------------------ map
   function map(o) {
     const engine = o.engine;
-    let state = o.state; let region; let pos; let travel = null; let drag = null;
+    let state = o.state; let region; let drag = null;
     const pan = { x: 0, y: 0 };
     const parts = [];
     const sc = { view: 'map', locked: false, facing: 1 }; let flickerT = 0;
 
     function nodePos(id) { const n = region.nodes[id]; return { x: n.x, y: n.y }; }
     function visible() { return state.explored[state.region] || []; }
+    const pipMet = () => state.learned.includes('echo');
+
+    // Movement lives in mover.js; this scene only tells it where to go and reacts to arrivals.
+    const mover = CK.Mover.create({
+      nodePos: (id) => nodePos(id),
+      onStep: (id, last) => {
+        const r = Rules().move(state, id);
+        if (!last) return;
+        Art().spawnBurst(parts, region.nodes[id].x, region.nodes[id].y, region.accent, 12, 120);
+        o.onArrive(r);
+      },
+    });
 
     sc.setState = function (s) {
       state = s; region = Rules().region(state.region);
-      pos = nodePos(state.node); travel = null; pan.x = 0; pan.y = 0;
-      engine.camera.x = pos.x; engine.camera.y = pos.y;
+      mover.place(state.node); pan.x = 0; pan.y = 0;
+      engine.camera.x = mover.pos.x; engine.camera.y = mover.pos.y;
     };
     sc.setState(state);
     sc.region = () => region;
-    sc.colonelPos = () => ({ x: pos.x, y: pos.y });
+    sc.colonelPos = () => ({ x: mover.pos.x, y: mover.pos.y });
     sc.burst = (x, y, color, n) => Art().spawnBurst(parts, x, y, color, n);
-    sc.snapTo = function (id) { pos = nodePos(id); travel = null; };
+    sc.snapTo = function (id) { mover.place(id); };
 
+    // Tap any place you can see: the Colonel walks the whole route there.
     sc.tapNode = function (id) {
-      if (sc.locked || travel || !region.nodes[id]) return;
+      if (sc.locked || mover.busy || !region.nodes[id]) return;
       if (id === state.node) { o.onArrive({ ok: true, arrived: region.nodes[id], first: false, again: true }); return; }
-      const c = Rules().canMove(state, id);
-      if (!c.ok) { o.onBlocked(c.reason, id); return; }
-      const pts = Art().tracePoints(nodePos(state.node), nodePos(id));
-      const stats = Rules().stats(state);
-      travel = { pts, len: Art().pathLen(pts), d: 0, to: id, speed: TRAVEL_SPEED / stats.travelMul };
-      sc.facing = region.nodes[id].x >= pos.x ? 1 : -1;
+      const r = Rules().path(state, id);
+      if (!r.path) { o.onBlocked(r.reason, id, r.lock); return; }
+      mover.go(r.path, Rules().stats(state).travelMul);
       pan.x = 0; pan.y = 0;
     };
 
+    function charSpot(id) { const n = region.nodes[id]; return { x: n.x + 62, y: n.y - 58 }; }
+    function standing() { // characters waiting at their stations
+      const out = [];
+      for (const id of visible()) {
+        const n = region.nodes[id];
+        if (n.kind !== 'character') continue;
+        if (n.ref === 'pip' && pipMet()) continue;
+        if (n.ref === 'liltux' && state.story && state.story.liltuxTaken) continue;
+        out.push(id);
+      }
+      return out;
+    }
     function nodeAt(p) {
-      let best = null; let bd = 52;
+      let best = null; let bd = Math.max(52, 30 / engine.view.s);
       for (const id of visible()) { const n = region.nodes[id]; const d = Math.hypot(n.x - p.x, n.y - p.y); if (d < bd) { bd = d; best = id; } }
+      if (!best) for (const id of standing()) { const c = charSpot(id); if (Math.hypot(c.x - p.x, c.y - p.y) < 40) best = id; }
       return best;
     }
 
     function hoverAt(p) {
       const near = (x, y, r) => Math.hypot(p.x - x, p.y - y) < r;
+      const pos = mover.pos;
       if (near(pos.x, pos.y - 62, 34)) return { type: 'colonel' };
-      if (near(pos.x - 46 * sc.facing, pos.y - 104, 24)) return { type: 'pip' };
-      if (region.home && visible().includes(region.home) && !(state.story && state.story.liltuxTaken)) {
-        const hn = region.nodes[region.home]; if (near(hn.x + 62, hn.y - 44, 34)) return { type: 'liltux' };
-      }
+      if (pipMet() && near(pos.x - 46 * sc.facing, pos.y - 104, 24)) return { type: 'pip' };
       const id = nodeAt(p);
       return id ? { type: 'node', id } : null;
     }
     const hover = (info, p) => { if (o.onHover) o.onHover(info, p && p.sx, p && p.sy); };
     sc.pointer = function (type, p) {
       if (type === 'leave') { hover(null); return; }
-      if (type === 'move' && p.kind === 'mouse' && !(drag && drag.moved)) hover(sc.locked || travel ? null : hoverAt(p), p);
+      if (type === 'move' && p.kind === 'mouse' && !(drag && drag.moved)) hover(sc.locked || mover.busy ? null : hoverAt(p), p);
       if (type === 'down' || (drag && drag.moved)) hover(null);
       if (type === 'cancel') { drag = null; return; }
       if (type === 'down') drag = { sx: p.sx, sy: p.sy, px: pan.x, py: pan.y, moved: false };
@@ -75,44 +95,52 @@
     sc.pinch = function (f) { engine.camera.zoom = Math.max(0.6, Math.min(1.6, engine.camera.zoom * f)); };
 
     sc.update = function (dt) {
-      if (travel) {
-        travel.d += travel.speed * dt;
-        pos = Art().pointAlong(travel.pts, travel.d / travel.len);
-        if (travel.d >= travel.len) {
-          const to = travel.to; travel = null;
-          const r = Rules().move(state, to);
-          pos = nodePos(state.node);
-          Art().spawnBurst(parts, pos.x, pos.y, region.accent, 12, 120);
-          o.onArrive(r);
-        }
-      }
+      const dir = mover.update(dt);
+      if (dir) sc.facing = dir;
       Art().stepParticles(parts, dt);
       if (state.story && state.story.flicker && !sc.locked) { state.story.flicker = false; flickerT = 1.6; if (o.onFlicker) o.onFlicker(); }
       if (flickerT > 0) flickerT -= dt;
       const cam = engine.camera; const k = Math.min(1, dt * 4);
-      cam.x += (pos.x + pan.x - cam.x) * k; cam.y += (pos.y + pan.y - cam.y) * k;
+      cam.x += (mover.pos.x + pan.x - cam.x) * k; cam.y += (mover.pos.y + pan.y - cam.y) * k;
     };
 
     sc.draw = function (ctx, t, view) {
-      const A = Art(); const reduced = engine.reducedMotion; const vis = visible();
+      const A = Art(); const R = Rules(); const reduced = engine.reducedMotion; const vis = visible(); const pos = mover.pos;
       engine.screenTransform(); A.background(ctx, view, t, region.accent);
       engine.worldTransform();
+      const seenRooms = new Set(vis.map((id) => region.nodes[id].room));
+      for (const room of region.rooms || []) A.room(ctx, room, t, region.accent, seenRooms.has(room.id), reduced);
       for (const [a, b] of region.edges) {
         if (!vis.includes(a) || !vis.includes(b)) continue;
-        const lit = Rules().isCleared(state, a) && Rules().isCleared(state, b);
-        A.trace(ctx, region.nodes[a], region.nodes[b], t, lit, region.accent, reduced);
+        A.trace(ctx, region.nodes[a], region.nodes[b], t, R.isCleared(state, a) && R.isCleared(state, b), region.accent, reduced);
       }
+      for (const d of R.doors(region)) if (vis.includes(d.a) && vis.includes(d.b)) A.door(ctx, d, R.doorLock(state, d), t, region.accent);
       const glitched = (state.story && state.story.glitched) || [];
-      for (const id of vis) A.node(ctx, region.nodes[id], t, { cleared: Rules().isCleared(state, id), current: id === state.node && !travel, accent: region.accent, reduced, glitched: glitched.includes(id) });
-      if (region.home && vis.includes(region.home) && !(state.story && state.story.liltuxTaken)) { const hn = region.nodes[region.home]; A.character(ctx, 'liltux', hn.x + 62, hn.y - 44, 0.9, t); }
+      for (const id of vis) A.node(ctx, region.nodes[id], t, { cleared: R.isCleared(state, id), current: id === state.node && !mover.busy, accent: region.accent, reduced, glitched: glitched.includes(id) });
+      for (const id of standing()) {
+        const n = region.nodes[id]; const c = charSpot(id); const ch = CK.World.CHARACTERS[n.ref];
+        A.character(ctx, n.ref, c.x, c.y, n.ref === 'liltux' ? 1.05 : n.ref === 'pip' ? 1.1 : 0.95, t);
+        A.nameTag(ctx, ch.name, c.x, c.y + 44, ch.color);
+      }
       A.colonel(ctx, pos.x, pos.y - 62, 0.9, t, { facing: sc.facing, reduced, redVisor: flickerT > 0 && (reduced || Math.floor(t * 8) % 2 === 0) });
-      A.pip(ctx, pos.x - 46 * sc.facing, pos.y - 104, 0.9, t);
+      if (pipMet()) A.pip(ctx, pos.x - 46 * sc.facing, pos.y - 104, 0.9, t);
       A.burst(ctx, parts);
       engine.screenTransform();
-      const holes = vis.map((id) => { const p = engine.toScreen(region.nodes[id].x, region.nodes[id].y); return { x: p.x - engine.canvas.getBoundingClientRect().left, y: p.y - engine.canvas.getBoundingClientRect().top, r: 170 * view.s }; });
-      const cp = { x: pos.x * view.s + view.ox, y: pos.y * view.s + view.oy };
-      holes.push({ x: cp.x, y: cp.y - 40 * view.s, r: 260 * view.s });
+      const rect = engine.canvas.getBoundingClientRect();
+      const holes = vis.map((id) => { const p = engine.toScreen(region.nodes[id].x, region.nodes[id].y); return { x: p.x - rect.left, y: p.y - rect.top, r: 190 * view.s }; });
+      holes.push({ x: pos.x * view.s + view.ox, y: pos.y * view.s + view.oy - 40 * view.s, r: 260 * view.s });
       A.fog(ctx, view, holes, t);
+      engine.worldTransform();
+      for (const room of region.rooms || []) if (seenRooms.has(room.id)) A.roomName(ctx, room, region.accent);
+      // next goal: a marker above it (visible through fog) and an arrow at the screen edge when it's off-screen
+      const goal = R.objective(state);
+      if (goal && !mover.busy) {
+        const g = region.nodes[goal];
+        engine.worldTransform(); A.marker(ctx, g.x, g.y - 44, t, reduced);
+        engine.screenTransform();
+        const sx = g.x * view.s + view.ox; const sy = g.y * view.s + view.oy;
+        if (sx < 30 || sy < 70 || sx > view.w - 30 || sy > view.h - 110) A.edgeArrow(ctx, view, sx, sy, 'Next: ' + g.label);
+      }
     };
 
     if (CK.Engine.debug) {

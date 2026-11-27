@@ -85,6 +85,15 @@ async function step(pg, opts) {
   return true;
 }
 
+async function walkTo(pg, id) {
+  for (let i = 0; i < 30; i++) {
+    const st = await pg.evaluate(() => ({ n: CK._test.main.state.node, b: CK._test.main.busy() }));
+    if (st.n === id) return;
+    if (!st.b) await pg.evaluate((h) => CK._test.mapScene.tapNode(h), id);
+    await wait(400); await settle(pg);
+  }
+  throw new Error('walkTo ' + id + ' failed');
+}
 const tests = {
   async 'full chapter'(b) {
     const pg = await newPage(b);
@@ -271,6 +280,33 @@ const tests = {
     const untitled = await pg.$$eval('#ck-root button', (bs) => bs.filter((x) => x.offsetParent && !(x.title || '').trim()).map((x) => x.outerHTML.slice(0, 70)));
     assert.deepEqual(untitled, []);
   },
+  async 'rooms: auto-walk, locked doors explain themselves, goal shown'(b) {
+    const pg = await newPage(b);
+    await addPlayer(pg); await openKernel(pg); await settle(pg);
+    assert.match(await pg.textContent('.ck-goal'), /Talk to Pip/);
+    await step(pg); // meet Pip
+    await walkTo(pg, 'f3'); // then Bios
+    assert.equal(await pg.evaluate(() => CK._test.main.state.node), 'f3');
+    assert.match(await pg.textContent('.ck-goal'), /Fix the RAM Bank/);
+    await wait(700);
+    const bios = await pg.evaluate(() => { const n = CK.World.REGIONS[0].nodes.f3; return CK._test.engineToScreen(n.x + 62, n.y - 58); });
+    await pg.mouse.move(bios.x, bios.y); await wait(200);
+    assert.match(await pg.textContent('.ck-tip'), /Bios/);
+    await walkTo(pg, 'f0');
+    for (let i = 0; i < 40 && !(await pg.$('.ck-choice')); i++) {
+      const st = await pg.evaluate(() => ({ n: CK._test.main.state.node, b: CK._test.main.busy() }));
+      if (!st.b && st.n !== 'f5') await pg.evaluate(() => CK._test.mapScene.tapNode('f5'));
+      await wait(250);
+    }
+    await pg.click('.ck-choice button >> text=Step back');
+    await wait(300); await settle(pg);
+    assert.equal(await pg.evaluate(() => CK._test.main.state.node), 'f3');
+    await pg.evaluate(() => CK._test.mapScene.tapNode('f9'));
+    await pg.waitForFunction(() => /locked/i.test(document.querySelector('.ck-toasts').textContent), null, { timeout: 3000 });
+    assert.match(await pg.textContent('.ck-toasts'), /locked.*RAM Bank/i);
+    assert.equal(await pg.evaluate(() => CK._test.main.state.node), 'f3');
+    assert.deepEqual(pg.errs, []);
+  },
 };
 
 (async () => {
@@ -279,7 +315,7 @@ const tests = {
   const only = process.argv[2];
   for (const [name, fn] of Object.entries(tests)) {
     if (only && !name.includes(only)) continue;
-    try { await fn(b); console.log('ok -', name); } catch (e) { fail++; console.log('not ok -', name, '\n   ', e.message.split('\n')[0]); }
+    try { await fn(b); console.log('ok -', name); } catch (e) { fail++; console.log('not ok -', name, '\n   ', e.message.split('\n').slice(0, 6).join(' | ')); }
   }
   await b.close();
   console.log(fail ? `FAIL ${fail}` : 'PASS');

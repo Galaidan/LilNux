@@ -176,7 +176,8 @@ test('enterRegion sets start, checkpoint and reveals', () => {
   Rules.enterRegion(s, 'grub');
   assert.equal(s.region, 'grub'); assert.equal(s.node, 'g0'); assert.equal(s.prev, null);
   assert.deepEqual(s.checkpoint, { region: 'grub', node: 'g0' });
-  assert.deepEqual(s.explored.grub.sort(), ['g0', 'g1']);
+  assert.ok(['g0', 'g1', 'g2', 'g4'].every((id) => s.explored.grub.includes(id)), 'the whole first room is revealed');
+  assert.ok(!s.explored.grub.includes('g14'), 'hidden caches stay hidden');
 });
 
 test('move reports first visits and clears non-blocking nodes', () => {
@@ -216,4 +217,45 @@ test('sanitize moves an unknown node to the checkpoint and an unknown region to 
   Rules.sanitize(b);
   assert.deepEqual([b.region, b.node, b.bits], ['firmware', 'f0', 50]);
   assert.ok(b.explored.firmware.includes('f1'));
+});
+
+test('entering a room reveals the whole room (not hidden caches)', () => {
+  const s = fresh(); Rules.reveal(s, 'f0'); walk(s, 'f1', 'f3');
+  for (const id of ['f3', 'f4']) assert.ok(s.explored.firmware.includes(id), id);
+  assert.ok(!s.explored.firmware.includes('f14'));
+  walk(s, 'f5');
+  for (const id of ['f6', 'f7', 'f8']) assert.ok(s.explored.firmware.includes(id), 'Hardware Check room: ' + id);
+});
+
+test('doors sit between rooms and say what locks them', () => {
+  const reg = Rules.region('firmware');
+  const doors = Rules.doors(reg);
+  const d = doors.find((x) => (x.a === 'f5' && x.b === 'f9') || (x.a === 'f9' && x.b === 'f5'));
+  assert.ok(d, 'door between Hardware Check and Power Bus');
+  assert.ok(d.x > 1050 && d.x < 1090 && d.y === 560, JSON.stringify(d));
+  const s = fresh();
+  assert.equal(Rules.doorLock(s, d), 'f5', 'locked until the RAM Bank is fixed');
+  Rules.clear(s, 'f5');
+  assert.equal(Rules.doorLock(s, d), null);
+  assert.ok(!doors.some((x) => x.a === 'f0' || x.b === 'f0'), 'no door inside a room');
+});
+
+test('auto-path walks through known, cleared places', () => {
+  const s = fresh(); Rules.reveal(s, 'f0'); walk(s, 'f1', 'f3', 'f1', 'f0');
+  assert.deepEqual(Rules.path(s, 'f3').path, ['f1', 'f3']);
+  assert.deepEqual(Rules.path(s, 'f5').path, ['f1', 'f3', 'f5'], 'last step may be a new place');
+  walk(s, 'f1', 'f3', 'f5');
+  const r = Rules.path(s, 'f9');
+  assert.equal(r.path, undefined); assert.equal(r.reason, 'blocked'); assert.equal(r.lock, 'f5');
+  assert.deepEqual(Rules.path(s, 'f0').path, ['f3', 'f1', 'f0'], 'can always go back');
+  assert.equal(Rules.path(s, 'f12').reason, 'fog');
+});
+
+test('objective is the first unfinished goal', () => {
+  const s = fresh();
+  assert.equal(Rules.objective(s), 'f1');
+  Rules.reveal(s, 'f0'); walk(s, 'f1');
+  assert.equal(Rules.objective(s), 'f3');
+  walk(s, 'f3', 'f5'); Rules.clear(s, 'f5');
+  assert.equal(Rules.objective(s), 'f9');
 });

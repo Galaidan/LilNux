@@ -20,10 +20,10 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 - GitHub: `Galaidan/LilNux`. Default branch `main` = live site (GitHub Pages, once the repo is public and
   Pages is set to `main` / root).
 - Everything is merged into `main` (latest: message log, Q/E movement in fights, no forced dialogue on revisits,
-  map colour legend, hover info on map nodes/characters and titles on every button). "Push it" from the user
+  map colour legend, hover info, and the room-based map with doors, auto-walk and a next-goal marker). "Push it" from the user
   means merge into `main` and push.
 - Leftover remote branches already merged (safe to delete on github.com — this sandbox can't delete
-  remote branches): `colonel-kernel-design`, `ck-story-update`, `ck-ux-tweaks`.
+  remote branches): `colonel-kernel-design`, `ck-story-update`, `ck-ux-tweaks`, `ck-rooms`.
 - Commit identity used: `Galaidan <Galaidan@users.noreply.github.com>`. Don't put personal details in commits.
 
 ## Design documents (the source of truth)
@@ -46,6 +46,17 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
   Each rest → at most one secret NullNux event (`js/ck/story.js`); **never** loses progress.
 - Planned: Chapters 2–8 (Kernel Core, systemd, Filesystem, Bash, Packages, Network…), then the NullNux finale
   (phase 3: player types real commands from memory, clickable "adds" drop hint fragments).
+
+## Map structure (Adventure)
+
+- Each region has **rooms** (rectangles in `world.js`), every node has a `room`, and every path is a straight line.
+- **Doors** are where a path crosses between rooms (`Rules.doors`); a door is locked while the unfinished
+  problem/circuit/boss on its near side blocks it (`Rules.doorLock`), and the game says why.
+- Entering a room reveals the whole room (`Rules.revealRoom`). Tapping any visible place auto-walks the route
+  (`Rules.path`). `goals` per region drive the gold marker, the edge arrow and the "🎯 Next:" HUD pill (`Rules.objective`).
+- Characters stand at their stations with name tags (Pip waits at Power Rail until met, then follows).
+- **Planned:** the user may later want drag/WASD free walking inside rooms. Rooms were built for this: replace
+  `mover.js`, make fog/position work per room, and convert saved node positions to the nearest node.
 
 ## Hard rules
 
@@ -71,13 +82,14 @@ in the top bar). Both share players, XP, ranks and badges (`localStorage` key `l
 | `js/ck/puzzle.js` | circuit-rotation puzzle logic |
 | `js/ck/combat.js` | skillshot fight simulation (no drawing); `setMove` for Q/E |
 | `js/ck/engine.js` | canvas loop, sizing (DPR ≤ 2), camera, pointer/keys, pinch |
+| `js/ck/mover.js` | **all map movement** (tap-to-walk along a route). Swap this file to add drag/WASD free walking later |
 | `js/ck/art.js` | all drawing ("Neon Circuit" look), incl. Colonel, Pip, Lil Tux, creatures, fog |
 | `js/ck/scenes.js` | map, fight and puzzle scenes |
 | `js/ck/ui.js` | HUD, skill bar, Pip panel, dialogue, learning terminal, message log, legend, hover tooltip |
 | `js/ck/main.js` | chapter flow, rest/wake, bridge to `game.js` (`CK.open` / `CK.close`) |
 
 When adding files: add them to `index.html`, `tests/e2e/ck-harness.html` if tests need them, and the
-`FILES` list in `sw.js`; bump `VERSION` in `sw.js` whenever shipped files change (currently `lilnux-v6`).
+`FILES` list in `sw.js`; bump `VERSION` in `sw.js` whenever shipped files change (currently `lilnux-v7`).
 
 ## Tests (run one at a time — the sandbox has limited memory)
 
@@ -91,7 +103,7 @@ node tests/e2e/lilnux-regression.e2e.js
 ```
 
 Browser tests use the pre-installed Playwright + Chromium. Debug hooks (`CK._test`) exist only with `?ckdebug`
-in the URL. Current status on `main`: 76 unit tests + all e2e suites pass.
+in the URL. Current status on `main`: 83 unit tests + all e2e suites pass.
 
 ## Deferred polish (from the code review — user hasn't asked for these yet)
 

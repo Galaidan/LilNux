@@ -185,3 +185,10 @@ body.ck-open { overflow: hidden; }
   background: rgba(10, 14, 38, .96); border: 1px solid var(--c-cyan); color: var(--c-ink); font-size: 13px; line-height: 1.4; box-shadow: 0 0 18px rgba(56, 242, 255, .25); }
 .ck-tip b { color: var(--c-cyan); }
 .ck-tip small { color: var(--c-dim); }
+
+.ck-goal { display: inline-flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 999px; background: rgba(40, 30, 6, .85); border: 1px solid #ffd166; color: #ffd166; font-size: 12.5px; font-weight: 800; box-shadow: 0 0 14px rgba(255, 209, 102, .25); }
+.ck-legend i.goal { border: 0; width: 22px; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 13px solid #ffd166; background: none; border-radius: 0; }
+.ck-legend i.door { width: 8px; height: 18px; margin: 0 7px; border-color: #ffb347; }
+@media (max-width: 560px) { .ck-goal { height: 30px; font-size: 11px; padding: 0 9px; } }
+
+@media (max-width: 560px) { .ck-hud .ck-stat { display: none; } }

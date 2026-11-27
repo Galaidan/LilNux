@@ -137,3 +137,30 @@ test('GRUB Gate ends at Home, where Lil Tux lives', () => {
   assert.match(lt.lines.join(' '), /rest/i); assert.match(lt.lines.join(' '), /systemctl suspend/);
   assert.ok(!Object.values(W.SKILLS).some((s) => s.teacher === 'liltux'), 'resting is not a combat skill');
 });
+
+test('every region is built from rooms; every node sits inside its room', () => {
+  for (const r of W.REGIONS) {
+    assert.ok(Array.isArray(r.rooms) && r.rooms.length >= 4, r.id);
+    for (const [id, n] of Object.entries(r.nodes)) {
+      const room = r.rooms.find((x) => x.id === n.room);
+      assert.ok(room, `${id} has a room`);
+      assert.ok(n.x > room.x && n.x < room.x + room.w && n.y > room.y && n.y < room.y + room.h, `${id} inside ${room.id}`);
+    }
+    for (const a of r.rooms) for (const b of r.rooms) if (a !== b) {
+      const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+      assert.ok(!overlap, `${a.id} overlaps ${b.id}`);
+    }
+  }
+});
+
+test('paths are straight lines (no shared elbows)', () => {
+  for (const r of W.REGIONS) for (const [a, b] of r.edges) {
+    const A = r.nodes[a]; const B = r.nodes[b];
+    assert.ok(A.x === B.x || A.y === B.y, `${a}-${b} is straight`);
+  }
+});
+
+test('goals list the main route in order', () => {
+  assert.deepEqual(W.REGIONS[0].goals, ['f1', 'f3', 'f5', 'f9', 'f12', 'f13']);
+  assert.deepEqual(W.REGIONS[1].goals, ['g1', 'g3', 'g8', 'g12', 'g13']);
+});

@@ -46,6 +46,7 @@
     const xp = (n) => { if (n) h.addXP(n); };
     const say = (who, lines) => ui.say(who, lines);
     const sound = (k) => { if (h.sound && h.sound[k] && (!h.soundOn || h.soundOn())) h.sound[k](); };
+    const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     let lock = 0; const m = { learning: null, learnExample: null, pendingProblem: null }; let remindPending = false; let reminderOpen = false; let hiddenAt = 0;
     let orientationTipShown = false;
 
@@ -68,7 +69,6 @@
       speak: (t) => { if (h.speak) h.speak(t); },
     });
 
-    const escH = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     function describe(hv) {
       if (!hv) return null;
       if (hv.type === 'colonel') return '<b>Colonel Kernel</b> — that’s you. Click a connected node to move.';
@@ -84,11 +84,12 @@
       else if (n.kind === 'memory') what = done ? '✓ Memory recovered' : 'Memory fragment — a lost log line';
       else if (n.kind === 'boss') { const c = W.CREATURES[n.ref.creature]; what = done ? `✓ ${escH(c.name)} defeated` : `☠ Boss: ${escH(c.name)}`; }
       else if (n.kind === 'exit') what = 'The way onward to the next region';
-      const where = hv.id === state.node ? 'You are here' : R.neighbors(reg, state.node).includes(hv.id) ? 'Click to go here' : 'Not directly connected — follow the lines';
+      const route = hv.id === state.node ? null : R.path(state, hv.id);
+      const where = hv.id === state.node ? 'You are here' : route.path ? 'Click to walk here' : route.lock ? `🔒 Locked — ${lockText(route.lock)}` : 'Can’t get there yet';
       const glitch = state.story.glitched.includes(hv.id) ? '<br>⚠ Something is wrong here…' : '';
       return `<b>${escH(n.label)}</b><br>${what}${glitch}<br><small>${where}</small>`;
     }
-    const map = CK.Scenes.map({ engine, state, onArrive: (r) => { ui.tip(null); arrive(r); }, onBlocked: (why, id) => blocked(why, id), onFlicker: () => save(),
+    const map = CK.Scenes.map({ engine, state, onArrive: (r) => { ui.tip(null); arrive(r); }, onBlocked: (why, id, lockId) => blocked(why, id, lockId), onFlicker: () => save(),
       onHover: (hv, x, y) => ui.tip(describe(hv), x, y) });
     engineRef = engine; cur = { engine, ui, host, map };
     engine.setScene(map); engine.start();
@@ -100,7 +101,7 @@
       return !!state.story.restUnlocked && engine.scene === map && !map.locked && !ui.busy() && (n.kind === 'start' || n.kind === 'character') && !state.story.glitched.includes(state.node);
     }
     function refresh() {
-      ui.hud(state, { canRest: canRest() }); if (engine.scene === map) ui.skillBar(state, 'map');
+      ui.hud(state, { canRest: canRest(), objective: objectiveText() }); if (engine.scene === map) ui.skillBar(state, 'map');
       if (remindPending && !lock && engine.scene === map && !ui.busy()) { remindPending = false; breakReminder(); }
     }
 
@@ -174,9 +175,28 @@
         else if (node.kind === 'exit') await exit();
       });
     }
-    function blocked(why) {
-      const msg = { fog: 'Pip: Too foggy. Even I can’t see that far — explore next to it first (or scan with <code>ls</code>).', 'not-adjacent': 'Pip: No direct trace there. We follow the circuit lines, Colonel, not vibes.', blocked: 'Pip: We can’t just walk past a broken thing and pretend it’s fine. Tap it again to deal with it, or step back.' }[why];
-      if (msg) ui.toast(msg);
+    function lockText(id) {
+      const n = R.region(state.region).nodes[id];
+      if (!n) return 'something is in the way';
+      if (n.kind === 'problem') return `fix ⚠ ${escH(n.label)} first`;
+      if (n.kind === 'circuit') return `repair the ${escH(n.label)} circuit first`;
+      if (n.kind === 'boss') return `defeat the boss at ${escH(n.label)} first`;
+      return `deal with ${escH(n.label)} first`;
+    }
+    function blocked(why, id, lock) {
+      if (why === 'fog') return ui.toast('Pip: Too foggy. Even I can’t see that far — explore closer first (or scan with <code>ls</code>).');
+      if (lock && lock === state.node) return ui.toast('Pip: We can’t just walk past a broken thing and pretend it’s fine. Tap it to deal with it, or step back the way we came.');
+      ui.toast(`🔒 Pip: That way’s locked — ${lock ? lockText(lock) : 'we can’t get there yet'}.`);
+    }
+    function objectiveText() {
+      const id = R.objective(state); if (!id) return '';
+      const n = R.region(state.region).nodes[id];
+      if (n.kind === 'character') return `Talk to ${W.CHARACTERS[n.ref].name} at ${n.label}`;
+      if (n.kind === 'problem') return `Fix the ${n.label}`;
+      if (n.kind === 'circuit') return `Repair the ${n.label}`;
+      if (n.kind === 'boss') return `Defeat the ${W.CREATURES[n.ref.creature].name}`;
+      if (n.kind === 'exit') return `Head through the gate: ${n.label}`;
+      return `Go to ${n.label}`;
     }
 
     async function meet(who) {

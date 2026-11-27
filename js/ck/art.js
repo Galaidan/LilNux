@@ -78,6 +78,7 @@
       }
     } else {
       ctx.setLineDash([10, 9]); ctx.strokeStyle = 'rgba(56,242,255,0.32)'; ctx.lineWidth = 2; strokePts(ctx, pts); ctx.setLineDash([]);
+      if (!reduced) { const p = pointAlong(pts, (t * 0.18 + (a.x + b.y) * 0.002) % 1); ctx.fillStyle = 'rgba(160,240,255,0.45)'; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, TAU); ctx.fill(); }
     }
   }
 
@@ -134,6 +135,111 @@
       for (let i = 0; i < 4; i++) { const gy = y + ((t * 60 + i * 13) % h); ctx.beginPath(); ctx.moveTo(x - 4, gy); ctx.lineTo(x + w + 4, gy); ctx.stroke(); }
       if (!info.reduced) ctx.restore();
     }
+  }
+
+  // ---------------------------------------------------------------- rooms, props, doors, markers
+  const PROP_CACHE = {};
+  const SILK = { power: ['PWR_OK', 'VRM', 'C12', '+12V'], vault: ['BIOS v1.44', 'SPI', 'U7', 'CMOS'], check: ['DDR5', 'PCIe x16', 'U12', 'R7'],
+    bus: ['VCORE', 'L3', 'C40'], boot: ['ESP', 'GPT', 'MBR'], menu: ['grub.cfg', 'EFI'], entries: ['vmlinuz', 'menuentry'], initramfs: ['/init', 'cpio'],
+    loader: ['bzImage', 'cmdline'], home: ['~', '/home'] };
+  function propsFor(room) {
+    if (PROP_CACHE[room.id]) return PROP_CACHE[room.id];
+    const r = (CK.rng || (() => Math.random))(room.id.length * 97 + room.w);
+    const items = [];
+    const spot = () => ({ x: room.x + 20 + r() * (room.w - 40), y: room.y + 46 + r() * (room.h - 66) });
+    for (let i = 0; i < 4; i++) items.push(Object.assign({ k: 'chip', n: 'U' + Math.floor(r() * 40 + 1) }, spot()));
+    for (let i = 0; i < 6; i++) items.push(Object.assign({ k: 'cap' }, spot()));
+    for (let i = 0; i < 5; i++) items.push(Object.assign({ k: 'res', rot: r() > 0.5 }, spot()));
+    for (let i = 0; i < 3; i++) items.push(Object.assign({ k: 'vias' }, spot()));
+    (SILK[room.id] || []).forEach((txt) => items.push(Object.assign({ k: 'silk', txt }, spot())));
+    return (PROP_CACHE[room.id] = items);
+  }
+  function room(ctx, rm, t, accent, seen, reduced) {
+    rr(ctx, rm.x, rm.y, rm.w, rm.h, 26);
+    ctx.fillStyle = seen ? 'rgba(20,30,70,0.42)' : 'rgba(14,20,48,0.3)'; ctx.fill();
+    ctx.setLineDash(seen ? [] : [8, 8]); ctx.strokeStyle = withAlpha(accent, seen ? 0.45 : 0.18); ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+    if (seen) {
+      for (const p of propsFor(rm)) {
+        ctx.globalAlpha = 0.32;
+        if (p.k === 'chip') {
+          ctx.fillStyle = '#0d1430'; rr(ctx, p.x - 20, p.y - 13, 40, 26, 4); ctx.fill(); ctx.strokeStyle = 'rgba(140,170,230,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+          ctx.fillStyle = 'rgba(140,170,230,0.7)'; for (let i = -2; i <= 2; i++) { ctx.fillRect(p.x + i * 7 - 1, p.y - 17, 2, 4); ctx.fillRect(p.x + i * 7 - 1, p.y + 13, 2, 4); }
+          ctx.font = '700 8px "Adwaita Mono", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.n, p.x, p.y);
+        } else if (p.k === 'cap') {
+          ctx.fillStyle = '#1b2a55'; ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(140,170,230,0.7)'; ctx.lineWidth = 1; ctx.stroke();
+          ctx.fillStyle = 'rgba(140,170,230,0.6)'; ctx.fillRect(p.x - 8, p.y - 1.5, 16, 3);
+        } else if (p.k === 'res') {
+          ctx.save(); ctx.translate(p.x, p.y); if (p.rot) ctx.rotate(Math.PI / 2);
+          ctx.fillStyle = '#3a2f1c'; rr(ctx, -9, -3, 18, 6, 2); ctx.fill(); ctx.fillStyle = withAlpha(C.amber, 0.7); ctx.fillRect(-4, -3, 2, 6); ctx.fillRect(2, -3, 2, 6); ctx.restore();
+        } else if (p.k === 'vias') {
+          ctx.fillStyle = 'rgba(140,170,230,0.6)'; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { ctx.beginPath(); ctx.arc(p.x + i * 7, p.y + j * 7, 1.6, 0, TAU); ctx.fill(); }
+        } else if (p.k === 'silk') {
+          ctx.globalAlpha = 0.4; ctx.fillStyle = '#e8f1ff'; ctx.font = '700 10px "Adwaita Mono", monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(p.txt, p.x, p.y);
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (!reduced) { // a couple of tiny data sparks drifting around the room
+        for (let i = 0; i < 3; i++) {
+          const k = (t * 0.07 + i * 0.33 + rm.x * 0.001) % 1;
+          const sx = rm.x + 20 + k * (rm.w - 40); const sy = rm.y + rm.h * (0.25 + 0.5 * ((i * 0.37 + rm.y * 0.002) % 1)) + Math.sin(t * 2 + i) * 10;
+          ctx.fillStyle = withAlpha(accent, 0.5); glow(ctx, accent, 8); ctx.beginPath(); ctx.arc(sx, sy, 1.8, 0, TAU); ctx.fill(); noGlow(ctx);
+        }
+      }
+    }
+  }
+  function roomName(ctx, rm, accent) { // drawn above the fog so you always know which room is which
+    ctx.font = '900 15px "Adwaita Sans", Cantarell, system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const txt = rm.name.toUpperCase(); const w = ctx.measureText(txt).width + 16;
+    rr(ctx, rm.x + 10, rm.y + 10, w, 24, 8); ctx.fillStyle = 'rgba(4,8,22,0.7)'; ctx.fill();
+    ctx.fillStyle = withAlpha(accent, 0.95); ctx.fillText(txt, rm.x + 18, rm.y + 15);
+  }
+  function door(ctx, d, lock, t, accent) {
+    const horiz = d.from !== d.to && Math.abs(d.y - Math.round(d.y)) < 1e-9; // posts sit across the path
+    const vertical = d.a && d.b; void horiz; void vertical;
+    const locked = !!lock; const color = locked ? C.coral : accent;
+    ctx.save(); ctx.translate(d.x, d.y);
+    glow(ctx, color, locked ? 8 : 14);
+    ctx.fillStyle = '#0b1030'; ctx.strokeStyle = color; ctx.lineWidth = 2;
+    rr(ctx, -7, -30, 14, 16, 3); ctx.fill(); ctx.stroke(); rr(ctx, -7, 14, 14, 16, 3); ctx.fill(); ctx.stroke();
+    noGlow(ctx);
+    if (locked) {
+      ctx.fillStyle = '#1a0a14'; ctx.strokeStyle = C.coral; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, -4, 5, Math.PI, 0); ctx.stroke(); rr(ctx, -7, -4, 14, 11, 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C.coral; ctx.fillRect(-1, 0, 2, 4);
+    } else {
+      ctx.strokeStyle = withAlpha(accent, 0.6 + 0.3 * Math.sin(t * 3)); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(0, 14); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function nameTag(ctx, text, x, y, color) {
+    ctx.font = '800 11px "Adwaita Sans", Cantarell, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 14;
+    rr(ctx, x - w / 2, y - 9, w, 18, 9); ctx.fillStyle = 'rgba(4,8,22,0.85)'; ctx.fill(); ctx.strokeStyle = withAlpha(color, 0.8); ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = color; ctx.fillText(text, x, y + 0.5);
+  }
+  function marker(ctx, x, y, t, reduced) {
+    const b = reduced ? 0 : Math.sin(t * 4) * 6;
+    glow(ctx, C.gold, 16); ctx.fillStyle = C.gold;
+    ctx.beginPath(); ctx.moveTo(x - 12, y - 22 + b); ctx.lineTo(x + 12, y - 22 + b); ctx.lineTo(x, y - 6 + b); ctx.closePath(); ctx.fill(); noGlow(ctx);
+    if (!reduced) { const k = (t * 0.9) % 1; ctx.strokeStyle = withAlpha(C.gold, 0.7 * (1 - k)); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y + 44, 30 + k * 26, 0, TAU); ctx.stroke(); }
+  }
+  function edgeArrow(ctx, view, sx, sy, label) {
+    const cx = view.w / 2; const cy = view.h / 2; const ang = Math.atan2(sy - cy, sx - cx);
+    const mx = 46; const top = 84; const bottom = 120;
+    let ax = cx + Math.cos(ang) * view.w; let ay = cy + Math.sin(ang) * view.h;
+    const kx = Math.cos(ang) ? ((Math.cos(ang) > 0 ? view.w - mx : mx) - cx) / Math.cos(ang) : Infinity;
+    const ky = Math.sin(ang) ? ((Math.sin(ang) > 0 ? view.h - bottom : top) - cy) / Math.sin(ang) : Infinity;
+    const k = Math.min(Math.abs(kx), Math.abs(ky)); ax = cx + Math.cos(ang) * k; ay = cy + Math.sin(ang) * k;
+    ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
+    glow(ctx, C.gold, 14); ctx.fillStyle = C.gold; ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-8, -12); ctx.lineTo(-3, 0); ctx.lineTo(-8, 12); ctx.closePath(); ctx.fill(); noGlow(ctx);
+    ctx.restore();
+    ctx.font = '800 12px "Adwaita Sans", Cantarell, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    ctx.textAlign = Math.cos(ang) > 0.3 ? 'right' : Math.cos(ang) < -0.3 ? 'left' : 'center';
+    const lx = ax - Math.cos(ang) * 26; const ly = ay - Math.sin(ang) * 26;
+    const w = ctx.measureText(label).width + 14; const bx = ctx.textAlign === 'right' ? lx - w + 7 : ctx.textAlign === 'left' ? lx - 7 : lx - w / 2;
+    rr(ctx, bx, ly - 10, w, 20, 10); ctx.fillStyle = 'rgba(4,8,22,0.85)'; ctx.fill(); ctx.strokeStyle = withAlpha(C.gold, 0.8); ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = C.gold; ctx.fillText(label, lx, ly + 0.5);
   }
 
   // ---------------------------------------------------------------- fog
@@ -368,5 +474,5 @@
     for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; p.life -= dt; if (p.life <= 0) parts.splice(i, 1); }
   }
 
-  CK.Art = { KIND, liltux, C, rr, glow, noGlow, withAlpha, background, trace, tracePoints, pointAlong, pathLen, node, fog, colonel, pip, character, creature, burst, spawnBurst, stepParticles };
+  CK.Art = { room, roomName, door, nameTag, marker, edgeArrow, KIND, liltux, C, rr, glow, noGlow, withAlpha, background, trace, tracePoints, pointAlong, pathLen, node, fog, colonel, pip, character, creature, burst, spawnBurst, stepParticles };
 })(typeof window !== 'undefined' ? window : globalThis);

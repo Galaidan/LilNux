@@ -54,6 +54,84 @@
     return added;
   }
 
+  // Reveal every (non-hidden) node in a room — entering a room lets you see all of it.
+  function revealRoom(state, roomId) {
+    const reg = cur(state); const ex = explored(state); const added = [];
+    if (!roomId) return added;
+    for (const id of Object.keys(reg.nodes)) {
+      const nd = reg.nodes[id];
+      if (nd.room === roomId && (!nd.hidden || ex.includes(id)) && !ex.includes(id)) { ex.push(id); added.push(id); }
+    }
+    return added;
+  }
+
+  // Doors: where a path crosses from one room into another (the middle of the gap between the rooms).
+  function doors(reg) {
+    const out = [];
+    for (const [a, b] of reg.edges) {
+      const A = reg.nodes[a]; const B = reg.nodes[b];
+      if (!A.room || !B.room || A.room === B.room) continue;
+      const ra = reg.rooms.find((r) => r.id === A.room); const rb = reg.rooms.find((r) => r.id === B.room);
+      let x = (A.x + B.x) / 2; let y = (A.y + B.y) / 2;
+      if (A.y === B.y) { const [l, r] = A.x < B.x ? [ra, rb] : [rb, ra]; x = (l.x + l.w + r.x) / 2; }
+      else if (A.x === B.x) { const [t, bo] = A.y < B.y ? [ra, rb] : [rb, ra]; y = (t.y + t.h + bo.y) / 2; }
+      out.push({ a, b, x, y, from: A.room, to: B.room });
+    }
+    return out;
+  }
+  function distFromStart(reg) {
+    const d = { [reg.start]: 0 }; const q = [reg.start];
+    while (q.length) { const n = q.shift(); for (const nb of neighbors(reg, n)) if (!(nb in d)) { d[nb] = d[n] + 1; q.push(nb); } }
+    return d;
+  }
+  // A door is locked while the node on its near side (closer to the start) is an unfinished problem/circuit/boss.
+  function doorLock(state, door) {
+    const reg = cur(state); const d = distFromStart(reg);
+    const near = (d[door.a] || 0) <= (d[door.b] || 0) ? door.a : door.b;
+    return BLOCKING[reg.nodes[near].kind] && !isCleared(state, near) ? near : null;
+  }
+
+  // Auto-path: route through visible places. In-between stops must be visited/cleared; the last stop may be new.
+  function path(state, to) {
+    const reg = cur(state); const ex = explored(state);
+    if (!reg.nodes[to] || !ex.includes(to)) return { reason: 'fog' };
+    if (to === state.node) return { path: [] };
+    const here = reg.nodes[state.node];
+    const stuck = BLOCKING[here.kind] && !isCleared(state, state.node);
+    const prev = { [state.node]: null }; const q = [state.node]; let lock = null;
+    while (q.length) {
+      const n = q.shift();
+      for (const nb of neighbors(reg, n)) {
+        if (nb in prev || !ex.includes(nb)) continue;
+        if (n === state.node && stuck && nb !== state.prev) { lock = lock || state.node; continue; }
+        if (n !== state.node && BLOCKING[reg.nodes[n].kind] && !isCleared(state, n)) continue;
+        if (n !== state.node && !isCleared(state, n)) continue;
+        prev[nb] = n;
+        if (nb === to) { const out = []; let c = to; while (c !== state.node) { out.unshift(c); c = prev[c]; } return { path: out }; }
+        q.push(nb);
+      }
+    }
+    // explain why: the nearest unfinished blocking node standing in the way
+    if (!lock) {
+      const seen = new Set([state.node]); const q2 = [state.node];
+      while (q2.length && !lock) {
+        const n = q2.shift();
+        for (const nb of neighbors(reg, n)) if (!seen.has(nb) && ex.includes(nb)) { seen.add(nb); if (BLOCKING[reg.nodes[nb].kind] && !isCleared(state, nb)) { lock = nb; break; } q2.push(nb); }
+      }
+    }
+    return { reason: 'blocked', lock };
+  }
+
+  function objective(state) {
+    const reg = cur(state);
+    for (const id of reg.goals || []) {
+      const k = reg.nodes[id].kind;
+      if (k === 'exit' || (reg.home === id)) { if (!(k === 'character' && isCleared(state, id))) return id; continue; }
+      if (!isCleared(state, id)) return id;
+    }
+    return null;
+  }
+
   function canMove(state, to) {
     const reg = cur(state);
     if (!neighbors(reg, state.node).includes(to)) return { ok: false, reason: 'not-adjacent' };
@@ -69,7 +147,7 @@
     const c = canMove(state, to);
     if (!c.ok) return c;
     state.prev = state.node; state.node = to;
-    reveal(state, to);
+    reveal(state, to); revealRoom(state, cur(state).nodes[to].room);
     const node = cur(state).nodes[to];
     const first = !isCleared(state, to);
     if (!BLOCKING[node.kind]) clear(state, to);
@@ -198,7 +276,7 @@
     if (!nodeOk(state.region, state.node)) { state.region = state.checkpoint.region; state.node = state.checkpoint.node; state.prev = null; }
     if (state.prev && !region(state.region).nodes[state.prev]) state.prev = null;
     if (!state.explored[state.region]) state.explored[state.region] = [];
-    reveal(state, state.node);
+    reveal(state, state.node); revealRoom(state, region(state.region).nodes[state.node].room);
     return state;
   }
 
@@ -206,8 +284,8 @@
     const reg = region(regionId);
     state.region = regionId; state.node = reg.start; state.prev = null;
     state.checkpoint = { region: regionId, node: reg.start };
-    reveal(state, reg.start);
+    reveal(state, reg.start); revealRoom(state, reg.nodes[reg.start].room);
   }
 
-  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, quickFix, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, BLOCKING };
+  CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, quickFix, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, revealRoom, doors, doorLock, path, objective, BLOCKING };
 })(typeof window !== 'undefined' ? window : globalThis);
