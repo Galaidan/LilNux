@@ -26,7 +26,7 @@ in the top bar). Both share players, XP, ranks, badges and the sound switch (`lo
 - Local feature branches `ck-action`, `ck-chapter1`, `ck-polish`, `ck-hud-buttons`, `ck-craft-floors`,
   `ck-colonel-look`, `cyberpunk-start`, `handoff-2026-11-26` are all merged into `main` (safe to delete). Old remote branches `colonel-kernel-design`,
   `ck-story-update`, `ck-ux-tweaks` are merged too (delete on github.com if wanted).
-- Playtest zips from each round sit in `C:\ClaudeBro\` (`LilNux-*.zip`); they're throwaway.
+- Playtest zips from each round sit in `C:\ClaudeBro\LilNux-playtests\` (`LilNux-*.zip`); they're throwaway.
 - `C:\ClaudeBro\HANDOFF.md` is an old copy of this file and `C:\ClaudeBro\LilNux-Colonel-Kernel\` a stale unzip:
   ignore both. Work only in `C:\ClaudeBro\LilNux`.
 - Commit identity (repo-local): `Galaidan <Galaidan@users.noreply.github.com>`. Never put personal details in
@@ -171,7 +171,7 @@ change** (currently `lilnux-v14`; the wiring test asserts the number, so update 
   commit → build a playtest zip → the user playtests or says **"push it"** → `git merge --no-ff` into `main`,
   push, then confirm the live site serves the new cache (`curl https://galaidan.github.io/LilNux/sw.js`, usually
   live within a minute). Never push without the user's OK.
-- **Playtest zip:** `git archive --format=zip -o /c/ClaudeBro/LilNux-<name>.zip HEAD assets css index.html install-shortcut.sh js manifest.webmanifest play.sh README.md sw.js`
+- **Playtest zip:** `git archive --format=zip -o /c/ClaudeBro/LilNux-playtests/LilNux-<name>.zip HEAD assets css index.html install-shortcut.sh js manifest.webmanifest play.sh README.md sw.js`
 - **Push auth:** Git Credential Manager has the user's GitHub sign-in saved; `git push origin main` just works.
   If it ever asks again, run the push in the user's Terminal panel and use
   `git -c credential.gitHubAuthModes=browser push origin main` (the device-code flow expired once). The user's
