@@ -21,8 +21,8 @@ in the top bar). Both share players, XP, ranks, badges and the sound switch (`lo
 ## Repository state (2026-11-26)
 
 - GitHub `Galaidan/LilNux`. **`main` = the live site** (GitHub Pages): https://galaidan.github.io/LilNux/
-- `main` is at `6d4eca8` + nothing; the branch **`ck-firmware-map`** (2026-11-27, cache **`lilnux-v15`**) holds the Firmware map rework and is **not merged or pushed yet**. `main` is at cache **`lilnux-v14`** and is live (checked 2026-11-26: `sw.js` serves v14, `js/start-fx.js`
-  and `css/entry.css` return 200). Everything below is merged and pushed. The one thing waiting on a branch is the Firmware map rework (branch `ck-firmware-map`, see its section below).
+- `main` is at cache **`lilnux-v15`** and is live: the Firmware map rework (branch `ck-firmware-map`) was merged as `a70755f` and pushed 2026-11-27 (checked the same day: `sw.js` serves v15; `js/ck/rules.js`,
+  `js/ck/sprites.js` and `css/ck.css` return 200). Everything below is merged and pushed. Still to check on a real iPhone: door labels vs the HUD, crossfade and shimmer cost.
 - Local feature branches `ck-action`, `ck-chapter1`, `ck-polish`, `ck-hud-buttons`, `ck-craft-floors`,
   `ck-colonel-look`, `cyberpunk-start`, `handoff-2026-11-26` are all merged into `main` (safe to delete). Old remote branches `colonel-kernel-design`,
   `ck-story-update`, `ck-ux-tweaks` are merged too (delete on github.com if wanted).
@@ -55,7 +55,7 @@ in the top bar). Both share players, XP, ranks, badges and the sound switch (`lo
   `docs/superpowers/plans/2026-11-26-cyberpunk-start-screen.md`, and the build-notes README next to it (every decision
   and the review's findings). The approved mockup is `docs/superpowers/specs/2026-11-26-cyberpunk-start-screen-mockup.html`.
 
-## Firmware map rework (branch `ck-firmware-map`, 2026-11-27)
+## Firmware map rework (merged from `ck-firmware-map`, 2026-11-27)
 
 The user's playtest: Firmware Foundry's layout was hard to read, doors looked inaccessible, transitions were unclear, no programs to find, and it felt empty. Fixed with signposting, five area looks, state colors and three optional friends. Details, my calls and what is unverified: `docs/superpowers/plans/2026-11-27-firmware-map-rework-README.md`; design: `docs/superpowers/specs/2026-11-27-firmware-map-rework-design.md`.
 
@@ -170,7 +170,7 @@ Entry screens (outside `js/ck/`):
 
 When adding files: add them to `index.html`, `tests/e2e/ck-harness.html` if tests need them, and the `FILES`
 list in `sw.js` (`tests/ck/wiring.test.js` checks this). **Bump `VERSION` in `sw.js` whenever shipped files
-change** (currently `lilnux-v15` on `ck-firmware-map`, v14 on `main`; the wiring test asserts the number, so update it there too).
+change** (currently `lilnux-v15` on `main`; the wiring test asserts the number, so update it there too).
 
 ## How we work (this PC)
 
@@ -202,7 +202,7 @@ node tests/e2e/ck-adventure.e2e.js                 # 56 tests incl. a full Chapt
 node tests/e2e/lilnux-regression.e2e.js            # Learn mode; prints ERRORS [] when clean
 ```
 
-All pass on `main` as of 2026-11-26, and on `ck-firmware-map` as of 2026-11-27 (counts above are the branch). `SHOTS=<folder>` sets where e2e screenshots go. Debug hooks (`CK._test`)
+All pass on `main` as of 2026-11-27 (after the Firmware map merge). `SHOTS=<folder>` sets where e2e screenshots go. Debug hooks (`CK._test`)
 exist only with `?ckdebug` in the URL.
 
 Gotchas when writing e2e tests:

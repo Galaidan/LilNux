@@ -1,6 +1,6 @@
 # Firmware map rework: build notes
 
-Branch `ck-firmware-map`, built 2026-11-27 from the design in `docs/superpowers/specs/2026-11-27-firmware-map-rework-design.md`. Cache is `lilnux-v15`. Nothing is pushed.
+Branch `ck-firmware-map`, built 2026-11-27 from the design in `docs/superpowers/specs/2026-11-27-firmware-map-rework-design.md`. Cache is `lilnux-v15`. Merged to `main` as `a70755f` and pushed 2026-11-27; live.
 
 ## What changed
 
