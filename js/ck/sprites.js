@@ -276,6 +276,40 @@
     return null;
   });
 
+  // Firmware neighbours (24x28, all original). CMOS: a sleepy coin battery with a + on its face.
+  const cmosSpr = grid(24, 28, (x, y) => {
+    if (y >= 24) return (x >= 8 && x <= 10) || (x >= 13 && x <= 15) ? (y === 27 ? 'k' : 'L') : null;
+    if (!inEll(x, y, 11.5, 13.5, 10, 10.5)) return null;
+    if (!inEll(x, y, 11.5, 13.5, 9, 9.5)) return 'k';
+    if ((y === 7 && x >= 10 && x <= 13) || ((x === 11 || x === 12) && y >= 6 && y <= 8)) return 'a'; // the + terminal mark
+    if (y === 11 && ((x >= 7 && x <= 9) || (x >= 14 && x <= 16))) return 'k'; // eyes mostly shut
+    if (y === 16 && x >= 10 && x <= 13) return 'k';
+    return y < 10 ? 'w' : y < 19 ? 'd' : 'L';
+  });
+  // Opti: an add-in card with gold edge fingers, a bracket tab and a glowing display visor.
+  const optiSpr = grid(24, 28, (x, y) => {
+    if (y >= 25) return (x >= 7 && x <= 9) || (x >= 14 && x <= 16) ? (y === 27 ? 'k' : 'L') : null;
+    if (x < 3 || x > 20 || y < 2) return null;
+    if (y >= 21 && y <= 24) return x === 3 || x === 20 ? 'k' : (x % 2 ? 'y' : 'G');
+    if (x === 3 || x === 20 || y === 2 || y === 20) return 'k';
+    if (x <= 5 && y >= 4 && y <= 12) return 'd';
+    if (y >= 6 && y <= 10 && x >= 7 && x <= 18) return (y === 6 || y === 10) ? 'V' : (x === 9 || x === 16) ? 'W' : 'c';
+    if (y >= 13 && y <= 17 && x >= 9 && x <= 14) return (x + y) % 2 ? 's' : 'F';
+    return 'C';
+  });
+  // Acpi: a tall table with a header bar and ruled rows.
+  const acpiSpr = grid(24, 28, (x, y) => {
+    if (y >= 25) return (x >= 7 && x <= 9) || (x >= 14 && x <= 16) ? (y === 27 ? 'k' : 'L') : null;
+    if (x < 3 || x > 20 || y < 2 || y > 24) return null;
+    if (x === 3 || x === 20 || y === 2 || y === 24) return 'k';
+    if (y <= 5) return y === 5 ? 'k' : 'V';
+    if ((y === 8 || y === 9) && (x === 8 || x === 9 || x === 15 || x === 16)) return 'b';
+    if (y === 12 && x >= 10 && x <= 13) return 'k';
+    if (y >= 15 && y % 3 === 0 && x >= 5 && x <= 18) return 'd';
+    if (x === 11 && y >= 15) return 'd';
+    return 'T';
+  });
+
   // ---- creatures ----------------------------------------------------------------------------------
   // Loop Wisp (24x24): a violet flame curled into a loop, one eye.
   const wisp = (f) => grid(24, 24, (x, y) => {
@@ -383,7 +417,7 @@
   const barrier = grid(16, 16, (x, y) => ((x + y) % 4 === 0 ? 'W' : (x + y) % 4 === 1 ? 'm' : (x - y + 32) % 6 === 0 ? 'v' : null));
 
   const SET = {
-    bios: { rows: bios }, grub: { rows: grubSpr }, liltux: { rows: liltux },
+    bios: { rows: bios }, grub: { rows: grubSpr }, liltux: { rows: liltux }, cmos: { rows: cmosSpr }, opti: { rows: optiSpr }, acpi: { rows: acpiSpr },
     wisp_0: { rows: wisp(0) }, wisp_1: { rows: wisp(1) }, boot_0: { rows: boot(0) }, boot_1: { rows: boot(1) },
     wraith_0: { rows: wraith(0) }, wraith_1: { rows: wraith(1) },
     terminal: { rows: terminal(true) }, terminal_off: { rows: terminal(false) }, pedestal: { rows: pedestal },

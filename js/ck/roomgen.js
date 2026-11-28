@@ -49,8 +49,33 @@
 
     // ---- landmarks along the back wall, never in front of the north door ----
     const memoryCorner = nodeId === 'f2' || nodeId === 'g2';
-    if (rng() < 0.75) for (let y = 1; y <= 2; y++) for (let x = 3; x <= 6; x++) set(x, y, 'H');
-    if (rng() < 0.75 && !gap) for (let y = 1; y <= 2; y++) for (let x = 22; x <= 24; x++) set(x, y, 'T');
+    const roll1 = rng() < 0.75; const roll2 = rng() < 0.75 && !gap; // always consumed, so room contents stay the same as before the area looks
+    const lm = (letter, x0, x1) => { for (let y = 1; y <= 2; y++) for (let x = x0; x <= x1; x++) if (isFloor(x, y)) set(x, y, letter); };
+    const zone = node.zone;
+    if (!zone) { // GRUB Gate: a chip and a heat sink at random
+      if (roll1) lm('H', 3, 6);
+      if (roll2) lm('T', 22, 24);
+    } else if (zone === 'power') { // capacitor banks; CMOS Cell gets a giant coin battery
+      lm('U', 3, 8);
+      if (nodeId === 'f2') lm('V', 21, 24); else if (!gap) lm('U', 20, 25);
+    } else if (zone === 'rom') { // rows of ROM chips; the Vault holds the padlocked BIOS chip
+      lm('R', 3, 9);
+      if (nodeId === 'f3') lm('Z', 19, 24); else lm('R', 19, 25);
+    } else if (zone === 'ram') { // rows of RAM sticks
+      lm('M', 3, 10); lm('M', 19, 26);
+    } else if (zone === 'lanes') { // PCIe slots; Clock Gen has the crystal can
+      lm('L', 3, 10);
+      if (nodeId === 'f11') lm('Q', 21, 24); else if (nodeId !== 'f9') lm('L', 19, 26);
+    } // the boss arena and the gate room are left bare: the floor carries the look
+
+    // ---- interior machines: two per room in the quadrants, so the middle isn't just floor. The cross between the doors stays clear. ----
+    const INTERIOR = { power: ['U', 4], rom: ['R', 5], ram: ['M', 5], lanes: ['L', 5] };
+    if (zone && INTERIOR[zone] && node.kind !== 'start') {
+      const [letter, w] = INTERIOR[zone]; const ir = CK.rng(hash(region.id + ':in:' + nodeId)); // its own stream: the rest of the room is unchanged
+      const quads = [[4, 4], [20, 4], [4, 10], [20, 10]].filter(([qx, qy]) => !((node.friend || node.kind === 'character') && qx === 20 && qy === 4)); // keep the NPC spot open
+      for (let i = quads.length - 1; i > 0; i--) { const j = Math.floor(ir() * (i + 1)); [quads[i], quads[j]] = [quads[j], quads[i]]; }
+      for (const [qx, qy] of quads.slice(0, 2)) for (let y = qy; y <= qy + 1; y++) for (let x = qx; x < qx + w; x++) if (isFloor(x, y) && x <= right - 2) set(x, y, letter);
+    }
 
     // ---- what the room is for ----
     const free = (x, y) => isFloor(x, y);
@@ -63,6 +88,7 @@
       if (memoryCorner) { set(14, 1, '*'); set(13, 1, 'b'); set(15, 1, 'b'); set(14, 2, 'b'); }
       else set(14, 7, '*');
     } else if (node.kind === 'boss') set(14, 7, SPAWN_LETTER[node.ref.creature]);
+    if (node.friend) set(19, 4, 'c'); // an optional Firmware neighbour (see world.js FRIENDS)
     if (nodeId === 'g7') set(3, 5, 's');
 
     // capacitor pillars for cover (not in boss arenas)
@@ -78,7 +104,7 @@
       const okSpot = (x, y) => free(x, y) && y >= 2 && y <= 10
         && doorTiles.every(([dx, dy]) => Math.max(Math.abs(dx - x), Math.abs(dy - y)) >= 6)
         && placed.every(([px, py]) => Math.max(Math.abs(px - x), Math.abs(py - y)) >= 3)
-        && [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]].every(([dx, dy]) => !'HT'.includes(at(x + dx, y + dy)) && !'HT'.includes(at(x + 2 * dx, y + 2 * dy)));
+        && [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]].every(([dx, dy]) => !'HTRMVQUZL'.includes(at(x + dx, y + dy)) && !'HTRMVQUZL'.includes(at(x + 2 * dx, y + 2 * dy)));
       for (let tries = 0; placed.length < want && tries < 4000; tries++) {
         const x = 4 + Math.floor(rng() * 22); const y = 2 + Math.floor(rng() * 9);
         if (okSpot(x, y)) { placed.push([x, y]); set(x, y, letter); }

@@ -5,17 +5,18 @@
 
   const TILE = 16;
   // # wall · . floor · , alt floor · D door (solid for now) · P player start · m Glitch Mite · o capacitor pillar
+  // Firmware area landmarks (each block of letters is one landmark): R ROM chips · M RAM sticks · V coin battery · Q crystal can · U capacitor bank · Z padlocked BIOS chip · L PCIe slot
   // ~ void (the data void under the plaza; solid, no falling yet) · & corruption bloom (solid scenery)
   // % corruption creep (walkable decoration) · H giant chip · T heat sink (landmarks; each block of letters is one landmark)
   // Chapter rooms add: = bridge · _ retracted bridge (solid until openBridge) · ! switch · t terminal · c character spot
   // p pedestal · * memory crystal · s path sign · b corrupt block (kill breaks it) · > exit gate (walkable)
   // spawns: m Glitch Mite · w Loop Wisp · G Corrupt Boot Glitch · K Missing Kernel Wraith
   // D doors are solid unless setDoor(side, 'open' | 'loop'); a door's side is the room edge it sits on.
-  const SOLID = { '#': true, o: true, '~': true, '&': true, H: true, T: true, _: true, '!': true, t: true, c: true, p: true, '*': true, s: true, b: true };
-  const KNOWN = { '#': 1, '.': 1, ',': 1, D: 1, P: 1, m: 1, o: 1, '~': 1, '&': 1, '%': 1, H: 1, T: 1,
+  const SOLID = { '#': true, o: true, '~': true, '&': true, H: true, T: true, R: true, M: true, V: true, Q: true, U: true, Z: true, L: true, _: true, '!': true, t: true, c: true, p: true, '*': true, s: true, b: true };
+  const KNOWN = { '#': 1, '.': 1, ',': 1, D: 1, P: 1, m: 1, o: 1, '~': 1, '&': 1, '%': 1, H: 1, T: 1, R: 1, M: 1, V: 1, Q: 1, U: 1, Z: 1, L: 1,
     '=': 1, _: 1, '!': 1, t: 1, c: 1, p: 1, '*': 1, s: 1, b: 1, '>': 1, w: 1, G: 1, K: 1 };
   const SPAWN = { m: 'glitchMite', w: 'loopWisp', G: 'bootGlitch', K: 'kernelWraith' };
-  const LANDMARK = { H: 'chip', T: 'heatsink' };
+  const LANDMARK = { H: 'chip', T: 'heatsink', R: 'rom', M: 'ram', V: 'coin', Q: 'crystalcan', U: 'capbank', Z: 'bioschip', L: 'slot' };
   const PROP = { t: 'terminal', c: 'npc', p: 'pedestal', '*': 'crystal', s: 'sign', '!': 'switch', b: 'block', '>': 'gate' };
   const OPEN_DOOR = { open: 1, loop: 1 };
 

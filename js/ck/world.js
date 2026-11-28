@@ -159,6 +159,38 @@
     ],
   };
 
+  // Optional Firmware neighbours: no commands to learn, just a voice and a true fact or two. (Facts checked against real firmware/Linux behaviour.)
+  CHARACTERS.cmos = {
+    id: 'cmos', friend: true, name: 'CMOS', title: 'Coin battery · keeps the time', color: '#c9d4ef',
+    toast: 'Still ticking. Somebody has to.',
+    lines: [
+      'Mmh? Oh. A visitor. Keep it down. When the power’s off, I’m the only one in here still awake.',
+      'I’m CMOS: a coin battery, about three volts, the size of a button. I keep the clock running while the computer is switched off. On older boards I remember the firmware’s settings too.',
+      'If I ever die, the machine forgets the date. On Linux, `timedatectl` shows what time the system thinks it is, and `hwclock` reads the battery-backed clock directly.',
+      'Years, I’ve lasted. Years. Nobody ever says thank you. …Anyway. Go on.',
+    ],
+  };
+  CHARACTERS.opti = {
+    id: 'opti', friend: true, name: 'Opti', title: 'Option ROM · a card’s own firmware', color: '#38f2ff',
+    toast: 'Do come again. I do enjoy an audience.',
+    lines: [
+      'Ah! An audience! I am Option ROM: firmware that lives on the add-in card itself. Graphics cards, network cards, storage controllers.',
+      'When the computer starts, the main firmware gives me a turn, and I get my card ready to work before any operating system exists. I am extremely important.',
+      'Modern UEFI machines run me as a driver stored on the card, but “Option ROM” sounds grander, so we keep the name.',
+      'That first picture on the screen, before the Fedora logo? Display firmware like me helps draw it. You’re welcome.',
+    ],
+  };
+  CHARACTERS.acpi = {
+    id: 'acpi', friend: true, name: 'Acpi', title: 'ACPI tables · what the hardware can do', color: '#b6ff5c',
+    toast: 'Shh. Reading.',
+    lines: [
+      'Shh. I’m ACPI: a set of tables the firmware hands to the operating system. They describe the hardware: what’s installed, and how to switch it on and off.',
+      'I’m also how a computer sleeps. ACPI defines sleep states, and S3 is “suspend to RAM”: nearly everything powers down while memory stays alive.',
+      'On Fedora, `systemctl suspend` asks the system to go to sleep, and I help make that happen. Rest isn’t a luxury, Colonel. It’s a feature.',
+      'Ask me about S4 sometime: hibernate. Memory gets written to disk and the power goes off completely, so it survives even a flat battery. Slower to wake, though.',
+    ],
+  };
+
   // Puzzle grids are stored SOLVED. Codes: S=source G=target I=straight L=corner T=tee X=cross .=empty, digit = rotation.
   const TYPES = { S: 'source', G: 'target', I: 'straight', L: 'corner', T: 'tee', X: 'cross', '.': 'empty' };
   function grid(rows) {
@@ -169,7 +201,7 @@
   const n = (x, y, label, kind, ref, extra) => Object.assign({ x, y, label, kind }, ref !== undefined ? { ref } : {}, extra || {});
 
   const firmware = {
-    id: 'firmware', name: 'Firmware Foundry', accent: '#ffb347', start: 'f0', boss: 'f12', exit: 'f13',
+    id: 'firmware', name: 'Firmware Foundry', accent: '#ffb347', start: 'f0', boss: 'f12', exit: 'f13', powerNode: 'f9',
     intro: ['Firmware Foundry. This is where a computer wakes up — before Linux, before anything. Cozy. Well, no. Dark.', 'Walk with WASD or your left thumb. Doors lead on; my map in Pip’s panel shows where we’ve been. Don’t worry, I’ll float right next to you. Someone has to.', 'Weird… I’m picking up a faint signal deep inside the system. Small. Penguin-shaped? Let’s boot this machine and find out.'],
     outro: ['POST complete! The firmware found a bootable disk and is handing control to the bootloader. Look at you, being useful.', '…did you feel that? A memory. Something about “Linux version 6.19”. Weird. Let’s keep moving before you get sentimental.'],
     nodes: {
@@ -196,7 +228,7 @@
   };
 
   const grubRegion = {
-    id: 'grub', name: 'GRUB Gate', accent: '#b6ff5c', start: 'g0', boss: 'g12', exit: null, home: 'g13',
+    id: 'grub', name: 'GRUB Gate', accent: '#b6ff5c', start: 'g0', boss: 'g12', exit: null, home: 'g13', powerNode: 'g9',
     intro: ['GRUB Gate. The bootloader’s job: find the kernel, load it, and hand over control. Basically a very fancy “start” button.', 'Somewhere past these loops is the kernel image. Try not to get lost. Again.'],
     outro: ['The kernel image is loaded and GRUB just handed over control to… wait.', 'Colonel. The log says “Run /init as init process”. That’s me — PID 1. And the thing that starts PID 1 is the kernel. Which means you’re…', '…not important right now. The machine is booting! Look — Home just came online. Someone’s waving at us. Wave back, Colonel. It’s polite.'],
     nodes: {
@@ -227,6 +259,41 @@
     'grub-memories': { id: 'grub-memories', giver: 'grub', text: 'Recover all 5 boot memories at the Gate', goal: { type: 'memories', region: 'grub', count: 5 }, bits: 25 },
     'pip-clean': { id: 'pip-clean', giver: 'pip', text: 'Clear 3 problem rooms without taking a hit', goal: { type: 'clean', count: 3 }, bits: 30 },
   };
+
+  // Room character: an area look (zone), a one-line banner blurb, and optional friends. Facts are real firmware / GRUB behaviour.
+  const ZONES = { f0: 'power', f1: 'power', f2: 'power', f3: 'rom', f4: 'rom', f8: 'rom', f14: 'rom', f15: 'rom', f5: 'ram', f6: 'ram', f7: 'lanes', f9: 'lanes', f10: 'lanes', f11: 'lanes', f12: 'boss', f13: 'gate' };
+  const FRIENDS = { f2: 'cmos', f8: 'opti', f10: 'acpi' };
+  const BLURBS = {
+    f0: 'Power has just arrived. Nothing has started yet.',
+    f1: 'Power supplies deliver steady voltage rails to the board.',
+    f2: 'A coin battery keeps the clock running with the power off.',
+    f3: 'Firmware sits in flash memory on the board and runs before any operating system.',
+    f4: 'The first code the processor runs comes from firmware storage, not the disk.',
+    f5: 'POST tests memory before anything is allowed to use it.',
+    f6: 'RAM comes in DIMM sticks. More RAM means more room for programs.',
+    f7: 'PCIe lanes link the CPU to graphics cards and NVMe drives.',
+    f8: 'Add-in cards carry their own firmware, which runs at boot.',
+    f9: 'A bus is a shared set of wires that parts use to talk to each other.',
+    f10: 'ACPI tables tell the operating system what the hardware can do.',
+    f11: 'A crystal ticks at a fixed rate so every part stays in step.',
+    f12: 'Older BIOS machines boot from a disk’s first sector; UEFI uses an EFI System Partition.',
+    f13: 'The firmware found a bootable disk. Next stop: the bootloader.',
+    f14: 'A cache nobody was meant to find.', f15: 'A cache nobody was meant to find.',
+    g0: 'GRUB shows a menu of everything it can boot.', g1: 'GRUB has a small command shell for emergencies.',
+    g2: 'GRUB’s menu is built from a config file, grub.cfg.', g3: 'Each menu entry names a kernel to load.',
+    g4: 'A wrong path can send a bootloader around in circles.', g5: 'The kernel is a file, vmlinuz, that GRUB loads into memory.',
+    g6: 'Spare parts turn up in odd places.', g7: 'The initramfs is a tiny temporary filesystem the kernel uses to get started.',
+    g8: 'Fedora keeps older kernels as fallback boot entries.', g9: 'The kernel has to find and mount the root filesystem.',
+    g10: 'Boot parameters, like quiet and ro, are passed to the kernel.', g11: 'Filesystems are found by UUID, not by device name.',
+    g12: 'GRUB hands control to the kernel and steps aside.', g13: 'The desktop. Linux is up.',
+    g14: 'A cache nobody was meant to find.', g15: 'A cache nobody was meant to find.',
+  };
+  for (const reg of [firmware, grubRegion]) {
+    for (const id of Object.keys(reg.nodes)) {
+      const node = reg.nodes[id]; node.blurb = BLURBS[id] || '';
+      if (reg === firmware) { node.zone = ZONES[id]; if (FRIENDS[id]) node.friend = FRIENDS[id]; }
+    }
+  }
 
   CK.World = { SKILLS, MODULES, CREATURES, CHARACTERS, REGIONS: [firmware, grubRegion], TASKS, grid };
 })(typeof window !== 'undefined' ? window : globalThis);

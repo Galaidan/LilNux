@@ -130,6 +130,56 @@
     return out;
   }
 
+  // ---- signposting: where to go next, and what each door says -------------------------------------
+  // Pathfinding ignores gating (sealed doors open as you play) but never walks through a hidden room you haven't found.
+  function steps(state, from) {
+    const reg = cur(state); const ex = explored(state); const dist = { [from]: 0 }; const first = {}; const q = [from];
+    while (q.length) {
+      const id = q.shift();
+      for (const nb of neighbors(reg, id)) {
+        if (dist[nb] !== undefined || (reg.nodes[nb].hidden && !ex.includes(nb))) continue;
+        dist[nb] = dist[id] + 1; first[nb] = id === from ? nb : first[id]; q.push(nb);
+      }
+    }
+    return { dist, first };
+  }
+  // The room to head for: a teacher you haven't learned from (Pip only for kill; his other lessons happen on the way),
+  // else the boss, else the way out of the region.
+  function goalNode(state) {
+    const reg = cur(state); const { dist } = steps(state, state.node);
+    const teaches = (n) => Object.values(W().SKILLS).some((sk) => sk.teacher === n.ref && !state.learned.includes(sk.id) && (n.ref !== 'pip' || sk.id === 'kill'));
+    const cands = Object.keys(reg.nodes).filter((id) => reg.nodes[id].kind === 'character' && teaches(reg.nodes[id]) && dist[id] !== undefined); // reachable only
+    if (cands.length) return cands.sort((a, b) => dist[a] - dist[b])[0];
+    if (reg.boss && !isCleared(state, reg.boss)) return reg.boss;
+    return reg.exit || reg.home || null;
+  }
+  function nextStep(state, target, from) {
+    from = from || state.node; if (!target || from === target) return null;
+    return steps(state, from).first[target] || null;
+  }
+  function goalSide(state, from) {
+    from = from || state.node; const n = nextStep(state, goalNode(state), from);
+    return n ? sideOf(cur(state), from, n) : null;
+  }
+  // Per door: where it leads, whether it is open, why it is shut, and whether it is the way to the goal.
+  function doorInfo(state, nodeId, opts) {
+    opts = opts || {}; const reg = cur(state); const ex = explored(state); const ds = doorStates(state, nodeId, opts); const goal = goalSide(state, nodeId); const out = {};
+    for (const side of Object.keys(ds)) {
+      const { to, kind } = ds[side]; let reason = null;
+      if (kind === 'wall') { out[side] = { to, kind, name: null, reason: null, goal: false }; continue; }
+      if (opts.bossFight) reason = 'Fight!';
+      else if (kind === 'sealed') reason = ex.includes(to) ? 'Clear this room first' : 'Not found yet';
+      else if (kind === 'crack') reason = 'Hidden crack: ls -a, then kill';
+      else if (kind === 'loop') reason = 'Set the path sign: cd /boot';
+      else if ((opts.gapSides || []).includes(side)) reason = 'echo the switch';
+      out[side] = { to, kind, name: ex.includes(to) ? reg.nodes[to].label : '???', reason, goal: side === goal };
+    }
+    return out;
+  }
+  // Power: a room whose job is done (or that never had one) is on; broken problem, circuit and boss rooms are off.
+  const isPowered = (state, nodeId) => { const n = cur(state).nodes[nodeId]; return !(n && BLOCKING[n.kind]) || isCleared(state, nodeId); };
+  const regionPowered = (state) => { const r = cur(state); return !!r.powerNode && isCleared(state, r.powerNode); };
+
   // cd fast travel: any visited safe room (start / character) that isn't glitched.
   function travelTargets(state) {
     const reg = cur(state); const glitched = (state.story && state.story.glitched) || [];
@@ -247,5 +297,5 @@
   }
 
   CK.Rules = { stats, region, neighbors, reveal, canMove, move, isCleared, clear, learn, equip, unequip, installModule, buyUpgrade, reward, useOnMap, fastTravel, taskProgress, claimTasks, enterRegion, sanitize, BLOCKING,
-    TOOLS, MOVES, SAFE, LOOP_DOORS, clearRoom, sideOf, doorStates, travelTargets };
+    TOOLS, MOVES, SAFE, LOOP_DOORS, clearRoom, sideOf, doorStates, travelTargets, goalNode, nextStep, goalSide, doorInfo, isPowered, regionPowered };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -271,3 +271,23 @@ body.ck-open { overflow: hidden; }
 #ck-root { animation: ck-fade-in .3s ease-out; }
 @keyframes ck-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #ck-root { animation: none; } }
+
+/* ---- room signposting: name banner and door labels (text stays in the overlay) ---- */
+.ck-ui .ck-signs { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+.ck-ui .ck-signs > * { pointer-events: none; }
+.ck-roomname { padding: 8px 16px; text-align: center; border-radius: 12px; background: rgba(6, 10, 28, .82); border: 1px solid var(--c-amber, #ffb347); box-shadow: 0 0 18px rgba(255, 179, 71, .25); opacity: 0; transform: translateY(-6px); transition: opacity .45s, transform .45s; }
+.ck-roomname.show { opacity: 1; transform: none; }
+.ck-roomname b { display: block; font-size: 1.05rem; letter-spacing: .06em; text-transform: uppercase; color: var(--c-amber, #ffb347); }
+.ck-roomname span { display: block; margin-top: 2px; font-size: .82rem; color: #cfe3ff; }
+.ck-sign { position: absolute; left: 0; top: 0; display: grid; gap: 3px; justify-items: center; white-space: nowrap; font-size: .78rem; line-height: 1.15; opacity: 0; transition: opacity .25s; }
+.ck-sign > span { display: block; padding: 2px 8px; border-radius: 10px; background: rgba(6, 10, 28, .78); border: 1px solid rgba(207, 227, 255, .45); color: #e6f2ff; }
+.ck-sign.s-n, .ck-sign.s-s { margin-left: 0; translate: -50% -50%; }
+.ck-sign.s-w { translate: 0 -50%; justify-items: start; }
+.ck-sign.s-e { translate: -100% -50%; justify-items: end; }
+.ck-sign.near, .ck-sign.goal, .ck-sign.lock { opacity: 1; }
+.ck-sign.goal .nm { border-color: #ffd36a; color: #ffe9a8; box-shadow: 0 0 12px rgba(255, 211, 106, .55); font-weight: 700; }
+.ck-sign .why { border-color: #ff5d73; color: #ffc2cb; }
+@media (prefers-reduced-motion: reduce) { .ck-roomname, .ck-sign { transition: none; } }
+.ck-roomname .note { color: #ffe9a8; font-weight: 700; }
+
+.ck-sign.off { display: none; }

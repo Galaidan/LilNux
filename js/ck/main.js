@@ -112,7 +112,32 @@
           if (kind === 'crack' && brokenDoors.has(side)) kind = 'open';
           room.setDoor(side, kind);
         }
+        signsRefresh(false);
         return ds;
+      }
+      // "to the north-east": where the room's character stands, for dark rooms and wide ones
+      function friendWhere() {
+        const p = room.props.find((x) => x.kind === 'npc'); if (!p) return '';
+        const dx = p.tx - room.cols / 2; const dy = p.ty - room.rows / 2;
+        const v = dy < -2 ? 'north' : dy > 2 ? 'south' : ''; const h = dx > 3 ? 'east' : dx < -3 ? 'west' : '';
+        return v || h ? `, to the ${[v, h].filter(Boolean).join('-')}` : '';
+      }
+      // The overlay's door labels and (on entering) the room-name banner. Text never goes into the pixel canvas.
+      function signsRefresh(withBanner) {
+        if (!room || !ui || !ui.signs) return;
+        const node = reg().nodes[roomId]; const T = CK.Rooms.TILE;
+        const info = R.doorInfo(state, roomId, { bossFight, gapSides: room.tiles.some((r) => r.includes('_')) ? ['e'] : [] });
+        const doors = {};
+        for (const side of Object.keys(info)) {
+          const t = room.doors[side] && room.doors[side].tiles; if (!t) continue;
+          const d = Object.assign({}, info[side]);
+          if (d.kind === 'crack' && brokenDoors.has(side)) { d.kind = 'open'; d.reason = null; }
+          d.cx = (t.reduce((a, p) => a + p[0], 0) / t.length + 0.5) * T; d.cy = (t.reduce((a, p) => a + p[1], 0) / t.length + 0.5) * T;
+          doors[side] = d;
+        }
+        ui.signs.doors(doors);
+        if (scene) { scene.setPower(R.isPowered(state, roomId), R.regionPowered(state)); scene.setGoal(R.goalSide(state, roomId)); }
+        if (withBanner) ui.signs.room({ name: node.label, blurb: node.blurb || '', note: node.friend && !state.friends.includes(node.friend) ? `👋 ${W.CHARACTERS[node.friend].name} is here${friendWhere()}. Go near and press E (✋ on a phone).` : '' });
       }
       function makeSim() {
         const node = reg().nodes[roomId]; const ds = R.doorStates(state, roomId, { bossFight });
@@ -138,14 +163,15 @@
         sim.player.x = at.x; sim.player.y = at.y;
         if (fromSide) sim.player.face = { n: { x: 0, y: 1 }, s: { x: 0, y: -1 }, w: { x: 1, y: 0 }, e: { x: -1, y: 0 } }[fromSide];
         const npc = room.props.find((p) => p.kind === 'npc');
-        const who = node.kind === 'character' && node.ref !== 'pip' && !(node.ref === 'liltux' && state.story.liltuxTaken) ? node.ref : null;
+        const who = node.friend || (node.kind === 'character' && node.ref !== 'pip' && !(node.ref === 'liltux' && state.story.liltuxTaken) ? node.ref : null);
         const view = { room, sim, accent: node.accent || region.accent, dark: !!node.dark, glitched: state.story.glitched.includes(id),
-          npcs: npc && who ? [{ who, tx: npc.tx, ty: npc.ty }] : [], seed: CK.RoomGen.hash(id) };
+          npcs: npc && who ? [{ who, tx: npc.tx, ty: npc.ty }] : [], seed: CK.RoomGen.hash(id),
+          zone: node.zone, glow: !!node.hidden, powered: R.isPowered(state, id), regionPower: R.regionPowered(state), goalSide: R.goalSide(state, id) };
         if (!scene) {
-          scene = CK.RoomScene.create(Object.assign({ engine, input, onEvent, paused, onDoor, onNear, onTouch, onUse, onCd }, view));
+          scene = CK.RoomScene.create(Object.assign({ engine, input, onEvent, paused, onDoor, onNear, onTouch, onUse, onCd, onFrame: (cam, v, P) => ui.signs.frame(cam, v, P) }, view));
           engine.setScene(scene); engine.start();
         } else scene.setRoom(view, fromSide && !puzzle ? fromSide : null);
-        input.setTools(state.equipped); ui.action(true); onNear(null); refresh();
+        input.setTools(state.equipped); ui.action(true); onNear(null); refresh(); signsRefresh(true);
       }
       function toolsChanged() {
         input.setTools(state.equipped); ui.action(!puzzle);
@@ -174,7 +200,7 @@
         else if (p && p.kind === 'sign') label = 'Read the path sign (cd)';
         ui.prompt(label); input.showUse(label);
       }
-      const sceneNpc = () => { const n = reg().nodes[roomId]; return n.kind === 'character' ? n.ref : null; };
+      const sceneNpc = () => { const n = reg().nodes[roomId]; return n.friend || (n.kind === 'character' ? n.ref : null); };
       function onUse(p) {
         if (lock || !p) return;
         if (p.kind === 'npc') { const who = sceneNpc(); if (who) busy(() => meet(who)); }
@@ -208,9 +234,9 @@
         if (ev.type === 'lock-none' && Date.now() - (firsts.lockNone || 0) > 4000) { firsts.lockNone = Date.now(); ui.toast('◎ Nothing in view to lock onto. Face a creature first (cloaked ones need <code>ls</code>).'); }
         if (ev.type === 'sigkill' && !firsts.sigkill) { firsts.sigkill = true; ui.toast(LINES.sigkill); }
         if (ev.type === 'switch' && roomId === 'f1' && !state.switches.includes('f1')) {
-          state.switches.push('f1'); room.openBridge(); save(); ui.toast('⚡ The bridge slides out across the gap.');
+          state.switches.push('f1'); room.openBridge(); signsRefresh(false); save(); ui.toast('⚡ The bridge slides out across the gap.');
         }
-        if (ev.type === 'break' && ev.id && ev.id.startsWith('door-')) { const side = ev.id.slice(5); brokenDoors.add(side); room.setDoor(side, 'open'); }
+        if (ev.type === 'break' && ev.id && ev.id.startsWith('door-')) { const side = ev.id.slice(5); brokenDoors.add(side); room.setDoor(side, 'open'); signsRefresh(false); }
         if (ev.type === 'reveal') onPulse();
         if (ev.type === 'clear') onClear();
         if (ev.type === 'lose') onLose();
@@ -228,10 +254,15 @@
       async function learn(skill) {
         m.learning = skill; m.learnExample = W.SKILLS[skill].example;
         await ui.learn(skill);
-        m.learning = null; m.learnExample = null; sound('win'); xp(10); toolsChanged();
+        m.learning = null; m.learnExample = null; sound('win'); xp(10); toolsChanged(); signsRefresh(false);
       }
       async function meet(who, arriving) {
         if (who === 'liltux') return meetLilTux();
+        if (W.CHARACTERS[who] && W.CHARACTERS[who].friend) { // an optional Firmware neighbour: a voice and a true fact, no new command
+          if (!state.friends.includes(who)) { state.friends.push(who); save(); await say(who, W.CHARACTERS[who].lines); xp(5); }
+          else ui.toast(`<b>${W.CHARACTERS[who].name}:</b> ${W.CHARACTERS[who].toast}`);
+          return;
+        }
         if (who === 'pip') {
           if (!state.learned.includes('kill')) { await say('pip', W.CHARACTERS.pip.lines); await learn('kill'); ui.toast(LINES.dashTip); }
           else if (!arriving) ui.toast('<b>Pip:</b> Still here. Still PID 1. Still not going anywhere — that’s literally my whole job.');
@@ -383,9 +414,9 @@
           },
           onLeave: () => endPuzzle(),
         });
-        ui.action(false); engine.setScene(puzzle);
+        ui.action(false); ui.signs.show(false); engine.setScene(puzzle);
       }
-      function endPuzzle() { if (!puzzle) return; puzzle.destroy(); puzzle = null; engine.setScene(scene); ui.action(true); input.clear(); }
+      function endPuzzle() { if (!puzzle) return; puzzle.destroy(); puzzle = null; engine.setScene(scene); ui.action(true); ui.signs.show(true); input.clear(); }
       function needCd(what) {
         if (!state.learned.includes('cd')) { ui.toast(`🌀 The ${what} blinks at you. Someone at the GRUB Gate could show you how it works.`); return true; }
         if (!state.equipped.includes('cd')) { ui.toast(`🌀 Equip <code>cd</code> in Pip → Items to use ${what === 'sign' ? 'path signs' : 'terminals'}.`); return true; }

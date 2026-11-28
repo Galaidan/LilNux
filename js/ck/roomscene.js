@@ -18,7 +18,10 @@
     // ---- pre-rendered layers ------------------------------------------------------------------
     const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
     const Art = CK.RoomArt; const A = Art.ART;
-    let art = Art.paint(room, { accent, seed: o.seed || 7 }); // plaza, cliffs, walls, creep (static) + props/cores/leds
+    let zone = o.zone; let glow = !!o.glow; // Firmware area look and the secret-cache glow
+    let art = Art.paint(room, { accent, seed: o.seed || 7, zone, glow }); // plaza, cliffs, walls, creep (static) + props/cores/leds
+    // power: a room whose job is done is on; broken ones are dim. powerK crossfades 0 (off) to 1 (on). regionPower lights the floor motif.
+    let powerTarget = o.powered === false ? 0 : 1; let powerK = powerTarget; let regionPower = !!o.regionPower; let goalSide = o.goalSide || null;
     // world state for chapter rooms
     let dark = !!o.dark; let glitched = !!o.glitched; let npcs = o.npcs || [];
     let litT = 0; let flickerT = 0; let slideT = 0; let slideDir = null;
@@ -90,6 +93,7 @@
 
     // ---- update -----------------------------------------------------------------------------------
     function update(dt) {
+      if (powerK !== powerTarget) powerK = reduced() ? powerTarget : Math.max(0, Math.min(1, powerK + Math.sign(powerTarget - powerK) * Math.min(Math.abs(powerTarget - powerK), dt / 0.8)));
       // frozen behind the rotate screen, while unfocused, or while a dialogue / terminal / panel is open;
       // keys pressed meanwhile (Enter on a dialogue, letters typed into the terminal) are dropped, not replayed
       const sliding = slideT > 0; if (sliding) slideT = Math.max(0, slideT - dt); // a room slide finishes even under a dialogue
@@ -177,6 +181,7 @@
       const P = sim.player;
       const c = CK.PixEngine.camera(room.w, room.h, view.w, view.h, P.x, P.y - 8);
       cam.x = c.x; cam.y = c.y;
+      if (o.onFrame) o.onFrame(cam, view, P);
       let sx = 0; let sy = 0;
       if (shakeT > 0 && !reduced()) { sx = Math.round((Math.random() - 0.5) * 4); sy = Math.round((Math.random() - 0.5) * 4); }
       g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
@@ -192,7 +197,7 @@
         sx += Math.round(OFF[0] * k * view.w); sy += Math.round(OFF[1] * k * view.h);
       }
       g.setTransform(1, 0, 0, 1, -cam.x + sx, -cam.y + sy);
-      g.drawImage(art.ground, 0, 0);
+      drawGround(g);
       drawDoors(g);
 
       // danger and shots tint the plaza under them
@@ -212,14 +217,15 @@
       const list = [];
       list.push({ y: P.y, draw: () => drawColonel(g, P) });
       for (const e of sim.enemies) if (!e.dead) list.push({ y: e.y + e.r, draw: () => (e.kind === 'glitchMite' ? drawMite(g, e) : drawFoe(g, e)) });
-      for (const p of art.props) list.push({ y: p.sortY, draw: () => g.drawImage(p.img, p.x, p.y) });
+      art.props.forEach((p, i) => list.push({ y: p.sortY, draw: () => drawLayered(g, p.img, art.off.props[i].img, p.x, p.y) }));
       for (const p of room.props || []) list.push({ y: (p.ty + p.h) * TILE, draw: () => drawProp(g, p) });
       list.push({ y: P.y - 2, draw: () => Pix.draw(g, spr.pip, pip.x, pip.y + (reduced() ? 0 : Math.round(Math.sin(t * 3) * 1.5)), { glow: 0.7 }) });
       list.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
 
       // glowing cores and status lights bloom on top of the dark machines
-      for (let i = 0; i < art.cores.length; i++) { const k = art.cores[i]; light(g, k.x, k.y, k.color, k.r, k.a * pulse(i, 1.6), 'lighter'); }
-      for (const l of art.leds) { g.globalAlpha = pulse(l.phase, 4) > 0.6 ? 1 : 0.25; g.fillStyle = l.color; g.fillRect(l.x, l.y, 1, 1); }
+      const pw = 0.18 + 0.82 * powerK; // glows stay low in an unpowered room
+      for (let i = 0; i < art.cores.length; i++) { const k = art.cores[i]; light(g, k.x, k.y, k.color, k.r, k.a * pw * pulse(i, 1.6), 'lighter'); }
+      for (const l of art.leds) { g.globalAlpha = (pulse(l.phase, 4) > 0.6 ? 1 : 0.25) * (0.15 + 0.85 * powerK); g.fillStyle = l.color; g.fillRect(l.x, l.y, 1, 1); }
       g.globalAlpha = 1;
 
       for (const ob of sim.orbs) {
@@ -271,19 +277,32 @@
     }
     // ---- chapter rooms: doors, props, bigger creatures, SIGKILL, darkness, glitches ----------------
     const SLIDE = 0.25;
+    // The room's ground and props: the powered picture, the dim one, or a crossfade between them. The lit floor motif shows once the region has power.
+    function drawLayered(g, on, off, x, y) {
+      if (powerK >= 0.999) g.drawImage(on, x, y);
+      else if (powerK <= 0.001) g.drawImage(off, x, y);
+      else { g.drawImage(off, x, y); g.globalAlpha = powerK; g.drawImage(on, x, y); g.globalAlpha = 1; }
+    }
+    function drawGround(g) {
+      drawLayered(g, art.ground, art.off.ground, 0, 0);
+      if (art.lit && regionPower && powerK > 0.05) { g.globalAlpha = powerK * (reduced() ? 0.85 : 0.6 + 0.3 * Math.sin(t * 2.2)); g.drawImage(art.lit, 0, 0); g.globalAlpha = 1; }
+    }
     function drawDoors(g) {
       if (!room.doors) return;
       for (const side of Object.keys(room.doors)) {
         const kind = room.doorKind(side);
         for (const [tx, ty] of room.doors[side].tiles) {
           const x = tx * TILE; const y = ty * TILE;
+          if (kind === 'sealed' || kind === 'loop') { // disabled: a grey-coral bar, then the barrier
+            g.globalAlpha = 0.55; g.fillStyle = '#9a6a78'; if (side === 'n' || side === 's') g.fillRect(x, side === 'n' ? y + 13 : y, TILE, 3); else g.fillRect(side === 'w' ? x + 13 : x, y, 3, TILE); g.globalAlpha = 1;
+          }
           if (kind === 'sealed') { Pix.draw(g, spr.barrier, x + 8, y + 16, { alpha: reduced() ? 0.85 : 0.6 + 0.3 * pulse(tx + ty, 5) }); }
           else if (kind === 'crack') Pix.draw(g, spr.crack, x + 8, y + 16);
           else if (kind === 'wall') { if (side === 'n') Pix.draw(g, spr.tile_wall_front, x + 8, y + 16); else { g.fillStyle = A.void0; g.fillRect(x, y, TILE, TILE); } }
           else {
-            const col = kind === 'loop' ? '#b6ff5c' : accent;
-            g.globalAlpha = kind === 'loop' ? 0.35 + 0.4 * pulse(tx, 3) : 0.55; g.fillStyle = col;
-            if (side === 'n' || side === 's') g.fillRect(x, side === 'n' ? y + 13 : y, TILE, 3); else g.fillRect(side === 'w' ? x + 13 : x, y, 3, TILE);
+            const goal = kind === 'open' && side === goalSide; const col = kind === 'loop' ? '#b6ff5c' : goal ? '#ffd36a' : accent; const th = goal ? 5 : 3; const off = th - 3;
+            g.globalAlpha = kind === 'loop' ? 0.35 + 0.4 * pulse(tx, 3) : goal ? 0.75 + 0.25 * pulse(tx + ty, 3) : 0.55; g.fillStyle = col;
+            if (side === 'n' || side === 's') g.fillRect(x, side === 'n' ? y + 13 - off : y, TILE, th); else g.fillRect(side === 'w' ? x + 13 - off : x, y, th, TILE);
             g.globalAlpha = 1;
           }
         }
@@ -503,13 +522,18 @@
       // A new room (a door, fast travel, a reboot). `slide` is the side the Colonel came in by.
       setRoom(v, slide) {
         room = v.room; accent = v.accent || accent; dark = !!v.dark; glitched = !!v.glitched; npcs = v.npcs || [];
-        art = Art.paint(room, { accent, seed: v.seed || 7 });
+        zone = v.zone; glow = !!v.glow; powerTarget = v.powered === false ? 0 : 1; powerK = powerTarget; regionPower = !!v.regionPower; goalSide = v.goalSide || null;
+        art = Art.paint(room, { accent, seed: v.seed || 7, zone, glow });
         scene.setSim(v.sim); litT = 0; latch = null; near = null; touched = new Set();
         if (o.onNear) o.onNear(null);
         slideT = slide && !reduced() ? SLIDE : 0; slideDir = slide || null;
         if (CK.Rooms.doorAt(room, v.sim.player.x, v.sim.player.y)) latch = CK.Rooms.doorAt(room, v.sim.player.x, v.sim.player.y);
       },
       get room() { return room; },
+      // power: this room's job is done / the region's power node is solved; goal: the side of the door toward the next objective
+      setPower(powered, regional) { powerTarget = powered ? 1 : 0; regionPower = !!regional; if (reduced()) powerK = powerTarget; },
+      setGoal(side) { goalSide = side || null; },
+      get power() { return { k: powerK, target: powerTarget, region: regionPower, goal: goalSide }; },
       light(seconds) { litT = Math.max(litT, seconds); },
       flicker() { flickerT = 1.6; },
       // A pickup: a burst of palette particles and a ring on the spot, plus the amount when there is one.

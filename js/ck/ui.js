@@ -9,7 +9,7 @@
   function create(rootEl, h) {
     const W = CK.World; const R = CK.Rules;
     rootEl.classList.add('ck-ui');
-    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-act" hidden></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div>'
+    rootEl.innerHTML = '<div class="ck-hud"></div><div class="ck-act" hidden></div><div class="ck-signs"></div><div class="ck-layer"></div><div class="ck-toasts" aria-live="polite"></div>'
       + '<div class="ck-prompt" hidden></div><div class="ck-bossbar" hidden><b></b><div role="img"><i></i></div></div>'
       + '<div class="ck-rotate"><div class="ph"></div><p><b>Turn your phone sideways to play.</b></p><p>The Adventure is played in landscape.</p><button type="button" class="ck-btn" data-ck="exit">Back to menu</button></div>';
     const $ = (s) => rootEl.querySelector(s);
@@ -31,6 +31,57 @@
       else { ui.unread++; const b = $('.ck-unread'); if (b) { b.textContent = ui.unread; b.hidden = false; } }
     }
     ui.record = record;
+
+    // ------------------------------------------------------------ room signposting (text stays in the overlay)
+    // A name banner on entering a room, and a label at each door: the way to the goal is gold and always shown, a shut door
+    // wears a lock chip saying why, and the other doors name where they lead when the Colonel is close.
+    const signsEl = $('.ck-signs'); const nameEl = document.createElement('div');
+    let signLabels = {}; let signList = []; let bannerTimer = 0; let bannerOut = 0; let topAt = 0; let topPx = 0;
+    const SIGN_IN = { n: [0, 26], s: [0, -26], w: [30, 0], e: [-30, 0] };
+    ui.signs = {
+      room(info) { // { name, blurb, note }: a banner card that stacks with the toasts, so nothing overlaps it
+        clearTimeout(bannerOut); if (nameEl.isConnected) nameEl.remove();
+        nameEl.innerHTML = `<b>${esc(info.name)}</b>${info.blurb ? `<span>${esc(info.blurb)}</span>` : ''}${info.note ? `<span class="note">${esc(info.note)}</span>` : ''}`;
+        nameEl.className = 'ck-roomname'; $('.ck-toasts').prepend(nameEl); void nameEl.offsetWidth; nameEl.classList.add('show');
+        clearTimeout(bannerTimer); bannerTimer = setTimeout(() => { nameEl.classList.remove('show'); bannerOut = setTimeout(() => nameEl.remove(), 500); }, 3600);
+      },
+      // doors: { side: { name, reason, goal, kind, cx, cy } } with the door centre in room pixels
+      doors(doors) {
+        for (const l of Object.values(signLabels)) l.el.remove();
+        signLabels = {}; signList = [];
+        for (const side of Object.keys(doors)) {
+          const d = doors[side]; if (d.kind === 'wall') continue;
+          const el = document.createElement('div');
+          el.className = `ck-sign s-${side}${d.goal ? ' goal' : ''}${d.reason ? ' lock' : ''}`;
+          el.setAttribute('aria-hidden', 'true');
+          const name = d.name ? `${d.goal ? '➤ ' : ''}${esc(d.name)}` : '';
+          el.innerHTML = (name ? `<span class="nm">${name}</span>` : '') + (d.reason ? `<span class="why">🔒 ${esc(d.reason)}</span>` : '');
+          signsEl.appendChild(el);
+          signLabels[side] = { el, cx: d.cx, cy: d.cy, side, x: null, y: null, near: false }; signList.push(signLabels[side]);
+        }
+      },
+      show(on) { signsEl.hidden = !on; }, // hidden while the circuit puzzle owns the canvas
+      frame(cam, view, P) { // called every frame by the room scene
+        const now = Date.now();
+        if (now - topAt > 400) { // measured a couple of times a second, not every frame (layout reads are costly on phones)
+          topAt = now; const act = rootEl.querySelector('.ck-act'); const ar = act && !act.hidden ? act.getBoundingClientRect() : null; const rr = rootEl.getBoundingClientRect();
+          topPx = Math.max((parseFloat(rootEl.style.getPropertyValue('--hud-h')) || 54), ar ? ar.bottom - rr.top : 0) + 10; // labels never sit under the top HUD or the tool chips
+        }
+        const top = topPx;
+        for (const l of signList) {
+          const wx = l.cx + SIGN_IN[l.side][0]; const wy = l.cy + SIGN_IN[l.side][1];
+          const px = (view.ox + (wx - cam.x) * view.k) / view.dpr; const py = (view.oy + (wy - cam.y) * view.k) / view.dpr;
+          const dx = (view.ox + (l.cx - cam.x) * view.k) / view.dpr; const dy = (view.oy + (l.cy - cam.y) * view.k) / view.dpr;
+          const doorOn = dx >= -8 && dx <= view.cssW + 8 && dy >= -8 && dy <= view.cssH + 8; // the door itself is on screen
+          const show = doorOn || l.el.classList.contains('goal'); // the goal door stays as an edge pointer when it is off screen
+          if (show !== l.shown) { l.shown = show; l.el.classList.toggle('off', !show); }
+          const x = Math.round(Math.max(6, Math.min(view.cssW - 6, px))); const y = Math.round(Math.max(top, Math.min(view.cssH - 6, py)));
+          if (x !== l.x || y !== l.y) { l.x = x; l.y = y; l.el.style.transform = `translate(${x}px,${y}px)`; }
+          const near = Math.hypot(P.x - l.cx, P.y - l.cy) < 56;
+          if (near !== l.near) { l.near = near; l.el.classList.toggle('near', near); }
+        }
+      },
+    };
     ui.openLog = function () {
       if ($('.ck-log')) return;
       const box = document.createElement('aside'); box.className = 'ck-log'; box.setAttribute('aria-label', 'Message log');
@@ -126,7 +177,7 @@
     };
 
     // ------------------------------------------------------------ dialogue
-    const PORTRAIT = { colonel: 'colonel_down_0', pip: 'pip', bios: 'bios', grub: 'grub', liltux: 'liltux' };
+    const PORTRAIT = { colonel: 'colonel_down_0', pip: 'pip', bios: 'bios', grub: 'grub', liltux: 'liltux', cmos: 'cmos', opti: 'opti', acpi: 'acpi' };
     function portrait(speaker) {
       const c = document.createElement('canvas'); const dpr = Math.min(root.devicePixelRatio || 1, 2);
       c.width = 72 * dpr; c.height = 72 * dpr; c.className = 'ck-portrait';

@@ -18,7 +18,7 @@
     body: '#1c2448', bodyTop: '#2b3768', bodyHi: '#3c4a85', bodyLo: '#11183a', pin: '#9fb3d9', pinLo: '#4a5a8a', fin: '#7d8fb8', finHi: '#c9d4ef',
     capEdge: '#2a1a66', capMid: '#4b2fa0', capLit: '#6a48d0', capHi: '#a58bff', capStripe: '#8f7ad8', capTop: '#c9d4ef', capScore: '#8792b5',
     mag: '#ff4fd8', vio: '#8b5cff', magLo: '#9b2f8a', vioLo: '#4b2fa0', magHi: '#ffb3f0', magInk: '#3a0f3f',
-    mint: '#6dffb0', cyan: '#38f2ff', coral: '#ff5d73', white: '#ffffff', shadow: 'rgba(20,58,70,0.42)',
+    mint: '#6dffb0', cyan: '#38f2ff', coral: '#ff5d73', white: '#ffffff', shadow: 'rgba(20,58,70,0.42)', gold: '#ffd166', amber: '#ffb347',
   };
 
   function rngOf(seed) { // mulberry32: same picture every load
@@ -31,7 +31,7 @@
   const isVoid = (room, tx, ty) => tileAt(room, tx, ty) === '~';
   const WALK = { '.': 1, ',': 1, P: 1, m: 1, '%': 1, w: 1, G: 1, K: 1, '>': 1 };
   // Every legend character paint() understands (rooms.js has the meanings).
-  const TILES = '#.,DPmo~&%HT=_!tcp*sb>wGK';
+  const TILES = '#.,DPmo~&%HT=_!tcp*sb>wGKRMVQUZL';
   // What paint() draws for each room tile: side doors are bridge ends, a retracted bridge is void,
   // props (terminal, NPC spot, pedestal, crystal, sign, switch, block, gate) stand on plain plaza.
   function artView(room) {
@@ -55,6 +55,17 @@
   const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
   const dot = (g, x, y, col) => { g.fillStyle = col; g.fillRect(x, y, 1, 1); };
   const box = (g, x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+
+  // Area looks for Firmware Foundry: a floor tint, and a floor motif drawn dim on the ground and bright on a separate
+  // "lit" layer that the scene shows once the region has power. Colours: [dim, bright].
+  const ZONE = {
+    power: { tint: ['#ffb347', 0.10], motif: 'rails', c: ['#c9a24f', '#ffd36a'] },
+    rom: { tint: ['#8b5cff', 0.09], motif: 'pads', c: ['#8fb7c9', '#cfa8ff'] },
+    ram: { tint: ['#38f2ff', 0.08], motif: 'sticks', c: ['#bba76a', '#ffd166'] },
+    lanes: { tint: ['#6dffb0', 0.07], motif: 'lanes', c: ['#6aa79c', '#38f2ff'] },
+    boss: { tint: ['#12082a', 0.22], motif: 'rings', c: ['#6a5aa8', '#ff4fd8'] },
+    gate: { tint: ['#b6ff5c', 0.10], motif: 'gate', c: ['#8fb05a', '#b6ff5c'] }, // the exit glows GRUB lime
+  };
 
   function paint(room, opts) {
     opts = opts || {};
@@ -120,6 +131,29 @@
       for (const [l, nd] of steps) { ex += DIRS[dd][0] * l; ey += DIRS[dd][1] * l; dd = nd; }
       if (walkPx(ex, ey)) padAt(ex, ey);
     }
+
+    // ---- 3b. area motif: floor lines that carry the area's look (dim here; bright on the lit layer) ----
+    const zoneStyle = ZONE[opts.zone] || null;
+    function motif(c, bright) {
+      if (!zoneStyle) return;
+      const col = zoneStyle.c[bright ? 1 : 0]; const plot = (x, y, w, h) => { for (let yy = 0; yy < (h || 1); yy++) for (let xx = 0; xx < (w || 1); xx++) if (walkPx(x + xx, y + yy)) box(c, x + xx, y + yy, 1, 1, col); };
+      const m = zoneStyle.motif;
+      if (m === 'rails') { // two power rails flank the west-east corridor, with rivets
+        for (const y of [117, 138]) { for (let x = 0; x < room.w; x++) plot(x, y, 1, 2); for (let x = 12; x < room.w; x += 32) plot(x, y - 1, 3, 4); }
+      } else if (m === 'pads') { // a grid of test pads
+        for (let y = 24; y < room.h; y += 32) for (let x = 24; x < room.w; x += 32) plot(x, y, 3, 3);
+      } else if (m === 'sticks') { // slot lines with gold contacts
+        for (let x = 48; x < room.w; x += 48) for (let y = 16; y < room.h; y++) { plot(x, y, 1, 1); if (y % 8 === 0) plot(x + 1, y, 2, 1); }
+      } else if (m === 'lanes') { // a bundle of parallel data lanes with east-pointing chevrons
+        for (let i = 0; i < 4; i++) for (let x = 0; x < room.w; x++) plot(x, 96 + i * 4, 1, 1);
+        for (let x = 40; x < room.w - 24; x += 56) for (let k = 0; k < 4; k++) { plot(x + k, 96 + k, 1, 1); plot(x + k, 111 - k, 1, 1); }
+      } else if (m === 'gate') { // lime east-pointing chevrons run down the corridor to the exit
+        for (let x = 40; x < room.w - 40; x += 36) for (let k = 0; k < 8; k++) { plot(x + k, 112 + k * 2, 2, 1); plot(x + k, 144 - k * 2, 2, 1); }
+      } else if (m === 'rings') { // concentric sector rings
+        for (const r of [36, 62, 88]) for (let a = 0; a < 720; a++) { const t = (a / 720) * Math.PI * 2; if (r === 62 && a % 12 < 4) continue; plot(Math.round(room.w / 2 + Math.cos(t) * r), Math.round(room.h / 2 + Math.sin(t) * r * 0.8), 1, 1); }
+      }
+    }
+    motif(g, false);
 
     // ---- 4. cracks: the plaza is old ----
     for (let i = 0; i < 12; i++) {
@@ -244,7 +278,7 @@
       if (c === 'o') props.push(capacitor(x, y));
       if (c === '&') props.push(bloom(x, y));
     }
-    for (const l of room.landmarks || []) props.push(l.kind === 'chip' ? chip(l) : heatsink(l));
+    for (const l of room.landmarks || []) props.push(landmark(l));
 
     function capacitor(x, y) {
       const H = 34; const img = canvasOf(16, H); const c = img.getContext('2d');
@@ -334,7 +368,114 @@
       return { img, x: wx, y: wy, sortY: (l.ty + l.h) * TILE };
     }
 
-    return { ground, props, cores, leds };
+    // ---- Firmware area landmarks (flat packages seen from above, same construction as chip()/heatsink()) ----
+    function landmark(l) {
+      switch (l.kind) {
+        case 'chip': return chip(l);
+        case 'rom': return romRow(l);
+        case 'ram': return ramSticks(l);
+        case 'coin': return coinCell(l);
+        case 'crystalcan': return crystalCan(l);
+        case 'capbank': return capBank(l);
+        case 'bioschip': return biosChip(l);
+        case 'slot': return pcieSlot(l);
+        default: return heatsink(l);
+      }
+    }
+    function frame(l, H, pad) { // a canvas for a landmark: top face of l.w x l.h tiles, a front face H tall
+      const fw = l.w * TILE; const fh = l.h * TILE; const top = 2;
+      const img = canvasOf(fw + pad * 2, fh + H + top + 4); const c = img.getContext('2d');
+      return { fw, fh, top, img, c, ox: pad, wx: l.tx * TILE - pad, wy: l.ty * TILE - (top + H), sortY: (l.ty + l.h) * TILE };
+    }
+    function done(f, l, shadowW) { groundShadow(l.tx * TILE, l.ty * TILE + f.fh - 4, shadowW || f.fw, 6); return { img: f.img, x: f.wx, y: f.wy, sortY: f.sortY }; }
+
+    function romRow(l) { // DIP-style ROM chips in a row, notch and pins, a faint cyan glow per chip
+      const f = frame(l, 6, 3); const { c, ox, top, fw, fh } = f;
+      box(c, ox, top, fw, fh, ART.bodyLo);
+      for (let x = ox + 1, i = 0; x + 20 <= ox + fw; x += 24, i++) {
+        const cy = top + 6; const ch = fh - 12;
+        for (let k = 3; k < 18; k += 3) { box(c, x + k, cy - 3, 1, 3, ART.pin); box(c, x + k, cy + ch, 1, 3, ART.pinLo); }
+        box(c, x, cy, 20, ch, ART.body); box(c, x, cy, 20, 1, ART.bodyHi); box(c, x, cy, 1, ch, ART.bodyHi);
+        box(c, x + 8, cy, 4, 2, ART.bodyLo); // the notch
+        for (let k = 0; k < 2; k++) box(c, x + 3, cy + 5 + k * 4, 8 + (k * 5 + i * 3) % 6, 1, ART.pinLo); // printed label
+        dot(c, x + 17, cy + ch - 3, ART.mint); cores.push({ x: f.wx + x + 10, y: f.wy + cy + ch / 2, r: 10, color: ART.cyan, a: 0.22 });
+      }
+      box(c, ox, top + fh, fw, 6, ART.body); box(c, ox, top + fh, fw, 1, ART.bodyHi); box(c, ox, top + fh + 4, fw, 2, ART.bodyLo);
+      for (let k = 0; k < 3; k++) vines(ox + 1 + Math.floor(R() * (fw - 2)), top + fh, 3 + Math.floor(R() * 4), c);
+      return done(f, l);
+    }
+    function ramSticks(l) { // two RAM sticks: black chips on a green-teal board, gold contacts, latch ears
+      const f = frame(l, 6, 3); const { c, ox, top, fw } = f;
+      for (let s = 0; s < 2; s++) {
+        const y = top + 2 + s * 15;
+        box(c, ox, y, fw, 12, '#1d4f5a'); box(c, ox, y, fw, 1, '#3b8a96'); box(c, ox, y + 11, fw, 1, ART.bodyLo);
+        for (let x = ox + 5; x + 10 <= ox + fw - 4; x += 14) { box(c, x, y + 2, 10, 6, ART.bodyLo); box(c, x, y + 2, 10, 1, ART.bodyHi); dot(c, x + 2, y + 4, ART.pinLo); }
+        for (let x = ox + 2; x < ox + fw - 2; x += 2) dot(c, x, y + 10, ART.gold);
+        box(c, ox - 2, y + 1, 2, 10, ART.fin); box(c, ox + fw, y + 1, 2, 10, ART.fin);
+        if (R() < 0.5) { const gx = ox + 6 + Math.floor(R() * (fw - 20)); box(c, gx, y + 3, 8, 3, ART.mag); dot(c, gx + 1, y + 3, ART.magHi); } // a corrupted chip
+      }
+      box(c, ox, top + 28, fw, 6, ART.body); box(c, ox, top + 28, fw, 1, ART.bodyHi);
+      return done(f, l);
+    }
+    function coinCell(l) { // CMOS battery: a silver coin lying on the board, + mark, warm glow
+      const f = frame(l, 8, 3); const { c, ox, top, fw, fh } = f; const cx = ox + fw / 2; const cy = top + fh / 2; const rx = fw / 2 - 2; const ry = fh / 2 + 1;
+      const ell = (y, rx_, ry_, col) => { c.fillStyle = col; c.beginPath(); c.ellipse(cx, y, rx_, ry_, 0, 0, Math.PI * 2); c.fill(); };
+      ell(cy + 8, rx, ry, ART.cliff2); ell(cy + 5, rx, ry, ART.fin); ell(cy, rx, ry, ART.finHi); ell(cy, rx - 3, ry - 3, ART.capTop); ell(cy, rx - 6, ry - 5, ART.capScore);
+      box(c, cx - 1, cy - 8, 3, 14, ART.amber); box(c, cx - 7, cy - 2, 15, 3, ART.amber); // the + mark
+      box(c, cx - 20, cy + 6, 6, 1, ART.pinLo); box(c, cx + 14, cy + 6, 6, 1, ART.pinLo);
+      tint(l.tx * TILE + fw / 2, l.ty * TILE + fh / 2 + 6, 44, ART.amber, 0.25);
+      cores.push({ x: f.wx + cx, y: f.wy + cy, r: 22, color: ART.amber, a: 0.35 });
+      return done(f, l);
+    }
+    function crystalCan(l) { // the clock crystal: a little metal can with a glint and two legs
+      const f = frame(l, 9, 3); const { c, ox, top, fw, fh } = f;
+      box(c, ox + 4, top + 3, fw - 8, fh - 6, ART.finHi); box(c, ox + 4, top + 3, fw - 8, 2, ART.white); box(c, ox + 4, top + fh - 5, fw - 8, 2, ART.fin);
+      box(c, ox + 3, top + 4, 1, fh - 8, ART.fin); box(c, ox + fw - 4, top + 4, 1, fh - 8, ART.fin);
+      for (let k = 0; k < 3; k++) box(c, ox + 9, top + 10 + k * 4, fw - 18, 1, ART.pinLo);
+      box(c, ox + 4, top + fh - 3, fw - 8, 9, ART.fin); box(c, ox + 4, top + fh - 3, fw - 8, 1, ART.finHi); box(c, ox + 4, top + fh + 4, fw - 8, 2, ART.pinLo);
+      box(c, ox + 14, top + fh + 6, 2, 3, ART.pin); box(c, ox + fw - 16, top + fh + 6, 2, 3, ART.pin);
+      cores.push({ x: f.wx + ox + fw / 2, y: f.wy + top + 8, r: 14, color: ART.white, a: 0.3 });
+      return done(f, l);
+    }
+    function capBank(l) { // a row of electrolytic capacitors
+      const f = frame(l, 6, 3); const { c, ox, top, fw } = f;
+      const shade = [ART.capEdge, ART.capMid, ART.capLit, ART.capHi, ART.capLit, ART.capMid, ART.capMid, ART.capStripe, ART.capMid, ART.capEdge];
+      for (let x = ox + 2; x + 11 <= ox + fw - 2; x += 14) {
+        for (let i = 0; i < 10; i++) box(c, x + i, top + 8, 1, 22, shade[i]);
+        box(c, x, top + 28, 10, 1, ART.capEdge); box(c, x + 1, top + 29, 8, 1, ART.bodyLo);
+        c.fillStyle = ART.capTop; c.beginPath(); c.ellipse(x + 5, top + 8, 5, 3, 0, 0, Math.PI * 2); c.fill();
+        box(c, x + 2, top + 8, 7, 1, ART.capScore); box(c, x + 5, top + 6, 1, 5, ART.capScore);
+        cores.push({ x: f.wx + x + 5, y: f.wy + top + 14, r: 8, color: ART.amber, a: 0.3 });
+      }
+      for (let k = 0; k < 3; k++) vines(ox + 2 + Math.floor(R() * (fw - 4)), top + 14, 6 + Math.floor(R() * 10), c);
+      return done(f, l);
+    }
+    function biosChip(l) { // the Vault's BIOS chip with a padlock over its die
+      const p = chip(l); const c = p.img.getContext('2d'); const cx = 4 + (l.w * TILE) / 2; const cy = 2 + (l.h * TILE) / 2;
+      box(c, cx - 7, cy - 2, 14, 10, ART.bodyLo); box(c, cx - 6, cy - 1, 12, 8, ART.amber); box(c, cx - 6, cy - 1, 12, 1, ART.gold);
+      box(c, cx - 4, cy - 7, 2, 6, ART.finHi); box(c, cx + 2, cy - 7, 2, 6, ART.finHi); box(c, cx - 4, cy - 8, 8, 2, ART.finHi); box(c, cx - 1, cy + 2, 2, 3, ART.bodyLo);
+      return p;
+    }
+    function pcieSlot(l) { // a PCIe slot: dark groove full of gold teeth, a latch at one end
+      const f = frame(l, 5, 3); const { c, ox, top, fw, fh } = f; const y = top + Math.floor(fh / 2) - 5;
+      box(c, ox, y, fw, 12, ART.body); box(c, ox, y, fw, 1, ART.bodyHi); box(c, ox + 3, y + 3, fw - 12, 5, ART.void0);
+      for (let x = ox + 4; x < ox + fw - 10; x += 2) box(c, x, y + 4, 1, 3, (x % 6 === 0) ? ART.gold : ART.pinLo);
+      box(c, ox + fw - 8, y + 2, 6, 8, ART.fin); box(c, ox + fw - 8, y + 2, 6, 1, ART.finHi);
+      box(c, ox, y + 12, fw, 5, ART.bodyLo); box(c, ox, y + 12, fw, 1, ART.bodyHi);
+      dot(c, ox + fw - 4, y + 5, ART.cyan); leds.push({ x: f.wx + ox + fw - 4, y: f.wy + y + 5, color: ART.cyan, phase: R() * 6 });
+      return done(f, l);
+    }
+
+    // ---- area finish: a floor tint, the lit layer, a dimmed copy for rooms with no power, a glow for secret caches ----
+    if (zoneStyle) { g.globalCompositeOperation = 'source-atop'; g.globalAlpha = zoneStyle.tint[1]; g.fillStyle = zoneStyle.tint[0]; g.fillRect(0, 0, room.w, room.h); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+    let lit = null;
+    if (zoneStyle) { lit = canvasOf(room.w, room.h); motif(lit.getContext('2d'), true); }
+    if (opts.glow) { cores.push({ x: room.w / 2, y: room.h / 2, r: 90, color: ART.cyan, a: 0.3 }); for (let i = 0; i < 5; i++) leds.push({ x: 60 + Math.floor(R() * (room.w - 120)), y: 50 + Math.floor(R() * (room.h - 100)), color: ART.cyan, phase: R() * 6 }); }
+    // The same room unpowered: cooler, darker, glows low. The scene crossfades between the two when a job is done.
+    const dim = (src) => { const d = canvasOf(src.width, src.height); const x = d.getContext('2d'); x.drawImage(src, 0, 0); x.globalCompositeOperation = 'source-atop'; x.globalAlpha = 0.5; x.fillStyle = '#0a1030'; x.fillRect(0, 0, d.width, d.height); return d; };
+    const off = { ground: dim(ground), props: props.map((p) => Object.assign({}, p, { img: dim(p.img) })) };
+
+    return { ground, props, cores, leds, lit, off };
   }
 
   // The data void far below: dark boards, faint traces and distant lights. Painted per buffer size.
